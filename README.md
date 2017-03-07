@@ -288,7 +288,7 @@ Build a sequence of the proper length (`N = integer`) for poly(A)
 
 Now run a replica exchange Monte Carlo simulation using SimRNA
 
-    > SimRNA3 -s myseq.seq -r myseq.simres -c config.dat -E 10 -o myseq >& myseq.log &
+    > SimRNA3 -s myseq.seq -r myseq.simres -c config.dat -E 10 -o myseq_x >& myseq_x.log &
 
 To generate sequences, use the following
 
@@ -406,9 +406,9 @@ Wayne Dawson
 ### Legal notice ###
 
 With the use of _Chreval_, the Licensee who obtains access to this 
-_Chreval_ software agrees to the following terms with respect to use 
-of the software package, _Chreval_ (version 0.5) (hereinafter 
-called the “Chreval”) furnished by the other party (“Licensor”).
+software package _Chreval_ agrees to the following terms with respect 
+to use of the software package, _Chreval_ (version 0.5) (hereinafter 
+called _Chreval_) furnished by the other party (the “Licensor”).
 
 The Licensor grants to the Licensee a non-exclusive, non-transferable, 
 permanent license to install and use the _Chreval_ on computer systems 
@@ -420,7 +420,7 @@ is restricted to the Licensee and to direct collaborators who are members
 of the organization or company of the Licensee at the site of the Licensee 
 and who accept the terms of this license.
 
-The Licensee agrees that the _Chreval_ has been developed in 
+1. The Licensee agrees that the _Chreval_ has been developed in 
 connection with academic research projects and is provided **as is**. 
 The Licensor disclaims all warranties with regard to the _Chreval_ 
 or any of its results, including any implied warranties of 
@@ -430,7 +430,7 @@ caused, including, without limitation, any damages arising out
 of the use of the _Chreval_, loss of use of the _Chreval_, or damage 
 of any sort to the Licensee.
 
-The Licensee understands that the _Cherval_ is a pre-released 
+2. The Licensee understands that the _Cherval_ is a pre-released 
 version and does not represent a final product from the Licensor. 
 In addition, the Licensee understands that the _Chreval_ contain 
 errors, or bugs, and other problems that could potentially 
@@ -438,5 +438,5 @@ result in system failure or failure in the use of the _Chreval_
 Licensee holds the entire risk as to the quality and performance 
 of the Chreval and the sole responsibility for protecting 1
 
-_Cherval_ shall not be used for activities or purposes that are 
+3. _Cherval_ shall not be used for activities or purposes that are 
 unethical or immoral by the standards of the Geneva convention.
