@@ -4,7 +4,7 @@ Free energy based high-resolution modeling of CTCF-mediated chromatin loops for 
 # current packages: chreval
 
 ### What does this package do? ###
-This program is an object oriented program for calculating 
+This package contains an object oriented programs for calculating 
 meta-structures based on the observed frequency of contacts 
 obtained from experimental data and a model for polymer entropy
 known as cross-linking entropy (CLE). Cross link is used in a 
@@ -14,8 +14,8 @@ the probability density function for end-to-end distance;
 typically introduced as the Gaussian polymer chain model in 
 polymer textbooks.
 
-The primary target experimental data for this program is 
-ChIA-PET data; however, the program also has an option for 
+The primary target experimental data for this package is 
+ChIA-PET data; however, the package also has an option for 
 analysing Hi-C data. Because the there are more issues with 
 self-ligation products in a general all-in-all HiC experiment, 
 it is strongly advised to stick to ChIA-PET data in general,
@@ -52,7 +52,7 @@ This repository contains the following executable programs.
 
 _Chreval_ is the main driver for calculating the free energy of
 observed heatmaps.  This is the actually dynamic programming 
-algorithm part of the program. It calculates the optimal and 
+algorithm part of the package. It calculates the optimal and 
 suboptmal structures of chromatin the Boltzmann distribution of 
 the principal structures. The program analyzes the energy of 
 various structures and defines them in terms of structural motifs. 
@@ -69,8 +69,8 @@ directory in this distribution
 
 tests/test_anal_loops 
 
-for an example. The program calls _Chreval_. You should make sure 
-that the files listed in the bed file also exist in your directory.
+for an example. The program calls objects in _Chreval_. You should make 
+sure that the files listed in the bed file also exist in your directory.
 
 * make_heatmap.py
 
@@ -152,13 +152,13 @@ The output directory from chreval in the above example will be
 layer of suboptimal structures within some specifable energy range
 from the mimumum free energy (default is 10 kcal/mol) or a fractional
 percentage of the free energy. These files have the extension `*.DBN`
-and can be read by the 3rd party program VARNA. Additionally, _Chevral_
-is set up to provide heatmap, pairing info, and restraint files for
-`SimRNA 3D` calculations (see instructions below). Two additional 
-files are `chrN_x_y_res5kb_BDwt.clust` that contains a matrix with the 
-Boltzmann probabilities for different interactions and
-`chrN_x_y_res5kb_summary.txt` that contains a shorthand list of the
-secondary structures.
+and can be read by the 3rd party package VARNA ( http://varna.lri.fr/ )
+Additionally, _Chevral_ is set up to provide heatmap, pairing info, 
+and restraint files for `SimRNA 3D` calculations (see instructions 
+below). Two additional  files are `chrN_x_y_res5kb_BDwt.clust` that 
+contains a matrix with the Boltzmann probabilities for different 
+interactions and `chrN_x_y_res5kb_summary.txt` that contains a shorthand 
+list of the secondary structures.
 
 There are a variety of additional options. Please run
 
@@ -192,8 +192,8 @@ To generate visuals of the 2D heatmaps from the standard input heatmap files,
 
 More recent file design includes extended heatmaps that contain more information 
 than just the 2D contact weights. Extended heatmaps are valuable for inputing 
-specific information about about CTCF orientations, where the older version only
-offers a generic intensity as a means to distinguish CTCF sites
+specific information about about CTCF orientations, where the older heatmap file 
+version only offers a generic intensity as a means to distinguish CTCF sites
 
     > cd tests/test_anal_loops/eheat_files
     > make_heatmap.py chr1_1890973_2316695.eheat 
@@ -239,15 +239,17 @@ when using an input file, or
 when using the command line. The input file has the advantage that one 
 can specify the actual weight of the particular structure on each line
 and build up a complex structure as a result of specific information 
-entered. It should be remembered that the program doesn't think, so 
-the user is responsible for inputting information that makes sense.
+entered. Whereas the program comes with a few very simple error checks,
+it should be remembered that the program **doesn't replace the job of 
+thinking**. Therefore, the user is responsible for inputting information 
+that makes sense.
 
 For more information on how to run the program, please run
 
     > my_generation.py -h
 
 
-### How to run the SimRNA packages to obtain 3D structures from Chreval outputs? ###
+### How to run the SimRNA package to obtain 3D structures from Chreval outputs? ###
 
 You must download the executable version of `SimRNA` from the following
 website
@@ -279,7 +281,7 @@ in the `config.dat` file, change the parameter `ETA_THETA_WEIGHT` from `0.4` to 
     ETA_THETA_WEIGHT 0.00
 
 
-Build a sequence of the proper length (N) for poly(A)
+Build a sequence of the proper length (`N = integer`) for poly(A)
 
     > SimRNA_make_polyA.py N  > myseq.seq
 
@@ -313,6 +315,7 @@ or `pymol`
 
 
 ----
+Example of command line calls in contributed software
 
     > SimRNA_make_polyA.py 10
     aaaaaaaaaa
@@ -329,7 +332,7 @@ atom displayed, if actually desired.
 
 
 
-Version 1.0
+Version 0.5
 
 
 ### How do I get set up? ###
@@ -404,7 +407,7 @@ Wayne Dawson
 
 With the use of _Chreval_, the Licensee who obtains access to this 
 _Chreval_ software agrees to the following terms with respect to use 
-of beta software program, vsfold (beta versions 0.5) (hereinafter 
+of the software package, _Chreval_ (version 0.5) (hereinafter 
 called the “Chreval”) furnished by the other party (“Licensor”).
 
 The Licensor grants to the Licensee a non-exclusive, non-transferable, 
