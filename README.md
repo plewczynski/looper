@@ -152,7 +152,7 @@ The output directory from chreval in the above example will be
 layer of suboptimal structures within some specifable energy range
 from the mimumum free energy (default is 10 kcal/mol) or a fractional
 percentage of the free energy. These files have the extension `*.DBN`
-and can be read by the 3rd party package VARNA ( http://varna.lri.fr/ )
+and can be read by the 3rd party software package [VARNA](http://varna.lri.fr/).
 Additionally, _Chevral_ is set up to provide heatmap, pairing info, 
 and restraint files for `SimRNA 3D` calculations (see instructions 
 below). Two additional  files are `chrN_x_y_res5kb_BDwt.clust` that 
@@ -251,10 +251,8 @@ For more information on how to run the program, please run
 
 ### How to run the SimRNA package to obtain 3D structures from Chreval outputs? ###
 
-You must download the executable version of `SimRNA` from the following
-website
-
-http://genesilico.pl/software/stand-alone/simrna
+You must download the executable version of `SimRNA` from the 
+[Bujnicki lab website](http://genesilico.pl/software/stand-alone/simrna).
 
 Copy the `data` directory and `config.dat` file to a separate directory 
 where you want to build the 3D structure.
@@ -315,7 +313,7 @@ or `pymol`
 
 
 ----
-Example of command line calls in contributed software
+Example of command line calls for the contributed software
 
     > SimRNA_make_polyA.py 10
     aaaaaaaaaa
@@ -340,10 +338,13 @@ Version 0.5
 * Summary of set up
 
 The package can run as is, but some applications may require the
-installation of the following python packages, if not already
-installed.
+installation of the following python packages, if they are not 
+already installed:
 
-`matplotlib`, `numpy`, `random` and `argparse`
+`matplotlib`  
+`numpy`  
+`random`  
+`argparse`
 
 
 * Configuration
@@ -359,9 +360,8 @@ Standard python 2.7
 Presently, this package is essentially complete. However, the user
 will have to build a databased of ChIA-PET data (or Hi-C) data to
 do any real analysis. More extensive data is (or will be) made 
-available at some point at the contributing laboratory 
-
-http://nucleus3d.cent.uw.edu.pl/
+available at some point at the contributing laboratory; 
+[Laboratory of Functional and Structural Genomics](http://nucleus3d.cent.uw.edu.pl/).
 
 Please consult Dariusz Plewczynski for access to such data that can 
 be used in this venue: 
@@ -389,18 +389,15 @@ programs in this package.
 
 To consult about bugs and other issues with the code, please contact 
 
-Wayne Dawson
-Laboratory of Functional and Structural Genomeics
-Center of New Technologies
-University of Warsaw
-Banacha 2C, 02-098 Warsaw
+Wayne Dawson  
+Laboratory of Functional and Structural Genomeics  
+Center of New Technologies  
+University of Warsaw  
+Banacha 2C, 02-098 Warsaw  
+  
+email: w.dawson@cent.uw.edu.pl  
 
-email: w.dawson@cent.uw.edu.pl
-
-* Repo owner or admin
-
-Wayne Dawson
-* Other community or team contact
+* Repo owner/developer: Wayne Dawson
 
 
 ### Legal notice ###
