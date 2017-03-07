@@ -368,7 +368,9 @@ associated with chromatin structure prediction and analysis"""
         
         #
         #
-        parser.add_argument('-Nenski', action='store_true', default=False,
+        parser.add_argument('-HiC', action='store_true', default=False,
+-                            dest='from_Nenski',
+-                            help='When using Hi-C data, this has a filtering algorithm that helps to remove self-ligation NN chain noise.')        parser.add_argument('-Nenski', action='store_true', default=False,
                             dest='from_Nenski',
                             help='Carry out special procedure to remove NN chain noise.')
         
