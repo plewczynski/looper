@@ -1,7 +1,10 @@
-# looper
+# looper/[_Chreval_](http://github.com/4dnucleome/looper) #
+
 Free energy based high-resolution modeling of CTCF-mediated chromatin loops for human genome
 
-# current packages: chreval
+
+
+# current packages: chreval #
 
 ### What does this package do? ###
 This package contains an object oriented programs for calculating 
