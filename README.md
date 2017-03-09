@@ -39,7 +39,7 @@ collection of loops from various parts of the genome. this is a
 grid based program, and operates at O(N^3) time, with similar 
 demands on memory. Therefore, it _can_ blow up.
 
-+ This is _not_ a black box
++ This is **_not_** a black box
 
 Science is about learning to think and learning how to ask the 
 right questions. Please learn to use your mind and think about 
@@ -70,7 +70,7 @@ to Przemek's bed format. This is a driver for carrying out analysis
 of the bed files with corresponding heat maps. See the included 
 directory in this distribution
 
-tests/test_anal_loops 
+`tests/test_anal_loops` 
 
 for an example. The program calls objects in _Chreval_. You should make 
 sure that the files listed in the bed file also exist in your directory.
