@@ -1,160 +1,171 @@
 #!/usr/bin/env python
 
-# anal_loops.py (ANALyze LOOPS)
-#
-#    Anal is an analysis tool that runs batch calculations with
-#    Chreval.
+"""@@@
 
-#    The input file is a list of loops formatted according to
-#    Przemek's approach (with extension 'bed') Teresa's approach
-#    (currently with extension 'txt').
+Main Program:  anal_loops.py (ANALyze LOOPS)
 
-#    command line example:
-#    > chreval.py -ff loops.CTCF.annotated.bed -dG
+Classes:       Anal
 
-#    where the file "loops.CTCF.annotated.bed" contains a list of data
-#    formatted according to Przemek. This has the format
+Author:        Wayne Dawson
+creation date: mostly 2016 and up to March 2017.
+last update:   180709
+version:       0
 
-#    file format1 (loops.CTCF.annotated.bed):
-#
-#                       CTCF    CTCF    PET   cmplx   cmplx   cmplx     
-# chr    bgn     end     1       2      cnt    ity      a       b       open            active
-# chr1	838908	912011	R	L	11	0	4	6	0.0686291944243	0.426918183932
-# chr1	838908	922335	R	R	5	1	6	8	0.0601364066789	0.397329401752
-# chr1	838908	1000167	R	L	7	3	15	17	0.0910398799447	0.5333717808
-# chr1	918286	969271	R	R	5	0	4	4	0.119015396685	0.543963910954
-# chr1	918286	1000167	R	L	75	1	8	8	0.11802493863	0.65697780926
-# chr1	918286	1059032	R	R	4	2	12	12	0.09421226891	0.648785755901
+anal_loops.py (ANALyze LOOPS)
+    
+    Anal is an analysis tool that runs batch calculations with
+    Chreval.
+    
+    The input file is a list of loops formatted according to Przemek's
+    approach (with extension 'bed') Teresa's approach (currently with
+    extension 'txt').
+    
+    command line example:
+    > anal_loops.py -ff loops.CTCF.annotated.bed -dG
+    
+    where the file "loops.CTCF.annotated.bed" contains a list of data
+    formatted according to Przemek. This has the format
+    
+    file format1 (loops.CTCF.annotated.bed):
 
-#    file format2 (structure.loops.GSE6352.annotated.bed):
-# chr1	1050000	1190000	241	-1	9	9	0.0529785714286	0.418914285714
-# chr1	1585000	1650000	80	-2	0	0	0.0553384615385	0.737907692308
-# chr1	1710000	1840000	154	-2	22	22	0.0699230769231	0.874938461538
+                       CTCF    CTCF    PET   cmplx   cmplx   cmplx     
+ chr    bgn     end     1       2      cnt    ity      a       b       open            active
+ chr1	838908	912011	R	L	11	0	4	6	0.0686291944243	0.426918183932
+ chr1	838908	922335	R	R	5	1	6	8	0.0601364066789	0.397329401752
+ chr1	838908	1000167	R	L	7	3	15	17	0.0910398799447	0.5333717808
+ chr1	918286	969271	R	R	5	0	4	4	0.119015396685	0.543963910954
+ chr1	918286	1000167	R	L	75	1	8	8	0.11802493863	0.65697780926
+ chr1	918286	1059032	R	R	4	2	12	12	0.09421226891	0.648785755901
 
-#    file format2 (structure.TAD_Rao.annotated.bed):
-# chr1	915000	1005000	0.72251	1	10	10	0.116533333333	0.643166666667
-# chr1	1030000	1235000	1.1954	-1	12	12	0.0460487804878	0.507936585366
-# chr1	1255000	1450000	0.9312	0	27	27	0.0741435897436	0.653230769231
+    file format2 (structure.loops.GSE6352.annotated.bed):
+ chr1	1050000	1190000	241	-1	9	9	0.0529785714286	0.418914285714
+ chr1	1585000	1650000	80	-2	0	0	0.0553384615385	0.737907692308
+ chr1	1710000	1840000	154	-2	22	22	0.0699230769231	0.874938461538
 
-
-#    In general, bed type files should only be one instance.
-
-#    An alternative file input would involve the following command
-#    line
-
-#    command line example:
-#    > chreval.py -ff wayn_active_inactive.txt wayn_compartments.txt wayn_open.txt -dG
-
-#    where the various list of "txt" files (wayn_active_inactive.txt,
-#    etc.) are formatted according to Teresa.
+    file format2 (structure.TAD_Rao.annotated.bed):
+ chr1	915000	1005000	0.72251	1	10	10	0.116533333333	0.643166666667
+ chr1	1030000	1235000	1.1954	-1	12	12	0.0460487804878	0.507936585366
+ chr1	1255000	1450000	0.9312	0	27	27	0.0741435897436	0.653230769231
 
 
-# used as a identifier                 |used in the program ----------------------------------
-# region of chromosome                 |specific location in region             state   length
-# chr   bgn             end            |chr     bgn             end              
-# chr1	10436116	10556545	chr1	10437400	10438000	active	600
-# chr1	10436116	10556545	chr1	10438000	10438466	active	466
-# chr1	10436116	10556545	chr1	10438558	10440200	active	1642
+    In general, bed type files should only be one instance.
+
+    An alternative file input would involve the following command line
+
+    command line example:
+    > anal_loops.py -ff wayn_active_inactive.txt wayn_compartments.txt wayn_open.txt -dG
+
+    where the various list of "txt" files (wayn_active_inactive.txt,
+    etc.) are formatted according to Teresa.
+
+
+ used as a identifier                 |used in the program ----------------------------------
+ region of chromosome                 |specific location in region             state   length
+ chr   bgn             end            |chr     bgn             end              
+ chr1	10436116	10556545	chr1	10437400	10438000	active	600
+ chr1	10436116	10556545	chr1	10438000	10438466	active	466
+ chr1	10436116	10556545	chr1	10438558	10440200	active	1642
         
 
-#    These files often have different data related to open, active,
-#    inactive, compartment A or B, etc., so the results typically
-#    require more than one file.  Therefore, multiple file entries are
-#    allowed for both file types; however, in general, for "bed"
-#    files, there should only be one input file.
+    These files often have different data related to open, active,
+    inactive, compartment A or B, etc., so the results typically
+    require more than one file.  Therefore, multiple file entries are
+    allowed for both file types; however, in general, for "bed" files,
+    there should only be one input file.
 
-#    The chromatin loop is specified by the region chr1 10436116 to
-#    10556545 and the zones listed above as "active" are bands between
-#    (10437400-10438000), (10438000-10438466) and
-#    (10438558-10440200). The percentage of active region is the sum
-#    of the lengths of the small segments divide by the length of the
-#    loop.
+    The chromatin loop is specified by the region chr1 10436116 to
+    10556545 and the zones listed above as "active" are bands between
+    (10437400-10438000), (10438000-10438466) and
+    (10438558-10440200). The percentage of active region is the sum of
+    the lengths of the small segments divide by the length of the
+    loop.
 
-#    There are several ways to weight the data.
-#
-#    1. (default) The simplest is to just take the first is simply the
-#    first Boltzmann probability term (no argument). This assumes that
-#    a compact structure will have a very large Boltzmann probability
-#    compared to any other possible structure.
-#
-#    basic comparision of stability
+    There are several ways to weight the data.
+
+    1. (default) The simplest is to just take the first is simply the
+    first Boltzmann probability term (no argument). This assumes that
+    a compact structure will have a very large Boltzmann probability
+    compared to any other possible structure.
+
+    basic comparision of stability
         
-#    Measure stability of a structure based on the magnitude of the
-#    first Boltzmann probability term. Presumably, the terms that have
-#    a very high Boltzmann probability also have the highest
-#    stability. However, it should be remembered that as the size of
-#    the loop becomes large, it is more likely that you will have
-#    multiple structures that are very similar in structure and free
-#    energy. As a result, I started searching for ways to combine
-#    similar structures together using various rules such as hamming
-#    distance, word similarity, variation in delta(TdS) and variation
-#    in delta(dG). Hence, even the first structure is shared between
-#    two or three or even a dozen different structures in the
-#    ensemble.
-#    
-#    Therefore, I have (presently) set up a variety of options for how
-#    to analyze the similarity of the structures in the ensemble.
-#
-#    2. (option: -sim) This uses calculation of a similarity ratio of
-#    two sequences. It is only the pattern that is looked at.
-#
-#    3. (-ham) Therefore, a second approach is to discriminate
-#    according to the Hamming distance of the structures.
-#
-#    4. (option -TdS) Hamming distance has some problems of its
-#    own. For example, when you observe sliding of a chain, the
-#    Hamming distance simply measures the observable edits. 
-#
-#    ...(((....)))...
-#    ....(((...)))...
-#    Example 1
-#
-#    ...(((....)))...
-#    ....(((....)))..
-#    Example 2
+    Measure stability of a structure based on the magnitude of the
+    first Boltzmann probability term. Presumably, the terms that have
+    a very high Boltzmann probability also have the highest
+    stability. However, it should be remembered that as the size of
+    the loop becomes large, it is more likely that you will have
+    multiple structures that are very similar in structure and free
+    energy. As a result, I started searching for ways to combine
+    similar structures together using various rules such as hamming
+    distance, word similarity, variation in delta(TdS) and variation
+    in delta(dG). Hence, even the first structure is shared between
+    two or three or even a dozen different structures in the ensemble.
+    
+    Therefore, I have (presently) set up a variety of options for how
+    to analyze the similarity of the structures in the ensemble.
+
+    2. (option: -sim) This uses calculation of a similarity ratio of
+    two sequences. It is only the pattern that is looked at.
+
+    3. (-ham) Therefore, a second approach is to discriminate
+    according to the Hamming distance of the structures.
+
+    4. (option -TdS) Hamming distance has some problems of its
+    own. For example, when you observe sliding of a chain, the Hamming
+    distance simply measures the observable edits.
+
+    ...(((....)))...
+    ....(((...)))...
+    Example 1
+
+    ...(((....)))...
+    ....(((....)))..
+    Example 2
 
 
-#    Consider Example 1. From viewpoint of Hamming distance, the
-#    number of edits in Example 1 are two. However, in fact, three
-#    contacts have actually moved. Hamming distance may efficiently
-#    measure edits, but it does not measure change. Entropy (CLE) or
-#    free energy are probably better measure of this change.
+    Consider Example 1. From viewpoint of Hamming distance, the number
+    of edits in Example 1 are two. However, in fact, three contacts
+    have actually moved. Hamming distance may efficiently measure
+    edits, but it does not measure change. Entropy (CLE) or free
+    energy are probably better measure of this change.
 
-#    In example 2, the Hamming distance is 4, yet actually six
-#    position-changes have occurred. On the other hand, in terms of
-#    its cross linked entropy (CLE), there is no energy change at all
-#    because (given all interactions are identical) the number of
-#    contacts and their arrangement remain the same, only the postion
-#    of the contacts has shifted through a process of sliding.
+    In example 2, the Hamming distance is 4, yet actually six
+    position-changes have occurred. On the other hand, in terms of its
+    cross linked entropy (CLE), there is no energy change at all
+    because (given all interactions are identical) the number of
+    contacts and their arrangement remain the same, only the postion
+    of the contacts has shifted through a process of sliding.
 
-#    The cross linking entropy would observe some change in Example 1,
-#    but no change in Example 2.  In terms of energy change, it is not
-#    all that much and involves minor movements of the chain. It was
-#    my thought that simple sliding like this should not be penalized
-#    all that much in an ensemble of structures. It also seems like
-#    the Hamming distance is not particular accurate because it really
-#    is sliding of the chain of 3 residues in Example 1 or even 6
-#    residues in Example 2. Therefore, I also introduced an entropic
-#    weight for measuring this difference.
-#
-#    5. (option -dG) Finally, the free energy could greatly differ in
-#    Example 1 and Example 2, even though the CLE does no change at
-#    all, as in Example 2.  So I reasoned that the weight on the
-#    structures should be a function of the free energy (which
-#    includes the CLE contribution). So even though the ClE is
-#    unchanged in Example 2, the enthalpy could be quite different,
-#    and this would discriminate the flow of structures.  So how many
-#    equivalent structures (to within some set free energy) are
-#    observed is crucial.
+    The cross linking entropy would observe some change in Example 1,
+    but no change in Example 2.  In terms of energy change, it is not
+    all that much and involves minor movements of the chain. It was my
+    thought that simple sliding like this should not be penalized all
+    that much in an ensemble of structures. It also seems like the
+    Hamming distance is not particular accurate because it really is
+    sliding of the chain of 3 residues in Example 1 or even 6 residues
+    in Example 2. Therefore, I also introduced an entropic weight for
+    measuring this difference.
 
+    5. (option -dG) Finally, the free energy could greatly differ in
+    Example 1 and Example 2, even though the CLE does no change at
+    all, as in Example 2.  So I reasoned that the weight on the
+    structures should be a function of the free energy (which includes
+    the CLE contribution). So even though the ClE is unchanged in
+    Example 2, the enthalpy could be quite different, and this would
+    discriminate the flow of structures.  So how many equivalent
+    structures (to within some set free energy) are observed is
+    crucial.
 
+"""
 
 import sys
 import os
 import chreval
 from GetOpts import GetOpts
+
 from ChromatinData import Data
-from Functions import make_file_heading
+from ChromatinData import make_file_heading
+
 from Functions import hamming_bin
 from Functions import hamming_str
 from Functions import similar
@@ -228,15 +239,15 @@ class Anal:
         # entropy parameters from the chreval
         header += "# thermodynamic parameters:\n"
         header += "#   entropy:\n"
-        header += "#     xi       = %.3g\n" % chreval.xi
-        header += "#     seg_len  = %.3g\n" % cl.seg_len    # [bps]
-        header += "#     lmbd     = %.3g\n" % chreval.lmbd
-        header += "#     gmm      = %.3g\n" % chreval.gmm
+        header += "#     xi       = %.3g\n" % cl.xi
+        header += "#     seg_len  = %.3g\n" % cl.seg_len # [bps]
+        header += "#     lmbd     = %.3g\n" % cl.lmbd    # [nt]
+        header += "#     gmm      = %.3g\n" % cl.gmm     # [dimensionless]
         header += "#     T        = %.3g\n" % cl.T          # in Kelvin
         # constants: weights for the enthalpy terms 
         header += "#   enthalpy:\n"
-        header += "#     febase   = %.3g\n" % chreval.febase
-        header += "#     feshift  = %.3g\n" % chreval.feshift
+        header += "#     febase   = %.3g\n" % cl.dHbase
+        header += "#     feshift  = %.3g\n" % cl.dHshift
         header += "# ----\n"
         
         return header
@@ -382,7 +393,7 @@ class Anal:
             
             # #######################################################
             # verify that the files exist or not. If they are missing
-            # then skep any further analysis.
+            # then skip any further analysis.
             # #######################################################
             
             # print "evaluating: ", os.path.exists(cl.f_heatmap[0]), cl.f_heatmap[0]
@@ -708,5 +719,5 @@ def main(cl):
 if __name__ == '__main__':
     # running the program
     main(sys.argv)
-
+#
 

@@ -1,13 +1,42 @@
 #!/usr/bin/env python
 
+"""@@@
+
+Main Module:   SimRNA2mds.py 
+
+Classes:       Rename 
+               Atom 
+               DataPDB
+
+Functions:     doSimRNA2mds
+
+Author:        Wayne Dawson
+creation date: parts 2016, made into a separate object 170314
+last update:   170314
+version:       0
+
+Purpose:
+
+After the SimRNA simulation is finished, a file containing the coarse
+grained structure of RNA is obtained in the form of a pdb file. For
+chromatin, this file has too many residues and the RNA names for these
+beads makes no sense. This tool is meant to convert the data to a
+special format that is popular in mds type simulations, thus the name
+SimRNA2mds.
+
+"""
+
 import sys
 from os import path
 from FileTools import FileTools
 
 PROGRAM = "SimRNA2mds.py"
 EXTS = ["pdb"]
+
 # REF = {"P" : [] , "C4'" : [], "N1" : [], "C2" : [], "C4" : [], "N9" : [], "C6" : [] }
 REF = {"P" : None }
+
+
 def usage():
     print "USAGE: %s pdbfile" % PROGRAM
 #
@@ -86,7 +115,7 @@ class DataPDB:
             print "ERROR: cannot open %s" % flnm
             sys.exit(1)
         #
-            
+        
         lfp = fp.readlines()
         b = 0.0; v =0.0; a = 'X'
         count = 0
@@ -178,7 +207,7 @@ class DataPDB:
     
 
 
-def main(cl):
+def doSimRNA2mds(cl):
 
     if len(cl) == 1:
         usage()
@@ -202,7 +231,7 @@ def main(cl):
         pdbflnm_out = cl[2]
         ft.check_ext(pdbflnm_out, EXTS, PROGRAM)
     #
-
+    
     dp = DataPDB()
     dp.readpdb(pdbflnm_in)
     
@@ -214,12 +243,10 @@ def main(cl):
     fp.write(s)
     fp.write("END\n")
     fp.close()
-
-
 #
 
 if __name__ == '__main__':
     # running the program
-    main(sys.argv)
+    doSimRNA2mds(sys.argv)
 
 

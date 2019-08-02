@@ -1,6 +1,30 @@
 #!/usr/bin/env python
 
-#
+"""@@@
+
+Main Program:  CUtils.py 
+
+Classes:       String
+
+Author:        Wayne Dawson
+creation date: 2016 (160903)
+last update:   190124
+version:       0
+
+
+Purpose:
+
+Some simple tools for handling various strings. 
+
+
+Comments:
+
+This is still used by ChromatinData and Chromosome. The main thing is
+hollerith function for describing genomic sequence regions and tests
+for float etc.
+
+"""
+
 import sys
 
 

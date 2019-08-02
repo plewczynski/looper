@@ -1,12 +1,41 @@
 #!/usr/bin/env python
 
-# my_generation.py: generates a heatmap for reading by chreval.py.
-# This is intended to be used to build test structures for chreval.py
-# to find. It is particularly needed for pseudoknot like contraptions
-# where all sorts of things hairy things could go wrong.
+"""@@@
+
+Main Module:   my_generation.py 
+
+Classes:       
+
+Functions:     add_noise 
+               read_SeqFile 
+               generate
+
+Author:        Wayne Dawson
+creation date: around 1610--
+last update:   190403
+version:       0
+
+
+Purpose: 
+
+my_generation.py: generates a heatmap for reading by chreval.py.  This
+is intended to be used to build test structures to tune the energy
+evaluation function in chreval.py and to understand how much the
+prediction can change as a result of having noise in the PET count
+data. This may prove to be particularly value in analyzing the
+significance of pseudoknot like constructions where all sorts of
+things could go wrong or turn harry.
+
+So far, this is one of the few programs that I didn't completely
+convert to object code. I guess is it largely self contained and not
+likely to be used by the other programs in this distribution.
+
+"""
+
 
 from Vienna import Vstruct
-from MatrixTools import MatrixTools
+from BasicTools   import initialize_matrix
+from HeatMapTools import HeatMapTools
 import sys
 import random
 import argparse
@@ -14,7 +43,7 @@ import os
 
 PROGRAM = "my_generation.py"
 
-def help_ExFile():
+def help_ExampleFile():
     print "Here is an example of an input file:\n"
     print "     > cat example.ss"
     print "     .ABC..........abc.. 20 "
@@ -37,7 +66,7 @@ def help_ExFile():
     print "\n     > %s -f example.ss" % PROGRAM
 #    
 
-def help_ExSeq():
+def help_ExampleSeq():
     print "command line:\n"
     print "     > %s -seq \".ABCDE.((..)).abcde\" \"{.................}\"" % PROGRAM
     print "\nThe first sequence expresses a parallel stem"
@@ -54,6 +83,23 @@ def help_ExSeq():
 
 
 def add_noise(N, hv):
+    # 170306wkd: I really don't know what to consider a valid range
+    # for noise with these experiments. However, it seems reasonable
+    # that one or two counts surely _could_ be noise, just by
+    # chance. Perhaps it is more, perhaps it is less, but in this
+    # scheme, I just add noise at random locations with a range
+    # between 0 and 2.
+    
+    # A further issue: I think it is questionable whether the
+    # distribution of noise should be treated as uniform or some
+    # weight that drops off like the pair interaction frequency. After
+    # all, spurious contacts are probably more likely on the short
+    # range of 1 to 10 segments, but beyond that, the probbability is
+    # likely rather small.  This is a very cheesy design here, in that
+    # it just blindly dumps noise anywhere without consideration of
+    # what the noise should really look like. Then again, we don't
+    # actually know what the "correct" distribution is. ... ... 
+    
     for j in range(0, N):
         for i in range(0,j):
             u1 = int(random.uniform(0,1) + 0.5)
@@ -65,6 +111,7 @@ def add_noise(N, hv):
     #
     return hv
 #
+
 
 def read_SeqFile(iflnm):
     print iflnm
@@ -111,7 +158,8 @@ def read_SeqFile(iflnm):
         print ss_seq[k], ss_wt[k] 
     return ss_seq, ss_wt
 #
-        
+
+
 def generate(ss_seq, ss_wt, w_noise, oflnm):
     debug_generate = False
     vs = []
@@ -122,6 +170,10 @@ def generate(ss_seq, ss_wt, w_noise, oflnm):
     for k in range(0, len(ss_seq)):
         vs += [Vstruct()]
         n = len(ss_seq[k])
+        
+        # First, verify that there are no imcompatibilities with the
+        # input sequences. One of the most obvious errors is that the
+        # sequences are of different length.
         if not n == N:
             print "ERROR: input sequence is not the same length as the others"
             m = 1
@@ -133,21 +185,25 @@ def generate(ss_seq, ss_wt, w_noise, oflnm):
         n_vs = len(vs) - 1
         vs[n_vs].wt = ss_wt[n_vs]
     #
+    
+    # display a summary if debugging
     if debug_generate:
         for k in range(0, len(vs)):
             print "%d: %d" % (k, vs[k].wt)
         #
     #
     
+    
+    # Second, go on and analyze what is there.
     for k in range(0, len(vs)):
         print "line(%2d): " % k
-        vs[k].reset_Vstruct()
+        #vs[k].reset_Vstruct()
         if debug_generate:
             print "Xlist:  ", vs[k].Xlist
             print "BPlist: ", vs[k].BPlist
         #
         vs[k].set_Vstruct(ss_seq[k])
-        vs[k].scan_ctcf(0, 0)
+        vs[k].scan_allTypes(0, 0)
         vs[k].print_vstr()
         
         if debug_generate:
@@ -165,19 +221,19 @@ def generate(ss_seq, ss_wt, w_noise, oflnm):
                 print "pk connects"
                 vs[k].print_Xlist_n(vs[k].PKlist)
             #
-            if len(vs[k].CTCFlist) > 0:
+            if len(vs[k].MPlist) > 0:
                 print "CTCF connects"
-                vs[k].print_Xlist_n(vs[k].CTCFlist)
+                vs[k].print_Xlist_n(vs[k].MPlist)
             #
         #
     #
-    # sys.exit(0)
-    mtools = MatrixTools()
+    
     hv = []
-    hv = mtools.initialize_matrix(hv, N, 0)
+    hv = initialize_matrix(hv, N, 0)
     
     # add noise if requested
     if w_noise:
+        # presently, a very cheesy function, but anyway....
         hv = add_noise(N, hv)
     #
     for k in range(0, len(vs)):
@@ -207,11 +263,11 @@ def generate(ss_seq, ss_wt, w_noise, oflnm):
             #
             hv[j][i] = hv[i][j]
         #
-        for pair in vs[k].CTCFlist:
+        for pair in vs[k].MPlist:
             i = pair.i
             j = pair.j
             if debug_generate:
-                print "CTCFlist: ", vs[k].wt
+                print "MPlist: ", vs[k].wt
             #
             if vs[k].wt > 0:
                 hv[i][j] = vs[k].wt
@@ -224,11 +280,16 @@ def generate(ss_seq, ss_wt, w_noise, oflnm):
     if debug_generate:
         print hv
     #
-    heatmap = mtools.make_heatmap(hv)
-    print heatmap
+    print "make heatmap"
+    htools = HeatMapTools() # default setup GenerateHeatMapTools()
+    heatmap = htools.make_heatmap(hv)
+    #print heatmap
+    print "save heatmap in %s" % oflnm
+    
     fp = open(oflnm, 'w')
     fp.write(heatmap)
     fp.close()
+    print "done"
 #
     
 
@@ -242,27 +303,36 @@ def main(cl):
     
     parser.add_argument('-o', nargs=1, default=["test.heat"],
                         dest='f_heatmap',
-                        help="name of output heatmap file [default 'test.heat']; the current output is in the older format where CTCF and singleton data are jumbled together on a single heatmap.")
+                        help="name of output heatmap file [default 'test.heat']; \
+                        the current output is in the older format where CTCF and \
+                        singleton data are jumbled together on a single heatmap.")
     
     parser.add_argument('-add_noise', action='store_true', default=False,
                         dest='w_noise',
                         help='Request to include noise in the output heatmap.')
     
-    parser.add_argument('-hExFile', action='store_true', default=False,
+    parser.add_argument('-h.ExFile', action='store_true', default=False,
                         dest='help_ExFile',
                         help='shows an example of an input file.')
-    parser.add_argument('-hExSeq', action='store_true', default=False,
+    parser.add_argument('-h.ExSeq', action='store_true', default=False,
                         dest='help_ExSeq',
                         help='shows an example of a command line call.')
     
     input_opt = parser.add_mutually_exclusive_group()    
     input_opt.add_argument('-f', nargs=1, default=["test.ss"],
-                        dest='f_ss',
-                           help="name of input 1D structure file [default 'test.ss']; the file can contain multiple lines (with structures of the same length), but each line _must_ contain only one Fontana-type formatted sequence.")
+                           dest='f_ss',
+                           help="name of input 1D structure file [default 'test.ss']; \
+                           the file can contain multiple lines (with structures of the \
+                           same length), but each line _must_ contain only one \
+                           Fontana-type formatted sequence.")
     
     input_opt.add_argument('-seq',     action='store', nargs='+', default=None,
-                        dest='seq', 
-                           help='The input structure (in Fontana-like format); e.g. \".ABCDE..abcde\" \"{...........}\" generates a CTCF boundary "{...........}" and a parallel stem of length 5, \".ABCDE..abcde\", where \".....E......e\" overlaps with the CTCF.')
+                           dest='seq', 
+                           help='The input structure (in Fontana-like format); \
+                           e.g. \".ABCDE..abcde\" \"{...........}\" generates a \
+                           CTCF boundary "{...........}" and a parallel stem of \
+                           length 5, \".ABCDE..abcde\", where \".....E......e\" \
+                           overlaps with the CTCF.')
     
     
     #
@@ -270,11 +340,11 @@ def main(cl):
     args = parser.parse_args()
     # print args
     if args.help_ExFile:
-        help_ExFile()
+        help_ExampleFile()
         sys.exit(0)
     #
     if args.help_ExSeq:
-        help_ExSeq()
+        help_ExampleSeq()
         sys.exit(0)
     #
     
@@ -309,4 +379,4 @@ def main(cl):
 # Main
 if __name__ == '__main__':
     main(sys.argv)
-
+#

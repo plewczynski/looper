@@ -1,5 +1,28 @@
 #!/usr/bin/env python
 
+"""@@@
+
+program:        Constants.py
+
+Creation Date:  cr 2017.03~
+Last Update:    180904
+Version:        1.0
+
+
+Purpose:
+
+Contains constants that are often used in various programs. Having one
+file that contains them all helps to keep everything regular.
+
+Comments:
+
+180904: Constants has been updated to include the Turner Energy Rule
+(TER) parameters because the concepts developed to build chreval and
+the upgrades of the vsfold series will probably be inherited to do RNA
+structure prediction eventually.
+
+"""
+
 # #################################################################
 # ###############  General configuration CONSTANTS  ###############
 # ###############    settings used in FreeEnergy    ###############
@@ -9,42 +32,29 @@
 # These are used to assign parameters in FreeEnergy()
 
 INFINITY = 1000.0
-# 161019wkd: I know infinity is not 1000, but I need to set some upper
-# bound on the program on the program where generally nothing can be
-# found by typical free energy. Generally this appears to be a large
-# enough number to be treated as "infinity". I made it adjustable for
-# the sake of raising the bar if necessary.
+"""@
 
-# Originally, I had tried to rid the code completely of these sorts of
-# artificial features, but it seems that this is not so easy to do and
-# they end up cropping up somewhere in the code whatever I
-# do. Perhaps, if the aesthetics get a bit too annoying, another way
-# is to run the program with this artifical value and, at the end,
-# rescale this upper bound to the maximum (if it is positive) or zero,
-# if not. At any rate, whatever number I use, it should be at least as
-# positive as the largest positive calculated value in the whole lot.
+161019wkd: I know infinity is not 1000 kcal/mol, but I need to set
+some upper bound on the program on the program where generally nothing
+can be found by typical free energy. Generally this appears to be a
+large enough number to be treated as "infinity". I made it adjustable
+for the sake of raising the bar if necessary.
 
-# fundamental coarse grained resolution length
-seg_len = 5000.0
+190403wkd: In an older version of the code, I still needed this for
+declaring values in the program. However, since the end of Dec 2018, I
+introduced my newer approach that includes entropy corrections in the
+blank regions, and this seems to eleminate the need for this artifical
+setting.
 
-# constants: in entropy evaluation
-kB       = 0.00198 # [kcal/mol]
-xi       = 5.0
-lmbd     = 0.002  #   
-gmm      = 2.3
-# constants: weights for the enthalpy terms 
-febase   = -6.0   #febase   = -4.7
-feshift  =  1.0
+Nevertheless, for starting search calculations, it is still convenient
+to have this very large positive free energy as a starting value so
+that almost every location resets to a more realistic value.
 
-# Presently, the enthalpy is based on a logarithmic assessment with
-# respect to the number of observed counts of a particular interaction
-# between parts (i,j) of the chromatin chain. It is clearly a crude
-# function to assess this binding free energy, but I have no real
-# information to work with here. For a given set of data, these two
-# parameters may surely require tuning. The current test set showed
-# somewhat reasonable results when setting a baseline of 4 kcal/mol
-# for the binding free energy of the CTCF clusters. Whether this
-# estimate is remotely correct or not is currently unknown.
+"""
+
+kB       = 0.0019872041 # [kcal/mol] (Boltzmann constant)
+
+# source: https://en.wikipedia.org/wiki/Boltzmann_constant
 
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 # #################################################################
@@ -56,6 +66,9 @@ feshift  =  1.0
 # ###############   used in 1D structure notation   ###############
 # #################################################################
 # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+
+sysDefLabels = { "Chromatin" : 'c',
+                 "RNA"       : 'A'}
 
 
 # used for PKs and parallel stems
@@ -193,11 +206,15 @@ rpr2num = {  ')' :  0,
 #            'z' : 29,
 }
 
-# the next two dictionaries can be used to increment between index i
-# and i+1 and reference a particular character. For example, say you
-# are using "Ee". Then lpr2num[E] = 8 / rpr2num[e] = 8,
-# PKrndx[rpr2num[e]] = 6 and so if we increment to 7,
-# rpr2num[PKfndx[7]], num2lpr[7] = 'F', num2rpr[7] = 'f'.
+"""@
+
+the next two dictionaries can be used to increment between index i and
+i+1 and reference a particular character. For example, say you are
+using "Ee". Then lpr2num[E] = 8 / rpr2num[e] = 8, PKrndx[rpr2num[e]] =
+6 and so if we increment to 7, rpr2num[PKfndx[7]], num2lpr[7] = 'F',
+num2rpr[7] = 'f'.
+
+"""
 PKfndx  = {  0 :  1,  # ['[', ']'],
              1 :  3,  # ['<', '>'],
              2 :  4,  # ['A', 'a'],
@@ -362,14 +379,18 @@ counter = {  0 :  0,  # ['(', ')'],
 }
 
 
-# This contains that actual base pairing information for each of the
-# label types; i.e., '(', '[', etc. It is a useful buffer that permits
-# the final sorting of information into various categories of such as
-# secondary structure (in BPlist), pseudoknots (in PKlist) and CTCF
-# islands (in CTCFlist). Using the above conversion formulae, each of
-# these labels ('(', '[', 'A', etc.) is identified with an index (0,
-# 1, 2, 3...). Hence, all the various letters are organized so that
-# they can be sorted to build the final lists.
+"""@
+
+This contains that actual base pairing information for each of the
+label types; i.e., '(', '[', etc. It is a useful buffer that permits
+the final sorting of information into various categories of such as
+secondary structure (in BPlist), pseudoknots (in PKlist) and CTCF
+islands (in CTCFlist). Using the above conversion formulae, each of
+these labels ('(', '[', 'A', etc.) is identified with an index (0, 1,
+2, 3...). Hence, all the various letters are organized so that they
+can be sorted to build the final lists.
+
+"""
 Xlist   = {  0 :  [],  # ['(', ')'],
              1 :  [],  # ['[', ']'],
              2 :  [],  # ['{', '}'],
@@ -406,3 +427,6 @@ Xlist   = {  0 :  [],  # ['(', ')'],
 
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 # #################################################################
+
+
+

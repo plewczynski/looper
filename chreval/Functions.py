@@ -1,21 +1,57 @@
 #!/usr/bin/env python
 
-# Important functions used by several program in this package
+"""@@@
 
+Main Module:   Functions.py 
+
+Classes:       
+
+Functions:     hamming_bin 
+               hamming_str 
+               KahanSumExp
+               similar 
+               
+
+Author:        Wayne Dawson
+creation date: mostly 2016, other developments in 2017 ~ 2019.
+last update:   190522
+version:       0
+
+Purpose:
+
+Important universal functions used by several program in this package
+
+"""
+
+import sys
 from math import exp, log, ceil, floor
 from difflib import SequenceMatcher # for similar
-import sys
 
 
-def make_file_heading(name, bgn, end, bp_resolution):
-    return "%s_%d_%d_%s" % (name, bgn, end, bp_resolution)
-#
-          
 
 # Measure the similarity of two strings and return a fractional
 # percentage of the similarity.
+
 def similar(a, b):
-   return SequenceMatcher(None, a, b).ratio()
+    """
+    example how SequenceMatcher works ...
+    
+      >>> a = "this is not true"
+      >>> b = "xxx this is true"
+      >>> sm = SequenceMatcher(None, a, b)
+      >>> sm.find_longest_match(0, len(a), 0, len(b))
+      Match(a=0, b=4, size=8)
+      >>> sm.ratio()
+      0.75
+      >>> a = "this is not true # not so # not so"
+      >>> b = "#"
+      >>> ma, mb, sz = sm.find_longest_match(0, len(a), 0, len(b))
+      >>> print ma, mb, sz
+      17 0 1
+      >>> round(sm.ratio(), 4)
+      0.0571
+    """
+    return SequenceMatcher(None, a, b).ratio()
 #
 
 def hamming_bin(s1, s2):
@@ -23,6 +59,7 @@ def hamming_bin(s1, s2):
     assert len(s1) == len(s2)
     return sum(c1 != c2 for c1, c2 in zip(s1, s2))
 #
+
 
 def hamming_str(str1, str2):
     """Count the # of differences between equal length strings str1 and str2"""
@@ -38,36 +75,44 @@ def hamming_str(str1, str2):
 
 
 
-# (IMPORTANT!!!) For the partition function (in my particular case), I
-# sometimes reach the limits of the IEEE 754 double-precision
-# standard, which occurs when I approach "math.exp(709.783)". So this
-# function is needed if have to compute arguments in the exponential
-# that are larger than this limit 709.783.  According to Wikipedia,
+"""@@@
 
-# https://en.wikipedia.org/wiki/Kahan_summation_algorithm
+(IMPORTANT!!!) For the partition function (in my particular case), I
+sometimes reach the limits of the IEEE 754 double-precision standard,
+which occurs when I approach "math.exp(709.783)". So this function is
+needed if have to compute arguments in the exponential that are larger
+than this limit 709.783.  According to Wikipedia,
 
-# using the Kahan algorithm is a fairly accurate compromise for
-# computing large numbers like this without losing as much precision
-# as would normally be the case, or, worse yet, just having to give
-# up. In general, the list should be sorted before this operation is
-# done so as to limit the times it must be corrected. In the case of
-# the computational program, this is already done.
+https://en.wikipedia.org/wiki/Kahan_summation_algorithm
 
-# KahanSumExp is an implementation of the Kahan summation algorithm in
-# python. The solution found in stackexchange in the scientific
-# computation
+using the Kahan algorithm is a fairly accurate compromise for
+computing large numbers like this without losing as much precision as
+would normally be the case, or, worse yet, just having to give up. In
+general, the list should be sorted before this operation is done so as
+to limit the times it must be corrected. In the case of the
+computational program, this is already done.
 
-# http://scicomp.stackexchange.com/questions/1122/how-to-add-large-exponential-terms-reliably-without-overflow-errors
-#
+KahanSumExp is an implementation of the Kahan summation algorithm in
+python. The solution found in stackexchange in the scientific
+computation
 
-# 161022wkd: The program can work faster by sorting in ascending
-# order. Since I want it in desending order, one way to keep this
-# practice is to include "expvalues.reverse().  Anyway, when running
-# test5(), the data really does need to be sorted first.
+http://scicomp.stackexchange.com/questions/1122/how-to-add-large-exponential-terms-reliably-without-overflow-errors
+
+
+161022wkd: The program can work faster by sorting in ascending
+order. Since I want it in desending order, one way to keep this
+practice is to include "expvalues.reverse().  
+
+Note: Please see test(5) in Boltzmann to see a case where it is
+important to sort.
+
+"""
+
 flag_KahanSumExp_USE_SORT = False
 
 # have to set what the maximum value is
 doubleMAX = (1.0 + (1.0 - (2 ** -52))) * (2 ** (2 ** 10 - 1))
+
 
 def KahanSumExp(expvalues):
     if flag_KahanSumExp_USE_SORT:
@@ -87,15 +132,31 @@ def KahanSumExp(expvalues):
             shift += n
             carry *= 2*n
             esum *= 2*n
-
+        #
+        
         exponent -= shift * log(2)
         value = exp(exponent) - carry 
         if doubleMAX - esum < value:
             shift += 1
             esum /= 2
             value /= 2
+        #
         tmp = esum + value 
         carry = (tmp - esum) - value 
         esum = tmp
+    #
     return esum, shift
 #
+
+
+    
+def test1():
+    values = [10, 37, 34, 0.1, 0.0004, 34, 37.1, 37.2, 36.9, 709, 710, 711]
+    value, shift = KahanSumExp(values)
+    print "{0} x 2^{1}".format(value, shift)
+#
+
+if __name__ == "__main__":
+    test1()
+#
+

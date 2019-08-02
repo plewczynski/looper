@@ -1,7 +1,32 @@
 #!/usr/bin/python
 
-# this contains a number of important data structures that are used in
-# ChromatinData and a few other programs.
+"""@@@
+
+Main Module:   Chromosome.py
+
+Classes:       Segment
+               Chromatin
+               Chromosome
+
+Author:        Wayne Dawson
+creation date: parts 2016 (in chreval), made into a separate object 170426
+last update:   180709
+version:       0
+
+Purpose:
+
+this contains a number of important data structures that are used in
+ChromatinData and a few other programs.
+
+
+Comments:
+
+Well, one thing is that it is kind of annoying that I have so many
+different data formats that are different yet very similar. I would
+like to streamline this, but presently, I think the philosophy is "if
+it works, don't fix it!".
+
+"""
 
 import sys
 import os

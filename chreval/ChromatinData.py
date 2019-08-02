@@ -1,76 +1,89 @@
 #!/usr/bin/python
 
-# ChromatinData.py 
-#
-#    This is supposed to be a self-contained data object. Not sure if
-#    it really functions as so, but I was able to decouple it from
-#    Anal at least.
+"""@@@
 
-#    The input file is a list of loops formatted according to
-#    Przemek's approach (with extension 'bed') Teresa's approach
-#    (currently with extension 'txt').
+Main Module:   ChromatinData.py 
 
-#    command line example:
-#    > chreval.py -ff loops.CTCF.annotated.bed -dG
+Classes:       Data
 
-#    where the file "loops.CTCF.annotated.bed" contains a list of data
-#    formatted according to Przemek. This has the format
+Functions:     make_file_heading
 
-#    file format1 (loops.CTCF.annotated.bed):
-#
-#                       CTCF    CTCF    PET   cmplx   cmplx   cmplx     
-# chr    bgn     end     1       2      cnt    ity      a       b       open            active
-# chr1	838908	912011	R	L	11	0	4	6	0.0686291944243	0.426918183932
-# chr1	838908	922335	R	R	5	1	6	8	0.0601364066789	0.397329401752
-# chr1	838908	1000167	R	L	7	3	15	17	0.0910398799447	0.5333717808
-# chr1	918286	969271	R	R	5	0	4	4	0.119015396685	0.543963910954
-# chr1	918286	1000167	R	L	75	1	8	8	0.11802493863	0.65697780926
-# chr1	918286	1059032	R	R	4	2	12	12	0.09421226891	0.648785755901
+Author:        Wayne Dawson
+creation date: mostly 2016 a little bit in 2017 up to March
+last update:   190522
+version:       0
 
-#    file format2 (structure.loops.GSE6352.annotated.bed):
-# chr1	1050000	1190000	241	-1	9	9	0.0529785714286	0.418914285714
-# chr1	1585000	1650000	80	-2	0	0	0.0553384615385	0.737907692308
-# chr1	1710000	1840000	154	-2	22	22	0.0699230769231	0.874938461538
+ChromatinData.py 
 
-#    file format2 (structure.TAD_Rao.annotated.bed):
-# chr1	915000	1005000	0.72251	1	10	10	0.116533333333	0.643166666667
-# chr1	1030000	1235000	1.1954	-1	12	12	0.0460487804878	0.507936585366
-# chr1	1255000	1450000	0.9312	0	27	27	0.0741435897436	0.653230769231
+   This is supposed to be a self-contained data object. Not sure if
+   it really functions as so, but I was able to decouple it from
+   Anal at least.
+
+   The input file is a list of loops formatted according to
+   Przemek's approach (with extension 'bed') Teresa's approach
+   (currently with extension 'txt').
+
+   command line example:
+   > chreval.py -ff loops.CTCF.annotated.bed -dG
+
+   where the file "loops.CTCF.annotated.bed" contains a list of data
+   formatted according to Przemek. This has the format
+
+   file format1 (loops.CTCF.annotated.bed):
+
+                       CTCF    CTCF    PET   cmplx   cmplx   cmplx     
+chr    bgn     end     1       2      cnt    ity      a       b       open            active
+chr1	838908	912011	R	L	11	0	4	6	0.0686291944243	0.426918183932
+chr1	838908	922335	R	R	5	1	6	8	0.0601364066789	0.397329401752
+chr1	838908	1000167	R	L	7	3	15	17	0.0910398799447	0.5333717808
+chr1	918286	969271	R	R	5	0	4	4	0.119015396685	0.543963910954
+chr1	918286	1000167	R	L	75	1	8	8	0.11802493863	0.65697780926
+chr1	918286	1059032	R	R	4	2	12	12	0.09421226891	0.648785755901
+
+   file format2 (structure.loops.GSE6352.annotated.bed):
+chr1	1050000	1190000	241	-1	9	9	0.0529785714286	0.418914285714
+chr1	1585000	1650000	80	-2	0	0	0.0553384615385	0.737907692308
+chr1	1710000	1840000	154	-2	22	22	0.0699230769231	0.874938461538
+
+   file format2 (structure.TAD_Rao.annotated.bed):
+chr1	915000	1005000	0.72251	1	10	10	0.116533333333	0.643166666667
+chr1	1030000	1235000	1.1954	-1	12	12	0.0460487804878	0.507936585366
+chr1	1255000	1450000	0.9312	0	27	27	0.0741435897436	0.653230769231
 
 
-#    In general, bed type files should only be one instance.
+   In general, bed type files should only be one instance.
 
-#    An alternative file input would involve the following command
-#    line
+   An alternative file input would involve the following command
+   line
 
-#    command line example:
-#    > chreval.py -ff wayn_active_inactive.txt wayn_compartments.txt wayn_open.txt -dG
+   command line example:
+   > chreval.py -ff wayn_active_inactive.txt wayn_compartments.txt wayn_open.txt -dG
 
-#    where the various list of "txt" files (wayn_active_inactive.txt,
-#    etc.) are formatted according to Teresa.
+   where the various list of "txt" files (wayn_active_inactive.txt,
+   etc.) are formatted according to Teresa.
 
 
-# used as a identifier                 |used in the program ----------------------------------
-# region of chromosome                 |specific location in region             state   length
-# chr   bgn             end            |chr     bgn             end              
-# chr1	10436116	10556545	chr1	10437400	10438000	active	600
-# chr1	10436116	10556545	chr1	10438000	10438466	active	466
-# chr1	10436116	10556545	chr1	10438558	10440200	active	1642
+used as a identifier                 |used in the program ----------------------------------
+region of chromosome                 |specific location in region             state   length
+chr   bgn             end            |chr     bgn             end              
+chr1	10436116	10556545	chr1	10437400	10438000	active	600
+chr1	10436116	10556545	chr1	10438000	10438466	active	466
+chr1	10436116	10556545	chr1	10438558	10440200	active	1642
         
 
-#    These files often have different data related to open, active,
-#    inactive, compartment A or B, etc., so the results typically
-#    require more than one file.  Therefore, multiple file entries are
-#    allowed for both file types; however, in general, for "bed"
-#    files, there should only be one input file.
+   These files often have different data related to open, active,
+   inactive, compartment A or B, etc., so the results typically
+   require more than one file.  Therefore, multiple file entries are
+   allowed for both file types; however, in general, for "bed"
+   files, there should only be one input file.
 
-#    The chromatin loop is specified by the region chr1 10436116 to
-#    10556545 and the zones listed above as "active" are bands between
-#    (10437400-10438000), (10438000-10438466) and
-#    (10438558-10440200). The percentage of active region is the sum
-#    of the lengths of the small segments divide by the length of the
-#    loop.
-
+   The chromatin loop is specified by the region chr1 10436116 to
+   10556545 and the zones listed above as "active" are bands between
+   (10437400-10438000), (10438000-10438466) and
+   (10438558-10440200). The percentage of active region is the sum
+   of the lengths of the small segments divide by the length of the
+   loop.
+"""
 
 
 import sys
@@ -86,6 +99,11 @@ from Chromosome import assign_bed_tags
 PROGRAM = "ChromatinData.py"
 string = String(10)
 
+
+def make_file_heading(name, bgn, end, bp_resolution):
+    return "%s_%d_%d_%s" % (name, bgn, end, bp_resolution)
+#
+          
 
 
 class Data:
@@ -303,59 +321,62 @@ class Data:
             print "read_bed_taglist()"
         #
         
-        #01 version: 1
-        #02 # CTCF analysis from ChIA-PET data and epigenetic info
-        #03 # active
-        #04 # open
-        #05 # compartment A
-        #06 # compartment B
-        #07 
-        #08 
-        #09 chromatin_tags:
-        #10 chr      bgn      end    lCTCF rCTCF  PETcnt  cmplx1 cmplx2   cmplx3  open             active           A       B
-        #11 chromatin_data:
-        #12 chr15 20558294 22455914  R      R       9      1       2       2      0.00473698633025 0.0317128824528 1.0     0.0
-        #13 chr15 21925132 22455914  R      R       17     0       1       0      0.0136930039074  0.0404572875493 1.0     0.0
-        #14 chr15 23887615 25747260  R      L       7      0       7       9      0.00475413318133 0.164474402372  1.0     0.0
-        #15 chr15 25752736 26179721  R      L       17     2       -2      2      0.0429710645573  0.061978758036  1.0     0.0
-        #16 chr15 25939090 26179721  R      L       7      1       -2      1      0.0750069608654  0.0585419168769 1.0     0.0
+        """@
         
-        # line01 tells the version index (so the program can adjust to
-        # the new formats people will create)
+        01 version: 1
+        02 # CTCF analysis from ChIA-PET data and epigenetic info
+        03 # active
+        04 # open
+        05 # compartment A
+        06 # compartment B
+        07 
+        08 
+        09 chromatin_tags:
+        10 chr      bgn      end    lCTCF rCTCF  PETcnt  cmplx1 cmplx2   cmplx3  open             active           A       B
+        11 chromatin_data:
+        12 chr15 20558294 22455914  R      R       9      1       2       2      0.00473698633025 0.0317128824528 1.0     0.0
+        13 chr15 21925132 22455914  R      R       17     0       1       0      0.0136930039074  0.0404572875493 1.0     0.0
+        14 chr15 23887615 25747260  R      L       7      0       7       9      0.00475413318133 0.164474402372  1.0     0.0
+        15 chr15 25752736 26179721  R      L       17     2       -2      2      0.0429710645573  0.061978758036  1.0     0.0
+        16 chr15 25939090 26179721  R      L       7      1       -2      1      0.0750069608654  0.0585419168769 1.0     0.0
         
-        # line02 to line06 A brief description. Not absolutely
-        # required, but it becomes useful when you have hundreds of
-        # files and you want to figure out what you were doing 6
-        # months ago. Any line that starts with '#' is automatically
-        # assumed to be a comment.
+        line01 tells the version index (so the program can adjust to
+        the new formats people will create)
         
-        # line07 to line08 this end of description. The empty lines or
-        # lines with some only spaces are ignored.
+        line02 to line06 A brief description. Not absolutely required,
+        but it becomes useful when you have hundreds of files and you
+        want to figure out what you were doing 6 months ago. Any line
+        that starts with '#' is automatically assumed to be a comment.
         
-        # line09 specifies that you are reading in the names of the
-        # fields in the chromatin file.
+        line07 to line08 this end of description. The empty lines or
+        lines with some only spaces are ignored.
         
-        # line10 The line that follows contains the list of all tags
-        # that will be used. The number of tags must match the number
-        # of columns in the data file. Moreover, the tags must adhere
-        # to particular names.
+        line09 specifies that you are reading in the names of the
+        fields in the chromatin file.
         
-        # line11 specifies the the data should follow. anything that
-        # follows this line should either be the data or a comment
-        # "#". Anything else will probably lead to an error.
+        line10 The line that follows contains the list of all tags
+        that will be used. The number of tags must match the number of
+        columns in the data file. Moreover, the tags must adhere to
+        particular names.
+        
+        line11 specifies the the data should follow. anything that
+        follows this line should either be the data or a comment
+        "#". Anything else will probably lead to an error.
         
         
-        #01 version: 1
-        #02 # CTCF analysis from ChIA-PET data and epigenetic info
-        #03 # active
-        #04 # open
-        #05 # compartment A
-        #06 # compartment B
-        #07 
-        #08 
-        #09 chromatin_tags:
-        #10 chr      bgn      end    lCTCF rCTCF  PETcnt  cmplx1 cmplx2   cmplx3  open             active           A       B
-        #11 chromatin_data:
+        01 version: 1
+        02 # CTCF analysis from ChIA-PET data and epigenetic info
+        03 # active
+        04 # open
+        05 # compartment A
+        06 # compartment B
+        07 
+        08 
+        09 chromatin_tags:
+        10 chr      bgn      end    lCTCF rCTCF  PETcnt  cmplx1 cmplx2   cmplx3  open             active           A       B
+        11 chromatin_data:
+
+        """
         
         k = 1
         taglist = []
@@ -408,22 +429,24 @@ class Data:
         dtbgn, taglist, description = self.read_bed_taglist(lfp, flnm)
         self.taglist += [taglist]
         self.description += [description]
-        
+
         # print dtbgn
         # print self.taglist
         # print self.description
+
+        """@
         
-        # this obtains the tags below
+        this obtains the tags below
         
-        #09 chromatin_tags:
-        #10 chr      bgn      end    lCTCF rCTCF  PETcnt  cmplx1 cmplx2   cmplx3  open             active           A       B
-        #11 chromatin_data:
-        #12 chr15 20558294 22455914  R      R       9      1       2       2      0.00473698633025 0.0317128824528 1.0     0.0
-        #13 chr15 21925132 22455914  R      R       17     0       1       0      0.0136930039074  0.0404572875493 1.0     0.0
-        #14 chr15 23887615 25747260  R      L       7      0       7       9      0.00475413318133 0.164474402372  1.0     0.0
-        #15 chr15 25752736 26179721  R      L       17     2       -2      2      0.0429710645573  0.061978758036  1.0     0.0
-        #16 chr15 25939090 26179721  R      L       7      1       -2      1      0.0750069608654  0.0585419168769 1.0     0.0
-        
+        09 chromatin_tags:
+        10 chr      bgn      end    lCTCF rCTCF  PETcnt  cmplx1 cmplx2   cmplx3  open             active           A       B
+        11 chromatin_data:
+        12 chr15 20558294 22455914  R      R       9      1       2       2      0.00473698633025 0.0317128824528 1.0     0.0
+        13 chr15 21925132 22455914  R      R       17     0       1       0      0.0136930039074  0.0404572875493 1.0     0.0
+        14 chr15 23887615 25747260  R      L       7      0       7       9      0.00475413318133 0.164474402372  1.0     0.0
+        15 chr15 25752736 26179721  R      L       17     2       -2      2      0.0429710645573  0.061978758036  1.0     0.0
+        16 chr15 25939090 26179721  R      L       7      1       -2      1      0.0750069608654  0.0585419168769 1.0     0.0
+        """
         
         #  
         name = ''    # name of the chromosome
@@ -480,33 +503,35 @@ class Data:
         #
         
         print "scanning %s...." % flnm
+
+        """@
         
-        # version 0 formats
-        # file format1 (loops.CTCF.annotated.bed):
-        #
-        #                       CTCF    CTCF    PET   cmplx   cmplx   cmplx     
-        # chr    bgn     end     1       2      cnt    ity      a       b       open            active
-        # chr1	838908	912011	R	L	11	0	4	6	0.0686291944243	0.426918183932
-        # chr1	838908	922335	R	R	5	1	6	8	0.0601364066789	0.397329401752
-        # chr1	838908	1000167	R	L	7	3	15	17	0.0910398799447	0.5333717808
-        # chr1	918286	969271	R	R	5	0	4	4	0.119015396685	0.543963910954
-        # chr1	918286	1000167	R	L	75	1	8	8	0.11802493863	0.65697780926
-        # chr1	918286	1059032	R	R	4	2	12	12	0.09421226891	0.648785755901
+        version 0 formats
+        file format1 (loops.CTCF.annotated.bed):
         
-        # file format2 (structure.loops.GSE6352.annotated.bed):
-        # chr1	1050000	1190000	241	-1	9	9	0.0529785714286	0.418914285714
-        # chr1	1585000	1650000	80	-2	0	0	0.0553384615385	0.737907692308
-        # chr1	1710000	1840000	154	-2	22	22	0.0699230769231	0.874938461538
+                              CTCF    CTCF    PET   cmplx   cmplx   cmplx     
+        chr    bgn     end     1       2      cnt    ity      a       b       open            active
+        chr1	838908	912011	R	L	11	0	4	6	0.0686291944243	0.426918183932
+        chr1	838908	922335	R	R	5	1	6	8	0.0601364066789	0.397329401752
+        chr1	838908	1000167	R	L	7	3	15	17	0.0910398799447	0.5333717808
+        chr1	918286	969271	R	R	5	0	4	4	0.119015396685	0.543963910954
+        chr1	918286	1000167	R	L	75	1	8	8	0.11802493863	0.65697780926
+        chr1	918286	1059032	R	R	4	2	12	12	0.09421226891	0.648785755901
         
-        # file format2 (structure.TAD_Rao.annotated.bed):
-        # chr1	915000	1005000	0.72251	1	10	10	0.116533333333	0.643166666667
-        # chr1	1030000	1235000	1.1954	-1	12	12	0.0460487804878	0.507936585366
-        # chr1	1255000	1450000	0.9312	0	27	27	0.0741435897436	0.653230769231
+        file format2 (structure.loops.GSE6352.annotated.bed):
+        chr1	1050000	1190000	241	-1	9	9	0.0529785714286	0.418914285714
+        chr1	1585000	1650000	80	-2	0	0	0.0553384615385	0.737907692308
+        chr1	1710000	1840000	154	-2	22	22	0.0699230769231	0.874938461538
         
-        # There are other formats, but it appears that if the tag
-        # "annotated" is not present, we can discriminate between
-        # them.
+        file format2 (structure.TAD_Rao.annotated.bed):
+        chr1	915000	1005000	0.72251	1	10	10	0.116533333333	0.643166666667
+        chr1	1030000	1235000	1.1954	-1	12	12	0.0460487804878	0.507936585366
+        chr1	1255000	1450000	0.9312	0	27	27	0.0741435897436	0.653230769231
         
+        There are other formats, but it appears that if the tag
+        "annotated" is not present, we can discriminate between them.
+        
+        """
         
         if len(self.ext) > 1:
             print "SORRY: The file '%s' is version 0 type 'bed' file." % flnm
@@ -606,20 +631,26 @@ class Data:
         # file format:
         
         self.taglist += [['chr', 'bgn', 'end', 'lCTCF', 'open', 'active', 'repressed', 'A', 'B']]
-        # used as a identifier                 |used in the program ----------------------------------                           
-        # region of chromosome                 |specific location in region             state   length
-        # chr   bgn             end            |chr     bgn             end              
-        # chr1	10436116	10556545	chr1	10437400	10438000	active	600
-        # chr1	10436116	10556545	chr1	10438000	10438466	active	466
-        # chr1	10436116	10556545	chr1	10438558	10440200	active	1642
-        # 0     1               2               3       4               5               6       7
+        
+        """@
+
+        used as a identifier                 |used in the program ----------------------------------                           
+        region of chromosome                 |specific location in region             state   length
+        chr   bgn             end            |chr     bgn             end              
+        chr1	10436116	10556545	chr1	10437400	10438000	active	600
+        chr1	10436116	10556545	chr1	10438000	10438466	active	466
+        chr1	10436116	10556545	chr1	10438558	10440200	active	1642
+        0     1               2               3       4               5               6       7
         
         
-        # 160617wkd: I must admit that building a hash in this way
-        # made some very simple code that is far more flexible
-        # compared to the original where data was a vector of
-        # objects. In this version, I can read in more than one file
-        # and update according to my needs.
+        160617wkd: I must admit that building a hash in this way made
+        some very simple code that is far more flexible compared to
+        the original where data was a vector of objects. In this
+        version, I can read in more than one file and update according
+        to my needs.
+        
+        """
+        
         for lfpk in lfp:
             s = lfpk.strip().split()
             if s[0][0] == '#': # first element on the line is a comment
@@ -943,4 +974,4 @@ def main(cl):
 if __name__ == '__main__':
     # running the program
     main(sys.argv)
-
+#

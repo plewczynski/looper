@@ -1,6 +1,26 @@
 #!/usr/bin/env python
 
-# builds a polyA sequence of a specified length
+"""@@@
+
+Main Module:   SimRNA_make_polyA.py 
+
+Classes:       
+
+Functions:     make_polyA_seq
+
+Author:        Wayne Dawson
+creation date: parts 2016, made into a separate object 170314
+last update:   170314
+version:       0
+
+Purpose:
+
+After obtaining the meta-structure of chromatin, we need to build a 3D
+structure. This program generates a polyA sequence of a specified
+length that can be used to begin a SimRNA simulation using a zeroed
+out statistical potential
+
+"""
 
 import sys
 SHOWMAIN = False
@@ -10,7 +30,7 @@ def usage():
     print "USAGE: %s integer" % PROGRAM
 #
 
-def main(cl):
+def make_polyA_seq(cl):
     #
     n = -1
     
@@ -42,7 +62,7 @@ def main(cl):
     
     print 'a'*n
 
-
+#
 
 
 
@@ -50,4 +70,5 @@ def main(cl):
 
 
 if __name__ == '__main__':
-    main(sys.argv)
+    make_polyA_seq(sys.argv)
+#

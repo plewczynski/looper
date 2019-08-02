@@ -1,11 +1,45 @@
 #!/usr/bin/env python
 
-# I try to do things a little bit differently, and introduce a kind of
-# command line reader for related programs in this suite. I don't know
-# that this will improve anything particularly, but it is worth a try.
+"""@@@
+
+Main Module:   GetOpts.py 
+
+Classes:       GetOpts
+
+Author:        Wayne Dawson
+creation date: mostly 2016, some developments in 2017.
+last update:   180709
+version:       0
+
+Purpose:
+
+Reads the command line information for chreval and sets up the
+calculations.
+
+
+Comments:
+
+I try to do things a little bit differently, and introduce a kind of
+command line reader for related programs in this suite. I don't know
+that this will improve anything particularly, but it is worth a try.
+
+##################################################################
+170829(Note): Surprisingly, although this program is called as an
+object in main of the initiating program, I don't have to specify
+sys.argv within this module for argparse to function properly.
+##################################################################
+
+"""
+
+__VERSION__ = "-- version 0.1 190708"
+#__version_info__ = ('2013','03','14')
+#__version__ = '-'.join(__version_info__)        
+
 
 import sys
 from FileTools import FileTools
+
+
 import argparse
 
 # ################################################################
@@ -13,17 +47,31 @@ import argparse
 # ################################################################
 # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 
-# coarse-grained resolution factor
-from Constants import seg_len
-# for entropy calculations
-from Constants import kB # [kcal/molK]
-from Constants import xi # [bps]
-from Constants import lmbd # [bps]
-from Constants import gmm # dimensionless but related to D/2        
-# constants: weights for the enthalpy terms 
-from Constants import febase # [kcal/mol]
-from Constants import feshift # (dimensionless, usually = 1)
+from Constants import kB # [kcal/molK] (Boltzmann constant)
 
+from ChrConstants import T37C    # [K] 37C in Kelven
+# coarse-grained resolution factor
+from ChrConstants import seg_len # bead to bead distance
+# for entropy calculations
+from ChrConstants import xi      # [bps]
+from ChrConstants import lmbd    # [bps]
+from ChrConstants import gmm     # dimensionless but related to D/2        
+from ChrConstants import delta   # dimensionless exponetial scaling weight
+# constants: weights for the enthalpy terms 
+from ChrConstants import febase  # [kcal/mol]
+from ChrConstants import feshift # (dimensionless, usually = 1)
+
+# locked vvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+from ChrConstants import minStemLen      # minimum stem length
+from ChrConstants import minLoopLen      # minimum loop length
+# locked ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+from ChrConstants import pk_scan_ahead   # hot lead length for pk
+from ChrConstants import dGpk_threshold  # threshold FE for pks
+from ChrConstants import dGMI_threshold  # threshold FE for M-/I-loops
+# locked vvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+from ChrConstants import set_dangles     # dangle parameter (always = 2)
+# locked ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+from ChrConstants import dG_range        # FE range in suboptimal structures
 
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 # ################################################################
@@ -38,13 +86,15 @@ set_ddG_range  = 2.0 # [kcal/mol] similarity in delta(dG)
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 # #################################################################
 
-#
-#  Reads the command line arguments for the suit of programs
-#  associated with chromatin structure prediction and analysis
-#
-class GetOpts:
-    """Reads the command line arguments for the suit of programs
-associated with chromatin structure prediction and analysis"""
+
+
+class GetOpts(object):
+    """@
+    
+    Reads the command line arguments for the suit of programs
+    associated with chromatin structure prediction and analysis
+    
+    """
     
     # NOTE: __everything__ is read or assumed to be a STRING here
     # whether it is a number or a string must be decided elsewhere.
@@ -55,22 +105,27 @@ associated with chromatin structure prediction and analysis"""
         if self.debug_GetOpts:
             print "program: ", program
         #
+        self.source = "GetOpts"
         self.f_heatmap   = ''
         self.f_activity  = ''
         self.f_output    = ''
         
-        # basic comparision of stability
+        """@
         
-        # Measure stability of a structure based on the magnitude of
-        # the first Boltzmann probability term. Presumably, the terms
-        # that have a very high Boltzmann probability also have the
-        # highest stability. However, it should be remembered that as
-        # the size of the loop becomes large, it is more likely that
-        # you will have multiple structures that are very similar in
-        # structure and free energy. As a result, I started searching
-        # for ways to combine similar structures together using
-        # various rules such as hamming distance, word similarity,
-        # variation in delta(TdS) and variation in delta(dG).
+        basic comparision of stability
+        
+        Measure stability of a structure based on the magnitude of the
+        first Boltzmann probability term. Presumably, the terms that
+        have a very high Boltzmann probability also have the highest
+        stability. However, it should be remembered that as the size
+        of the loop becomes large, it is more likely that you will
+        have multiple structures that are very similar in structure
+        and free energy. As a result, I started searching for ways to
+        combine similar structures together using various rules such
+        as hamming distance, word similarity, variation in delta(TdS)
+        and variation in delta(dG).
+        
+        """
         
         self.basic       = False # the first Boltzmann prob
         
@@ -105,12 +160,18 @@ associated with chromatin structure prediction and analysis"""
         args = None
         self.parser = self.setup_parser(program)
         if program == "GetOpts.py":
-            # this could have been done in setup_parser, and it worked
-            # when I did it that way. However, it is generally better
-            # to define stuff in a way where you don't have the
-            # program just ignore an undefined variable because it is
-            # buried in an "if clause".  Therefore, I set it up this
-            # way to keep everything clearly on the table.
+            
+            """@@@
+            
+            This could have been done in setup_parser, and it worked
+            when I did it that way. However, it is generally better to
+            define stuff in a way where you don't have the program
+            just ignore an undefined variable because it is buried in
+            an "if clause".  Therefore, I set it up this way to keep
+            everything clearly on the table.
+            
+            """
+            
             self.parser.add_argument('-test', action='store', default=program,
                                      dest='testprog', 
                                      help='For testing %s with different programs.' % program)
@@ -185,19 +246,77 @@ associated with chromatin structure prediction and analysis"""
         
         # output option
         self.p_all_1D      = args.p_all_1D
-        # in general, should only need to see the first 10 structures
-        # in the created directory. For a large calculation, it is
-        # easy to produce thousands of structures. For quite large
-        # structure, the program can easily generate one hundred
-        # thousand structures. Therefore, to avoid a explosion of
-        # files, the default is to print a maximum of 100
-        # structures. This is primarily so that the program (or the
-        # computer) doesn't crash due to the creation of so many
-        # files.
-
-        # the enthalpy parameter
+        """@@@
+        
+        In general, should only need to see the first 10 structures in
+        the created directory. For a large calculation, it is easy to
+        produce thousands of structures. For quite large structure,
+        the program can easily generate one hundred thousand
+        structures. Therefore, to avoid a explosion of files, the
+        default is to print a maximum of 100 structures. This is
+        primarily so that the program (or the computer) doesn't crash
+        due to the creation of so many files.
+        
+        """
+        
+        # !*1 = currently not an adjustable parameter
+        
+        # Entropy parameters
+        self.T             = args.T       # in Kelvin
+        self.seg_len       = args.seg_len # [bps] number of bps between beads
+        self.xi            = args.xi      # [nt] Kuhn length
+        self.lmbd          = lmbd         # [nt / seg_len] 
+        self.gmm           = args.gmm     # self avoiding walk parameter
+        self.delta         = args.delta   # exponential weight factor
+        
+        
+        self.minStemLen     = minStemLen
+        """@
+        
+        Note minStemLen "minimum stem length" is an artifact of
+        vsfoldN. I don't think there should be any reason to change
+        this anymore. stiffness should ultimately be decided by the
+        best stem length and not stupid blanket parameters like this
+        on. I keep it here because the minimum stem length for
+        chromatin is 1, where as for RNA, the minimum pair is at least
+        a dinucleotide base pair.
+        
+        """
+        
+        self.minLoopLen     = minLoopLen
+        # minimum loop length (for chromatin it is 1, or RNA 3)
+        
+        
+        # pseudoknot parameters
+        self.scan_ahead     = args.leadingEdge  # default 10
+        self.dGpk_threshold = args.pk_threshold # default 2 (needs better definition!!!)
+        
+        
+        self.dGMI_threshold = args.mi_threshold # [kcal/mol]
+        # threshold for MBL stability
+        
+        """@ 
+        
+        190130: Something less than this is basically the same as the
+        thermal energy, so it is probably rather weak. Anyway, it
+        seems like -0.2 kcal/mol for 'B' is really weak and it seems
+        unlikely that the stability of such a structure is really
+        significant. At any rate, the program will work even if you
+        set the threshold to zero.
+        
+        """
+        
+        self.dangles        = set_dangles # Free energy range to be listed
+        """@
+        
+        Actually this has always been 2 with vsfoldN and the option
+        should be basically ignored, in my opinion.
+        
+        """
+        
+        # Enthalpy constants: weights for the enthalpy terms 
         self.dHbase        = args.dHbase
-        self.dHshift       = feshift
+        self.dHshift       = feshift # [dimensionless] == 1
         
         self.dGrange       = args.dGrange
         # options associated with all programs
@@ -209,6 +328,9 @@ associated with chromatin structure prediction and analysis"""
         
         self.PETwt         = 100.0  # [relative counts]
         if isinstance(args.PET_wt, float):
+            # used "isinstance" because PET_wt is defined as "None" in
+            # option input
+            
             # print "setting add_PET_wt"
             self.add_PET_wt = True
             self.PETwt      = args.PET_wt
@@ -216,36 +338,39 @@ associated with chromatin structure prediction and analysis"""
         
         self.CTCF_scale    = 100.0 
         if isinstance(args.CTCF_scale, float):
-            self.CTCF_scale  = args.CTCF_scale
+            self.CTCF_scale = args.CTCF_scale
         #
-        # 161029wkd: In general, this should not be changed, but it
-        # does allow that you can change the range of tandem CTCF and
-        # convergent CTCF by bumping this parameter up or
-        # down. Conversely, If (for example) you choose 50, then the
-        # tandem CTCFs will now appear at 10, the convergent CTCFs at
-        # 20. Likewise, if you chose 200, then the tandem CTCFs will
-        # appear at 40 and the convergent at 80.
-
-        # The original use of the above (with PET_range and ref_scale
-        # (now CTCF_scale)) was a very confusing. One month later, I
-        # could not remember how it worked other than the maximum
-        # value always came out to 100 afterwards. Therefore, these
-        # are not used and instead, I have introduce a weight
-        # rescale_wt instead. Therefore, now I just make it automatic
-        # that entries in the input heatmap are reweighted by
-        # rescale_wt and recorded effectively as integers.
         
-        # This is part of on-going corrections to the program to
-        # adjust for different data types.
+        """@@@
+        
+        161029wkd: In general, this should not be changed, but it does
+        allow that you can change the range of tandem CTCF and
+        convergent CTCF by bumping this parameter up or
+        down. Conversely, If (for example) you choose 50, then the
+        tandem CTCFs will now appear at 10, the convergent CTCFs at
+        20. Likewise, if you chose 200, then the tandem CTCFs will
+        appear at 40 and the convergent at 80.
+        
+        The original use of the above (with PET_range and ref_scale
+        (now CTCF_scale)) was a very confusing. One month later, I
+        could not remember how it worked other than the maximum value
+        always came out to 100 afterwards. Therefore, these are not
+        used and instead, I have introduce a weight rescale_wt
+        instead. Therefore, now I just make it automatic that entries
+        in the input heatmap are reweighted by rescale_wt and recorded
+        effectively as integers.
+        
+        This is part of on-going corrections to the program to adjust
+        for different data types.
+        
+        """
+        
         self.rescale_wt    = 1.0 
         if isinstance(args.rescale_wt, float):
             self.rescale_wt  = args.rescale_wt
         #
         # Nenski data
         self.from_Nenski   = args.from_Nenski
-        
-        self.T             = args.T       # in Kelvin
-        self.seg_len       = args.seg_len # [bps]
         
         
         if self.program == "anal_loops.py" or \
@@ -308,7 +433,10 @@ associated with chromatin structure prediction and analysis"""
     
     
     def check_list(self, program, exts):
-        """verifies whether program is within the list of keys"""
+        """
+        verifies whether program is within the list of keys
+        """
+        
         flag_has_key = False
         keys = exts.keys()
         for key_k in keys:
@@ -327,30 +455,72 @@ associated with chromatin structure prediction and analysis"""
     
     
     def setup_parser(self, program):
-        """contains all the command line arguments"""
+        """
+        contains all the command line arguments
+        """
         parser = argparse.ArgumentParser()
         
+        
+        parser.add_argument('-T', action='store', default=310.0,
+                            dest='T', type=float,
+                            help='Set temperature in Kelvin [K].')
+        
+        s_xi = 'The Kuhn length. For RNA, this is a variable (default value \
+        is %6.2f nt).' % xi
+        parser.add_argument('-xi',  action='store', default=xi,
+                            dest='xi', type=float,
+                            help=s_xi)
+
+        s_gamma = 'Self avoiding walk parameter (default value for RNA is \
+        %5.2f -- sometimes it is increased to about 2.3).' % gmm
+        parser.add_argument('-gamma',  action='store', default=gmm,
+                            dest='gmm', type=float,
+                            help=s_gamma)
+
+        s_delta = 'Self avoiding walk parameter (default value for RNA is \
+        %5.2f -- it might vary between 1.0 and 2.5).' % delta
+        parser.add_argument('-delta',  action='store', default=delta,
+                            dest='delta', type=float,
+                            help=s_delta)
         
         parser.add_argument('-seg_len', action='store', default=seg_len,
                             dest='seg_len', type=float,
                             help='Set number of base pairs between beads.')
-        #
-        parser.add_argument('-T', action='store', default=300.0,
-                            dest='T', type=float,
-                            help='Set temperature in Kelvin [K].')
-        #
         
+        parser.add_argument('-pkLead',  action='store', default=pk_scan_ahead,
+                            dest='leadingEdge', type=int,
+                            help='For PK search, how much of a \'hot lead\' you \
+                            want to use ahead of the secondary structure search \
+                            (default is 10, probably not good -- or at least \
+                            expensive -- to request more than 20).')
+        
+        parser.add_argument('-pkThresh',  action='store', default=dGpk_threshold,
+                            dest='pk_threshold', type=float,
+                            help='Pseudoknot threshold free energy; the smallest \
+                            free energy necessary for formation of a stable \
+                            pseudoknot).')
+        
+        parser.add_argument('-miThresh',  action='store', default=dGMI_threshold,
+                            dest='mi_threshold', type=float,
+                            help='M-,I-loop  threshold free energy; the smallest \
+                            free energy necessary for formation of a stable \
+                            M-loop or I-loop).')
+
+        # ctcf parameters
         parser.add_argument('-add_PET_wt', action='store_true', default=False,
                             dest='add_PET_wt',
                             help='Turn on default PET cluster weight at edges of the heatmap.')
         
         parser.add_argument('-add_PET_wt_to_edges', action='store_true', default=False,
                             dest='add_PET_wt_to_edges',
-                            help='Place PET cluster weights at very edges of the heatmap.')
+                            help='Place PET cluster weights at very edges of the heatmap \
+                            (strongly not recommended anymore, it was used for early \
+                            heat maps that we were analyzing).')
         
         parser.add_argument('-PET_wt',     action='store', default=None,
                             dest='PET_wt', type=float,
-                            help='Set PET cluster weight at the edges of the heatmap.')
+                            help='Set PET cluster weight at the edges of the heatmap (used \
+                            in conjuction with the option -add_PET_wt_to_edges).')
         
         parser.add_argument('-rescale_wt',  action='store', default=1.0,
                             dest='rescale_wt', type=float,
@@ -361,25 +531,26 @@ associated with chromatin structure prediction and analysis"""
                             help='Set the assignment range for CTCF sites (default 100), \
                             where the range between 20 and 40 would represent tandem \
                             structures and more than 40 convergent CTCF sites.')
-        
+
+        s_dHbase = 'Adjusts the baseline of the enthalpy \
+        (default %6.3f [kcal/mol]).' % febase
         parser.add_argument('-dHbase',  action='store', default=febase,
                             dest='dHbase', type=float,
-                            help='Adjusts the baseline of the enthalpy (default %6.3f [kcal/mol]).' % febase)
+                            help=s_dHbase)
         
-        #
-        #
-        parser.add_argument('-HiC', action='store_true', default=False,
--                            dest='from_Nenski',
--                            help='When using Hi-C data, this has a filtering algorithm that helps to remove self-ligation NN chain noise.')        parser.add_argument('-Nenski', action='store_true', default=False,
-                            dest='from_Nenski',
-                            help='Carry out special procedure to remove NN chain noise.')
         
-        parser.add_argument('-dGrange',     action='store', default=10.0,
+        parser.add_argument('-dGrange',     action='store', default=dG_range,
                             dest='dGrange', type=float,
                             help='Set the free energy range that is searched relative to \
                             the minimum free energy; e.g., dGrange = [10 kcal/mol] and \
                             minimum FE -30 [kcal/mol] means search for structures with FE \
                             between -20 and -30 [kcal/mol.')
+        
+        
+        parser.add_argument('-HiC', action='store_true', default=False,
+                            dest='from_Nenski',
+                            help='When using Hi-C data, this has a filtering algorithm \
+                            that helps to remove self-ligation NN chain noise.')
         
         parser.add_argument('-printAll1D', action='store_true', default=False,
                             dest='p_all_1D',
@@ -399,6 +570,14 @@ associated with chromatin structure prediction and analysis"""
             # options unique to the chreval.py program
             if flag_checkfile:
                 # requires existence of file of given name
+                
+                # 190515: as I recall, giving it type=file from the
+                # start created some problems and, as a result, I
+                # found this way of reading in a file rather awkward
+                # to use. Perhaps that cryptic remark is because when
+                # the file could not be found, the program crashed. I
+                # think this part should be deleted, but I seem
+                # reluctant for some reason I cannot explain.
                 grp_files.add_argument('-f', nargs=1, type=file,
                                        default=[], dest='f_heatmap',
                                        help='Input heatmap data on frequency \
@@ -428,17 +607,20 @@ associated with chromatin structure prediction and analysis"""
             # basic
             grp_filter.add_argument('-basic', action='store_true', default=False,
                                     dest='basic',
-                                    help='Only report the probability of the first component in the Boltzmann distribution.')
+                                    help='(anal_loops) Only report the probability of the first \
+                                    component in the Boltzmann distribution.')
             
             # similarity
             grp_filter.add_argument('-sim', action='store_true', default=False,
                                     dest='similarity',
-                                    help='Use similarity measure in weighting chromatin structures.')
+                                    help='(anal_loops) Use similarity measure in weighting \
+                                    chromatin structures.')
             
             # hamming distance
             grp_filter.add_argument('-ham', action='store_true', default=False,
                                     dest='hamming',
-                                    help='Use hamming distance in weighting chromatin structures.')
+                                    help='(anal_loops) Use hamming distance in weighting \
+                                    chromatin structures.')
             
             # entropy weight
             grp_filter.add_argument('-TdS', action='store_true', default=False,
@@ -446,34 +628,47 @@ associated with chromatin structure prediction and analysis"""
                                     help='Use entropy difference in weighting chromatin structures.')
             grp_filter.add_argument('-TdS_range',     action='store', default=set_TdS_range,
                                     dest='TdS_range', type=float,
-                                    help='Set the range for dTdS (used with option -TdS).')
+                                    help='(anal_loops) Set the range for dTdS (used with \
+                                    option -TdS).')
             
             # free energy
             grp_filter.add_argument('-ddG',  action='store_true', default=False,
                                     dest='ddG',
-                                    help='Use free energy difference in weighting chromatin structures.')
+                                    help='(anal_loops) Use free energy difference in \
+                                    weighting chromatin structures.')
             parser.add_argument('-ddG_range',     action='store', default=set_ddG_range,
                                 dest='ddG_range', type=float,
-                                help='Set the range for ddG (used with option -ddG).')
+                                help='(anal_loops) Set the range for ddG (used in \
+                                conjuction with option -ddG).')
             
             #
             grp_filter.add_argument('-all', action='store_true', default=True,
                                     dest='allwts',
-                                    help='(default) make a list with all possibilities included (recommended).')
+                                    help='(anal_loops, default) make a list with all \
+                                    possibilities included (recommended).')
             
             
             grp_files = parser.add_mutually_exclusive_group()        
-            # options unique to the chreval.py program
+            # options unique to the anal_loops.py program
             if flag_checkfile:
                 # requires existence of file of given name
+                
+                # 190515: as I recall, giving it type=file from the
+                # start created some problems and, as a result, I
+                # found this way of reading in a file rather awkward
+                # to use. Perhaps that cryptic remark is because when
+                # the file could not be found, the program crashed. I
+                # think this part should be deleted, but I seem
+                # reluctant for some reason I cannot explain.
+                
                 grp_files.add_argument('-ff', nargs='+', type=file, default=[],
                                        dest='f_activity',
-                                       help='Input activity data on chromatin \
+                                       help='(anal_X programs) Input activity data on chromatin \
                                        structure (requires extension \'txt\' or \'bed\')')
             else:
                 grp_files.add_argument('-ff', nargs='+', default=[],
                                        dest='f_activity',
-                                       help='Input activity data on chromatin \
+                                       help='(anal_X programs) Input activity data on chromatin \
                                        structure (requires extension \'txt\' or \'bed\')')
             #
             parser.add_argument('-o', default="loops_results.dat",
@@ -482,21 +677,23 @@ associated with chromatin structure prediction and analysis"""
         #
         
         
+        """
+        ############################################################
         
-        # ############################################################
+        other types of read in formats
         
-        # other types of read in formats
+        parser.add_argument('--three', nargs=3) # three args
         
-        #parser.add_argument('--three', nargs=3) # three args
+        parser.add_argument('--all', nargs='*', dest='all') # all
         
-        #parser.add_argument('--all', nargs='*', dest='all') # all
+        parser.add_argument('--optional', nargs='?') # option
         
-        #parser.add_argument('--optional', nargs='?') # option
+        ############################################################
         
-        # ############################################################
-        #
+        """
         
-        parser.add_argument('--version', action='version', version='%(prog)s version 0.1')
+        parser.add_argument('-v', '--version', action='version',
+                            version='%(prog)s {version}'.format(version=__VERSION__))
         
         return parser # the main part of the parser
         
@@ -595,4 +792,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-
+#

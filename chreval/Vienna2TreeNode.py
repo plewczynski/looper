@@ -2,24 +2,25 @@
 
 """@@@
 
-Main Module:   Threads.py 
+Main Module:   Vienna2TreeNode.py 
 
-Objects:       LThreadBuilder
-               LThread2Vienna
-               NodeVisitor
-               TreeNode2DotBracket
-               TreeNode2Motif
+Objects:       LThread2DotBracket 
                Vienna2TreeNode
 
+Functions:     getStem 
+               makeStemList 
+               dispStemList 
+               ins_sort_StemList 
+               matchTupleList2VsList
 
 Author:        Wayne Dawson
-creation date: 170126
-last update:   190705
+creation date: 170126 (originally part of Threads.py & RThreads.py) 
+last update:   190718
 version:       0.1
 
 Purpose:
 
-This module is currently used only by "chreval.py" to analyze RNA
+This module is currently used only by "sarabande.py" to analyze RNA
 structure. Because there are some differences in the analysis routines
 of the chromatin, RNA and protein based program, I have had to make
 these separate.
@@ -64,7 +65,46 @@ earlier comments (updated 190705)
 
 import sys
 import string
-from HeatMapTools import HeatMapTools
+from copy import deepcopy
+
+
+# #######################
+# Thermodynamic constants
+# #######################
+
+# A hardwired infinity. Somewhat hate this, but it seems there is no
+# way around this darn thing.
+from Constants import INFINITY
+from Constants import kB   # [kcal/molK] (Boltzmann constant)
+
+# coarse-grained resolution factor (for RNA, _always_ should be 1)
+#from RConstants import seg_len
+# constants for entropy calculations
+#from RConstants import xi    # [bp] default stem Kuhn length
+#from RConstants import xi_fs # [nt] free strand Kuhn length
+#from RConstants import lmbd  # [nt] bead-to-bead bond distance
+#from RConstants import gmm   # dimensionless
+#from RConstants import T37C  # [K] absolute temp at 37 C.
+#from RConstants import T_0C  # [K] absolute temp at  0 C.
+"""@
+
+gamma is the dimensionless self avoiding walk parameter. Its value
+represents roughly 2*gmm ~ D, where D is the dimensionality of the
+system.
+
+"""
+# #########################
+# general constants for RNA
+# #########################
+#from RConstants import minStemLen      # minimum stem length
+#from RConstants import max_bp_gap      # max gap between bps
+#from RConstants import minLoopLen      # minimum loop length
+#from RConstants import pk_scan_ahead   # hot lead length for pk
+#from RConstants import dGpk_threshold  # threshold FE for pks
+#from RConstants import dGMI_threshold  # threshold FE for M-/I-loops
+#from RConstants import set_dangles     # dangle parameter (always = 2)
+#from RConstants import dG_range        # FE range in suboptimal structures
+
 
 """for Vienna Pair object representation"""
 from Pair import find_this_ij
@@ -74,11 +114,16 @@ from Pair import Pair
 from Pair import SortPair
 from Pair import vsPair2list
 
-from Vienna import Vstruct
+from Vienna    import Vstruct      # 1D structure analysis tool
+from Constants import sysDefLabels # system RNA, Chromatin
+
+# LThread object representation
+from LThread import LNode
+from LThread import DispLThread
+from LThread import LThread
+from LThread import LThread2Vienna
 
 """Motif (helping make all these things unified)"""
-from Motif import AST
-from Motif import APT
 from Motif import MBL
 from Motif import XLoop
 from Motif import Stem
@@ -87,6 +132,7 @@ from Motif import ArchMP
 from Motif import MultiPair
 from Motif import disp_Motif
 from Motif import copyStem
+from Motif import ins_sort_StemList
 
 """for Motif data representation"""
 from Motif      import Motif # a core object of these building programs
@@ -94,13 +140,10 @@ from Motif      import Link
 from Motif      import LGroup
 from Motif      import Map # main map for all the FE and structures
 
-"""contains free energy parameters"""
-from FreeEnergy import FreeEnergy
+
 
 """Other objects and tools"""
 from FileTools  import getHeadExt
-from ChPair     import ChPairData
-from ChPair     import LThread2ChPair
 
 """Important constants. """
 
@@ -124,17 +167,16 @@ from BasicTools import tuple2List
 from BasicTools import roundoff
 from BasicTools import initialize_matrix
 
-"""LThread Data"""
-from LThread import LNode
-from LThread import LThread
-from LThread import DispLThread
-from LThread import LThread2Vienna
-
-
 """Tree structure building/analysis tools"""
 from NaryTree   import Node
 from NaryTree   import NodeAnalysis
 from NaryTree   import TreeBuilder
+
+from LThreadBuilder  import LThreadBuilder
+from TreeNode        import TreeNode2DotBracket
+from TreeNode        import TreeNode2Motif
+
+
 
 # ################################################################
 # ############  Local-global functions and constants  ############
@@ -144,12 +186,11 @@ from NaryTree   import TreeBuilder
 # 1. control parameters tests etc in the program
 
 # Test   function
-#  0     a _very basic_ test of this module
+#  0     insert into a list
 #  1     parser for simple structures
-#  2     insert into a list
-#  3     convert a dot bracket structure representation to Motif
+#  2     convert a dot bracket structure representation to Motif
 
-TEST = 3
+TEST = 2
 
 
 # 2. special local global function
@@ -168,6 +209,97 @@ def usage():
 # ################################################################
 # ################################################################
 
+
+
+
+class LThread2DotBracket(object):
+    
+    def __init__(self, N, fe):
+        self.N      = N
+        self.vSeq   = []
+        self.fe     = fe
+        self.sseq   = self.N*'c'
+        
+    #
+    
+    
+    def getLThread2DotBracket(self, lt, structure_layout = 1, is_chromatin = True):
+        """@
+        
+        This method generates the 1D meta-structure representation
+        from an input from the module and class LThread (specifically,
+        a list of objects of class LNodes).
+        
+        lt: input should generally be from the list "thread" in class
+            LThread. It is a list of objects of class LNode.
+        
+        structure_layout: a formatting option for the output. 
+           0: only structure (no sequence)
+           1: both sequence and structure
+        
+        is_chromatin: chromatin does not have a real sequence like RNA
+           and proteins. Therefore, a pseudosequence has to be
+           generated
+        
+        """
+        
+        debug_getLThread2DotBracket = False # True # 
+        if debug_getLThread2DotBracket:
+            print "Enter getLThread2DotBracket"
+        #
+        
+        # obtain viable vs Pair list from lt data
+        vf = LThread2Vienna()
+        vf.lt2vs(lt)
+        
+        # process data in Vstruct
+        vsp = Vstruct()
+        vsp.init_vs_from_lt(vf)
+        
+        # print self.vSeq 
+        # build Tree diagram image
+        v2tp = Vienna2TreeNode(vsp, self.fe, self.sseq)
+        v2tp.vienna2tree()
+        if debug_getLThread2DotBracket:
+            print v2tp.dispTreeStruct(v2tp.ssTree,  "Secondary Structure Tree")
+            print v2tp.dispTreeStruct(v2tp.genTree, "Full Structure Tree")
+        #
+        # print "0: ", v2tp.vseq
+        
+        # VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+        tn2db = TreeNode2DotBracket(v2tp, is_chromatin)
+        #print tn2db.seqv
+        if not is_chromatin:
+            tn2db.seqv = []
+            for vv in self.vSeq:
+                tn2db.seqv += [vv]
+            #
+        #
+        
+        tn2db.vseq = tn2db.makeFinal(self.vSeq)
+        # AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        
+        #print "1:" , self.vSeq
+        tn2db.make_dotbracket(is_chromatin)
+        self.vSeq = tn2db.vSeq
+        self.vstr = tn2db.vstr
+        #print "2:" , self.vSeq
+        
+        s = ''
+        if structure_layout == 0:
+            s = tn2db.vstr + '\n' # this will only return the ss string
+            
+        elif structure_layout == 1:
+            s = self.vSeq + '\n' + self.vstr + '\n'
+        
+        else:
+            s  = self.vSeq + '\n'
+            s += self.vstr + '\n'
+        #
+        
+        return s
+    #
+#
 
 
 
@@ -221,20 +353,6 @@ def dispStemList(snode, name):
 #
     
     
-# sort stemlist according to i.
-def ins_sort_StemList(StemTypes):
-    for i in range(1,len(StemTypes)):    
-        j = i                    
-        while j > 0 and StemTypes[j].it < StemTypes[j-1].it: 
-            StemTypes[j], StemTypes[j-1] = StemTypes[j-1], StemTypes[j]
-            # syntactic sugar: swap the items
-            j=j-1 
-        #
-    #
-    return StemTypes
-#
-
-
 
 
 def matchTupleList2VsList(tuplelist, Xlist):
@@ -272,7 +390,6 @@ def matchTupleList2VsList(tuplelist, Xlist):
 #
 
 
-
 class Vienna2TreeNode(SortPair):
     """@@@
     
@@ -295,21 +412,90 @@ class Vienna2TreeNode(SortPair):
     I think eventually, I add a few small modules that will generate a
     real LThread output; however, I conclude that it will be symbolic
     for the most part.
-
+    
     """
-    def __init__(self, vs):
+    def __init__(self, vs, fe = None, seq = ""):
         # #######################  Vienna Data   #######################
         self.vs        = vs          # for employing functions
+        self.system    = vs.system   # what system? RNA? Chromatin? 
         self.N         = vs.N        # sequence length
         self.vstr      = vs.vstr     # the 1D structure
         self.vseq      = vs.vseq     # the 1D sequence
-        self.vsBPlist    = vs.BPlist   # the decomposed 1D ss structure
-        self.vsBProots   = vs.BProots  # the roots for the 1D ss structure
-        self.vsPKlist    = vs.PKlist   # the decomposed 1D apPK structure
-        self.vsPKroots   = vs.PKroots  # the roots for the 1D apPK structure
-        self.vsMPlist    = vs.MPlist # the decomposed 1D CTCF structure
+        self.vsBPlist  = vs.BPlist   # the decomposed 1D ss structure
+        self.vsBProots = vs.BProots  # the roots for the 1D ss structure
+        self.vsPKlist  = vs.PKlist   # the decomposed 1D apPK structure
+        self.vsPKroots = vs.PKroots  # the roots for the 1D apPK structure
+        self.vsMPlist  = vs.MPlist   # the decomposed 1D CTCF structure
         # #####################   engine driver   #####################
-        #self.fe = FreeEnergy() # basic FE/entropy function for chromatin
+        self.fe = fe # RNAModules or ChromatinModules
+        
+        if self.fe == None:
+            
+            # 1. Is there a sequence and is it the same length as the
+            # structure
+            
+            # print "Module not set:"
+            if self.vseq == "":
+                print "beads in sequence not set"
+                pair_nm = sysDefLabels[self.system]
+                if seq == "":
+                    # no information, hence, chose default
+                    self.vseq = len(self.vstr)*pair_nm
+                    
+                else:
+                    if len(seq) == len(self.vstr):
+                        self.vseq = seq
+                        
+                    else:
+                        # information inaccurate, hence, chose default
+                        self.vseq = len(self.vstr)*pair_nm
+                    #
+                    
+                #
+                
+                #print "1"
+                
+            else:
+                if len(seq) == len(self.vstr):
+                    self.vseq = seq
+                else:
+                    # information inaccurate, hence, chose default
+                    pair_nm   = sysDefLabels[self.system]
+                    self.vseq = len(self.vstr)*pair_nm
+                #
+                #print "2"
+                
+            #
+            # print "vseq: ", self.vseq
+            
+            # 2. Choose the system under study and set the proper
+            # modules to operate it. 
+            
+            if   self.system == "RNA":
+                """contains RNA free energy parameters"""
+                from RNAModules import BranchEntropy 
+                from RNAModules import SetUpBranchEntropy 
+                self.fe = BranchEntropy(SetUpBranchEntropy(self.vseq))
+                #print self.fe.g_kBT() # just testing
+                
+            elif self.system == "Chromatin":
+                """contains Chromatin free energy parameters"""
+                from ChromatinModules import BranchEntropy 
+                from ChromatinModules import SetUpBranchEntropy 
+                self.fe = BranchEntropy(SetUpBranchEntropy(self.vseq))
+                #print self.fe.g_kBT() # just testing
+                #print self.fe.sseq
+                
+            else:
+                print "ERROR: unrecognized system type (%s)" % self.system
+                print "       allowed names "
+                for snm in sysDefLabels.keys():
+                    print snm
+                #
+                sys.exit(1)
+            #
+            #print "Vienna2TreeNode constructor: stop here"; sys.exit(0)
+        #
         
         # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
         # ############  holding variables at various stages ############
@@ -353,6 +539,7 @@ class Vienna2TreeNode(SortPair):
         # ###############  main results from this class  ###############
         # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         
+        self.max_bp_gap = fe.max_bp_gap # 
         
         # ######  program flags  ########
         # Presently, these tags initialized_X have very limited
@@ -363,13 +550,14 @@ class Vienna2TreeNode(SortPair):
         self.initialized_bplist = False # not really used
         # =================================
         self.initialize_v2t   = True
-    #
+    #endInit
     
     def vienna2tree(self):
         if not self.initialize_v2t:
             print "ERROR: Vienna2TreeNode() is not initialized!"
             sys.exit(1)
         #
+        
         debug_vienna2tree = False # True # 
         if debug_vienna2tree:
             self.disp_ViennaLists("Vienna data on entering vienna2tree")
@@ -379,43 +567,49 @@ class Vienna2TreeNode(SortPair):
         self.build_BPstruct()
         
         self.build_MPstruct()
-    #
+    #endMethod
     
     def disp_ViennaLists(self, sttmnt = "in Thread from Vienna"):
         print sttmnt
         print "structural sequence"
+        self.vs.print_vseq()
         self.vs.print_vstr()
         print "secondary structure"
         self.vs.print_Xlist_n(self.vsBPlist)
         print "secondary structure roots"
         self.vs.print_Xlist_n(self.vsBProots)
-        #
+        
         if len(self.vsPKlist) > 0:
             print "pseudoknot linkages: "
             self.vs.print_Xlist_n(self.vsPKlist)
             print "pseudoknot linkage roots"
             self.vs.print_Xlist_n(self.vsPKroots)
         #
+        
         if len(self.vsMPlist) > 0:
             print "MP connects"
             self.vs.print_Xlist_n(self.vsMPlist)
         #
+        
         if len(self.vsMPlist) > 0:
             islands = []
             for cl in self.vsMPlist:
                 islands += [self.vs.expand_island(cl)]
-            #
+            #endfor
+            
             print "MP breakdown:"
             kk = 1
             for island_k in islands:
                 print "island(%d):" % kk
                 for ii in island_k:
                     print ii.disp_Pair()
-                #
+                #endfor
+                
                 kk += 1
-            #
+            #endfor
+            
         #
-    #
+    #endMethod
     
     
     def build_BPstruct(self):
@@ -473,10 +667,12 @@ class Vienna2TreeNode(SortPair):
         pkroots = []
         for vv in apPKtails:
             pkroots += [vv]
-        #
+        #endfor
+        
         for vv in ppPKtails:
             pkroots += [vv]
-        #
+        #endfor
+        
         pkroots = sortPairListWRT_n(pkroots, 0)
         
         # Update self.vsPKroots
@@ -517,7 +713,7 @@ class Vienna2TreeNode(SortPair):
         #
         
         # This next step is long and probably could be broken down
-        # into smaller methods, but I had to figure out some what to
+        # into smaller methods, but I had to figure out some way to
         # get this to work, and so this is what I presently have come
         # up with.
         rt_Kpk, rt_ppKpk, rt_Rpk \
@@ -532,16 +728,18 @@ class Vienna2TreeNode(SortPair):
             print "BProots"
             for vv in self.vsBProots:
                 print vv.disp_Pair()
-            #
+            #endfor
+            
             print "PKroots"
             for vv in self.vsPKroots:
                 print vv.disp_Pair()
-            #
+            #endfor
+            
             print self.dispTreeStruct(self.ssTree,  "Secondary Structure Tree")
             print self.dispTreeStruct(self.genTree, "Full Structure Tree")
             #print "stop at 4 (exit from) build_BPstruct"; sys.exit(0)
         #
-    #
+    #endMethod
     
     
     def find_apStem_tails(self, Xlist, assign_lt = True):
@@ -573,12 +771,14 @@ class Vienna2TreeNode(SortPair):
         if kvs >= n:
             flag_cont = False
         #
+        
         while flag_cont:
             if kvs >= n:
                 flag_cont = False
             else:
                 if Xlist[kvs].v == 'p' or Xlist[kvs].v == '-':
                     kvs += 1
+                    
                 else: 
                     if debug_find_apStem_tail:
                         print "ap: Xlist tail index: ", kvs, (Xlist[kvs].get_ssPair())
@@ -591,15 +791,19 @@ class Vienna2TreeNode(SortPair):
                     tails += [(i,j)]
                     kvs +=1
                 #
+                
             #
-        #
+            
+        #endwhile
+        
         if debug_find_apStem_tail:
             print "exit find_apStem_tail: index = ", kvs
             print tails
             #print "planned exit at end of find_apStem_tail(): "; sys.exit(0)
         #
+        
         return tails
-    #
+    #endMethod
     
     def find_apStem_head(self, kvs, Xlist):
         """
@@ -613,16 +817,17 @@ class Vienna2TreeNode(SortPair):
         if debug_find_apStem_head:
             print "enter find_apStem_head"
         #
+        
         flag_cont = True
         if kvs >= len(Xlist) - 1:
             flag_cont = False
+        #
+        
         while flag_cont:
             if debug_find_apStem_head:
                 print "ap head check: ", \
-                    kvs, \
-                    (Xlist[kvs  ].get_ssPair()), \
-                    (kvs+1), \
-                    (Xlist[kvs+1].get_ssPair())
+                    kvs,     (Xlist[kvs  ].get_ssPair()), \
+                    (kvs+1), (Xlist[kvs+1].get_ssPair())
             #
             i_0, j_0, v_0, c_0 = Xlist[kvs  ].get_ssPair()
             i_1, j_1, v_1, c_1 = Xlist[kvs+1].get_ssPair()
@@ -633,12 +838,15 @@ class Vienna2TreeNode(SortPair):
             else:
                 flag_cont = False
             #
-        #
+            
+        #endWhile
+        
         if debug_find_apStem_head:
             print "exit find_apStem_head: index = ", kvs
         #
+        
         return kvs
-    #
+    #endMethod
     
     
     def find_ppStem_tails(self, Xlist, lt_assign = True):
@@ -664,6 +872,7 @@ class Vienna2TreeNode(SortPair):
             else:
                 print "enter find_ppStem_tail, lt_assign = False"
             #
+            
         #
         
         tails = []
@@ -686,13 +895,17 @@ class Vienna2TreeNode(SortPair):
                     tails += [(i,j)]
                     kvs +=1
                 #
+                
             #
-        #
+            
+        #endWhile
+        
         if debug_find_ppStem_tails:
             print "exit find_ppStem_tail: index = ", kvs
         #
+        
         return tails
-    #
+    #endMethod
     
     def find_ppStem_head(self, kvs, Xlist):
         """
@@ -706,16 +919,19 @@ class Vienna2TreeNode(SortPair):
         if debug_find_ppStem_head:
             print "enter find_ppStem_head"
         #
+        
         flag_cont = True
         if kvs >= len(Xlist) - 1:
             flag_cont = False
+        #
+        
         while flag_cont:
             if kvs >= len(Xlist) - 1:
                 flag_cont = False
             else:
                 if debug_find_ppStem_head:
                     print "pp head check: ", \
-                        kvs,     (Xlist[kvs  ].get_ssPair()), \
+                        kvs,     (Xlist[kvs  ].get_ssPair()),\
                         (kvs+1), (Xlist[kvs+1].get_ssPair())
                 #
                 i_0, j_0, v_0, c_0 = Xlist[kvs  ].get_ssPair()
@@ -725,13 +941,17 @@ class Vienna2TreeNode(SortPair):
                 else:
                     flag_cont = False
                 #
+                
             #
-        #
+            
+        #endWhile
+        
         if debug_find_ppStem_head:
             print "exit find_ppStem_head: index = ", kvs
         #
+        
         return kvs
-    #
+    #endMethod
     
     
     
@@ -785,7 +1005,7 @@ class Vienna2TreeNode(SortPair):
         """
         pkapTailList = copyList(apPKtails)
         ssapTailList = tuple2List(copyList(self.apBPtails))
-        #
+        
         
         if debug_findStemsIn_apList:
             print "before doing this additional sorting into ss and pk stems:"
@@ -802,16 +1022,21 @@ class Vienna2TreeNode(SortPair):
                 print "ikr0(%2d) < ikr1(%2d) < jkr0(%2d) < jkr1(%2d)" \
                     % (ikr0, ikr1, jkr0, jkr1)
             #
+            
             if ikr0 < ikr1 and jkr0 < jkr1 and ikr1 < jkr0:
                 if debug_findStemsIn_apListx:
                     print "rearranging to pklist", ssapTailList[kr+1]
                 #
+                
                 pkapTailList += [(ikr1, jkr1)]
                 del ssapTailList[kr+1]
+                
             else:
                 kr += 1
             #
-        #
+            
+        #endWhile
+        
         pkapTailList = sortPairListWRT_n(pkapTailList, 0)
         
         # build a vslist (sstails) from self.vsBPlist
@@ -828,20 +1053,23 @@ class Vienna2TreeNode(SortPair):
             print "BPlist:"
             for vv in self.vsBPlist:
                 print vv.disp_Pair()
-            #
+            #endfor
+            
             print "BProots:"
             for vv in self.vsBProots:
                 print vv.disp_Pair()
-            #
+            #endfor
             
             print "ssaptails: "
             for vv in self.ssaptails:
                 print vv.disp_Pair()
-            #
+            #endfor
+            
             print "pkaptails"
             for vv in self.pkaptails:
                 print vv.disp_Pair()
-            #
+            #endfor
+            
             #print "stop at 2 in findStemsIn_apList";  sys.exit(0)
         #
         
@@ -892,12 +1120,14 @@ class Vienna2TreeNode(SortPair):
             if debug_findStemsIn_apListx:
                 print "fsiapl: ijpk = (%2d,%2d)" % (ipk, jpk)
             #
+            
             kr = 0
             while kr < (len(ssapTailList)-1):
                 ikr = ssapTailList[kr][0]; jkr = ssapTailList[kr][1]
                 if debug_findStemsIn_apListx:
                     print "ijkr = (%2d,%2d)[%2d]" % (ikr, jkr, kr)
                 #
+                
                 if ipk == ikr and jpk == jkr:
                     if debug_findStemsIn_apListx:
                         print "delete ssapTailList(ks=%d) : " % ks, ssapTailList[ks]
@@ -906,22 +1136,28 @@ class Vienna2TreeNode(SortPair):
                         print "not stopped, so maybe I don't need to consider this"
                         sys.exit(0)
                     #
+                    
                     del ssapTailList[ks]
                 #
+                
                 kr += 1
-            #
-        #
+            #endWhile
+            
+        #endfor
         
         
         
         if debug_findStemsIn_apList:
             print "build stems from the current information:"
         #
+        
         ss_apstemlist  = self.build_apStem(self.ssaptails, self.vsBPlist)
         ss_apstemlist  = self.ins_sort_stemlist(ss_apstemlist)
         
         pk_apstemlist  = self.build_apStem(self.pkaptails, self.vsPKlist)
         pk_apstemlist += self.build_apStem(self.pkaptails, self.vsBPlist)
+        
+        
         #print pk_apstemlist
         #sys.exit(0)
         pk_apstemlist  = self.ins_sort_stemlist(pk_apstemlist)
@@ -929,29 +1165,33 @@ class Vienna2TreeNode(SortPair):
             print "BPlist:"
             for vv in self.vsBPlist:
                 print vv.disp_Pair()
-            #
+            #endfor
+            
             print "BProots:"
             for vv in self.vsBProots:
                 print vv.disp_Pair()
-            #
+            #endfor
             
             print "ap ssstem:"
             for k in range(0, len(ss_apstemlist)):
                 print "%2d: %s" % (k, self.disp_stem(ss_apstemlist[k]))
-            #
+            #endfor
+            
             print "ap pkstem: "
             for k in range(0, len(pk_apstemlist)):
                 print "%2d: %s" % (k, self.disp_stem(pk_apstemlist[k]))
             #
+            
             #print "stop at 0 in findStemsIn_apList"; sys.exit(0)
             if stop_at_end:
                 print "stop at the end of findStemsIn_aplist"; sys.exit(0)
-            #
+            #endfor
+            
         #
         
         return ss_apstemlist, pk_apstemlist
         ##################################
-    #
+    #endMethod
 
 
     def buildTreeDmns(self,
@@ -959,12 +1199,12 @@ class Vienna2TreeNode(SortPair):
                       ss_ppstemlist,
                       pk_apstemlist,
                       pk_ppstemlist):
-
+        
         """#### 
         
         Builds a ss tree and a full general tree with the exception of
         the MP interactions. 
-
+        
         For the MP, I am basically trying to work around the matter. For free
         energy calculations, This is easily done because we do not
         have to work depth first but can simply add the individual
@@ -979,12 +1219,12 @@ class Vienna2TreeNode(SortPair):
         binding. If it is weak, it is easier to do the former. If it
         is strong, like the ctcfs it was originally designed to
         conquer, then probably the latter is better.
-
+        
         """
         
         debug_buildTreeDmns  = False # True # 
         debug_buildTreeDmnsx = False # True # 
-        stop_at_end          = False # True #
+        stop_at_end          = False # True # 
         
         
         if debug_buildTreeDmns:
@@ -994,10 +1234,11 @@ class Vienna2TreeNode(SortPair):
         ss_stemlist = []
         for ssk in ss_ppstemlist:
             ss_stemlist += [ssk]
-        #
+        #endfor
+        
         for ssk in ss_apstemlist:
             ss_stemlist += [ssk]
-        #
+        #endfor
         
         # sort stems
         ss_stemlist = self.ins_sort_stemlist(ss_stemlist) # must sort!!!
@@ -1005,10 +1246,11 @@ class Vienna2TreeNode(SortPair):
         pk_stemlist = []
         for ssk in pk_ppstemlist:
             pk_stemlist += [ssk]
-        #
+        #endfor
+        
         for ssk in pk_apstemlist:
             pk_stemlist += [ssk]
-        #
+        #endfor
         
         # sort stems
         pk_stemlist = self.ins_sort_stemlist(pk_stemlist) # must sort!!!
@@ -1018,11 +1260,13 @@ class Vienna2TreeNode(SortPair):
             print "ss_stemlist(after sorting): "
             for vv in ss_stemlist:
                 print self.disp_stem(vv)
-            #
+            #endfor
+            
             print "pk_stemlist(after sorting): "
             for vv in pk_stemlist:
                 print self.disp_stem(vv)
-            #
+            #endfor
+            
             print "----------------------------"
             #print "stop at 0 in buildTreeDmns"; sys.exit(0)
         #
@@ -1032,6 +1276,7 @@ class Vienna2TreeNode(SortPair):
         if debug_buildTreeDmns:
             print "make ssStems and pkStems and build ss Tree:"
         #
+        
         self.ssStems = makeStemList(0, self.N, ss_stemlist)
         self.pkStems = makeStemList(0, self.N, pk_stemlist)
         # pkStems is not really used at all!
@@ -1052,7 +1297,7 @@ class Vienna2TreeNode(SortPair):
         buildTreeStruct assume that the boundaries (ib,jb) are actual
         indices of actual positions _on_ the sequence, not convenient
         notation conventions.
-
+        
         """
         # print self.ssTree
         
@@ -1082,20 +1327,23 @@ class Vienna2TreeNode(SortPair):
         if debug_buildTreeDmns:
             print "** parallel stem case"
         #
+        
         dpkpp = {} # keep a record of whether a connection was found
         for kpk in range(0, len(pkppStems)):
             ipk = pkppStems[kpk].it; jpk = pkppStems[kpk].jt
             if debug_buildTreeDmnsx:
                 print "btd: ijpk(%2d,%2d)" % (ipk, jpk)
             #
+            
             dpkpp.update({(ipk, jpk) : False })            
-        #
+        #endfor
         
         rt_ppKpk = [] # potential extended PKs
         for krt in range(0, len(ssppStems)):
             if debug_buildTreeDmnsx:
                 print "ssppStems(%2d): %s" % (krt, ssppStems[krt])
             #
+            
             irt = ssppStems[krt].it; jrt = ssppStems[krt].jt
             newpk = [[(irt, jrt)], []] 
             
@@ -1105,16 +1353,19 @@ class Vienna2TreeNode(SortPair):
                 if debug_buildTreeDmnsx:
                     print "ijrt(%2d,%2d), ijpk(%2d,%2d)" % (irt, jrt, ipk, jpk)
                 #
+                
                 if irt < ipk and ipk < jrt and jrt < jpk:
                     if debug_buildTreeDmnsx:
                         print "use rt(%2d,%2d): -> pk(%2d,%2d)" % (irt, jrt, ipk, jpk)
                     #
+                    
                     newpk[1] += [(ipk, jpk)]
                     if dpkpp.has_key((ipk, jpk)):
                         dpkpp[(ipk, jpk)] = True
                     else:
                         dpkpp.update({(ipk, jpk) : True})
                     #
+                    
                 else:
                     
                     if debug_buildTreeDmnsx:
@@ -1129,6 +1380,7 @@ class Vienna2TreeNode(SortPair):
                                 print "here xx"
                                 sys.exit(1)
                             #
+                            
                         else:
                             if irt < ipk:
                                 print "irt(%d) < ipk(%d) < jpk(%d) < jrt(%d)" \
@@ -1140,16 +1392,20 @@ class Vienna2TreeNode(SortPair):
                                 print "here yy"
                                 sys.exit(1)
                             #
+                            
                         #
+                        
                     #endif
+                    
                 #
                 kpk += 1
                 # kpk always increments because this is just
                 # searching, not searching and deleting.
-            #
+            #endWhile
             
             rt_ppKpk += [newpk]
-        #
+            
+        #endfor
         
         k = 0
         while k < len(rt_ppKpk):
@@ -1157,11 +1413,13 @@ class Vienna2TreeNode(SortPair):
                 if debug_buildTreeDmns:
                     print "delete rt_ppKpk[%d]: %s" % (k, rt_ppKpk[k])
                 #
+                
                 del rt_ppKpk[k]
             else:
                 k += 1
             #
-        #
+            
+        #endWhile
         
         
         if debug_buildTreeDmns:
@@ -1207,8 +1465,9 @@ class Vienna2TreeNode(SortPair):
                 if debug_buildTreeDmnsx:
                     print "pqL = (%2d,%2d)" % (pL, qL)
                 #
+                
                 pklinks += [getStem(pL, qL, pk_ppstemlist)]
-            #
+            #endFor
             
             
             if rt_ppKpk[k][0][0][0] < pktails[0][0]:
@@ -1235,17 +1494,19 @@ class Vienna2TreeNode(SortPair):
                     print "ijz: (%2d,%2d)" % (iz, jz)
                     #print "stop at 3 in buildTreeDmns"; sys.exit(0)
                 #
+                
                 newpk = PseudoKnot(iz, jz, 'K')
                 newpk.roottmp  = rt_ppKpk[k][0]
                 newpk.linkages = pklinks
                 self.pkstructs += [newpk]
+                
             else:
                 n = len(rt_ppKpk[k][0]) - 1
                 iz = pklinks[0].stem[0].i; jz = rt_ppKpk[k][0][n][1] 
                 
                 
-                # This looks a bit strange because position "it" is
-                # derived from the root stem, position "jt" is derived
+                # This looks a bit strange because position ".it" is
+                # derived from the root stem, position ".jt" is derived
                 # from the linkage stem.
                 if debug_buildTreeDmnsx: 
                     print "rt_ppKpk[%d][0][0][0] = %d, pktails[0][0] = %d" \
@@ -1262,12 +1523,14 @@ class Vienna2TreeNode(SortPair):
                     print "ijz: (%2d,%2d)" % (iz, jz)
                     #print "stop at 3 in buildTreeDmns"; sys.exit(0)
                 #
+                
                 newpk = PseudoKnot(iz, jz, 'K')
                 newpk.roottmp  = rt_ppKpk[k][0]
                 newpk.linkages = pklinks
                 self.pkstructs += [newpk]
                 #sys.exit(0)
-        #
+        #endFor
+        
         if debug_buildTreeDmnsx:
             print "-----"
             print "pkstructs: ", self.pkstructs
@@ -1302,6 +1565,7 @@ class Vienna2TreeNode(SortPair):
         if debug_buildTreeDmns:
             print "update the pk stem tails with the actual references for the stems"
         #
+        
         udpktails = []
         for dd in dpkpp.keys():
             # print dd
@@ -1314,15 +1578,20 @@ class Vienna2TreeNode(SortPair):
                         if debug_buildTreeDmns:
                             print "%s --> %s" % (dd, self.pkpptails[kv])
                         #
+                        
                     #
-                #
+                    
+                #endFor
+                
             #
-        #
+            
+        #endFor
         
         
         for vv in self.pkaptails:
             udpktails += [vv]
         #
+        
         udpktails = self.sortvsList(udpktails, 'i')
         
         kt = 0
@@ -1340,16 +1609,20 @@ class Vienna2TreeNode(SortPair):
                     flag_found = True
                     break
                 #
-            #
+                
+            #endFor
+            
             if not flag_found:
                 if debug_buildTreeDmnsx:
                     print "delete: ", udpktails[kt]
                 #
+                
                 del udpktails[kt]
             else:
                 kt += 1
             #
-        #
+            
+        #endWhile
         
         
         # Now, back to the matter at hand!!!!
@@ -1361,15 +1634,18 @@ class Vienna2TreeNode(SortPair):
             print "udpktails: (this should be the full list of viable candidates)"
             for vv in udpktails:
                 print vv.disp_Pair()
-            #
+            #endFor
+            
             print "self.pkaptails: (a subset list)"
             for vv in self.pkaptails:
                 print vv.disp_Pair()
-            #
+            #endFor
+            
             print "self.pkpptails: (another subset list)"
             for vv in self.pkpptails:
                 print vv.disp_Pair()
-            #
+            #endFor
+            
             #print "stop at 5 in buildTreeDmns"; sys.exit(0)
         #
         
@@ -1385,21 +1661,26 @@ class Vienna2TreeNode(SortPair):
             if debug_buildTreeDmnsx:
                 print "ijR = (%2d,%2d)" % (iR, jR)
             #
+            
             if jR > 0:
                 if self.is_extendedPK(iR, jR, pktail):
                     dmns = self.findDmnsInRegion(self.ssTree, iR, jR)
                     if len(dmns) == 1:
                         print "only one domain!"
                         sys.exit(0) # should not end up here?
+                    #
+                    
                     if debug_buildTreeDmnsx:
                         print "is extended"
                         print dmns
                     #
+                    
                     if dmns == None:
                         print "ERROR: after findDmnsInRegion{tree, ijR(%d,%d)" % (iR, jR)
                         print "       obtained domains was \"None\"!" 
                         sys.exit(1)
                     #
+                    
                     if len(dmns) == 0:
                         print "ERROR: after findDmnsInRegion{tree, ijR(%d,%d)" % (iR, jR)
                         print "       obtained domains was \empty\"!" 
@@ -1411,9 +1692,12 @@ class Vienna2TreeNode(SortPair):
                         print "ijpk = (%2d,%2d), ijR = (%2d,%2d)" % (ipk, jpk, iR, jR)
                         print "rt_Rpk = ", rt_Rpk[len(rt_Rpk)-1]
                     #
+                    
                 #
+                
             #
-        #
+            
+        #endFor
         
         if debug_buildTreeDmnsx:
             print "initial rt_Rpk: ", rt_Rpk
@@ -1429,6 +1713,7 @@ class Vienna2TreeNode(SortPair):
             if debug_buildTreeDmnsx:
                 print "ijRr(%2d,%2d)", iRr, jRr
             #
+            
             ks = kr + 1
             flag_del = False
             while ks < len(rt_Rpk):
@@ -1436,24 +1721,31 @@ class Vienna2TreeNode(SortPair):
                 if debug_buildTreeDmnsx:
                     print "ijRs = ", iRs, jRs
                 #
+                
                 if iRr == iRs and jRr == jRs:
                     if debug_buildTreeDmnsx:
                         print "delete ks = ", ks
                         print "rt_Rpk(kr = %2d, %s), rt_Rpk(kr = %2d, %s)" \
                             % (kr, rt_Rpk[kr][1], ks, rt_Rpk[ks][1])
                     #
+                    
                     rt_Rpk[kr][1] += rt_Rpk[ks][1]
                     del rt_Rpk[ks]
                     flag_del = True
                     break
+                
                 else:
                     ks += 1
                 #
-            #
+                
+            #endWhile
+            
             if not flag_del:
                 kr += 1
             #
-        #
+            
+        #endWhile
+        
         if debug_buildTreeDmns:
             print "revised rt_Rpk: ", rt_Rpk
             #sys,exit(0)
@@ -1471,31 +1763,38 @@ class Vienna2TreeNode(SortPair):
         rt_Kpk = [] # potential core PKs
         #for pktail in self.pkaptails: 
         for pktail in udpktails:
-            ipk = pktail.i; jpk = pktail.j
+            ilk = pktail.i; jlk = pktail.j
             idr, jdr = self.scanForKdmns(self.ssTree, pktail)
             if debug_buildTreeDmnsx:
-                print "ijpk = (%3d,%3d), ijdr = (%3d,%3d)" % (ipk, jpk, idr, jdr)
+                print "ijlk = (%2d,%2d)" % (ilk, jlk)
+                print "ijdr = (%2d,%2d)" % (idr, jdr)
             #
+            
             if jdr > 0:
                 testcore = self.is_corePK(pktail)
+                #print "testcore = ", testcore
                 if testcore:
                     iK = jK = 0
-                    if ipk < idr:
-                        iK = ipk; jK = jdr
+                    if ilk < idr:
+                        iK = ilk; jK = jdr
                     else:
-                        iK = idr; jK = jpk
+                        iK = idr; jK = jlk
                     #
+                    
                     dmns = self.findDmnsInRegion(self.ssTree, iK, jK)
                     
-                    rt_Kpk += [[dmns, [(ipk, jpk)]]]
+                    rt_Kpk += [[dmns, [(ilk, jlk)]]]
                     if debug_buildTreeDmnsx:
-                        print "testcore = ", testcore
-                        print "ijpk = (%2d,%2d), ijdr = (%2d,%2d)" % (ipk, jpk, idr, jdr)
+                        print "ijlk = (%2d,%2d), ijdr = (%2d,%2d)" % (ilk, jlk, idr, jdr)
                         print "domain region: %s" % dmns
                     #
+                    
                 #
+                
             #
-        #
+            
+        #endFor
+        
         if debug_buildTreeDmnsx:
             print "initial rt_Kpk: ", rt_Kpk
             #print "stop at 7 in buildTreeDmns"; sys.exit(0)
@@ -1512,6 +1811,7 @@ class Vienna2TreeNode(SortPair):
                 print "ijdr = ", idr, jdr
                 # print "stop at 7.1: compact the results"; sys.exit(0)
             #
+            
             ks = kr + 1
             flag_del = False
             while ks < len(rt_Kpk):
@@ -1520,6 +1820,7 @@ class Vienna2TreeNode(SortPair):
                 if debug_buildTreeDmnsx:
                     print "ijds = ", ids, jds
                 #
+                
                 if idr == ids and jdr == jds:
                     if debug_buildTreeDmnsx:
                         print "delete ks = ", ks
@@ -1527,6 +1828,7 @@ class Vienna2TreeNode(SortPair):
                             % (kr, rt_Kpk[kr][1], ks, rt_Kpk[ks][1])
                         #print "stop at 7.2: compact the results"; sys.exit(0)
                     #
+                    
                     rt_Kpk[kr][1] += rt_Kpk[ks][1]
                     del rt_Kpk[ks]
                     flag_del = True
@@ -1534,11 +1836,14 @@ class Vienna2TreeNode(SortPair):
                 else:
                     ks += 1
                 #
+                
             #
             if not flag_del:
                 kr += 1
             #
-        #
+            
+        #endWhile
+        
         if debug_buildTreeDmns:
             print "revised rt_Kpk: ", rt_Kpk
             # print "stop at 7.3: finished compact the results"; sys,exit(0)
@@ -1547,7 +1852,7 @@ class Vienna2TreeNode(SortPair):
         # ######################################################################
         # #####  Deal with the resulting mixture of core and extended PKs  #####
         # ######################################################################
-
+        
         # Now we look for overlaps between the different the R and K
         # pks and adjusting these points
         
@@ -1558,6 +1863,7 @@ class Vienna2TreeNode(SortPair):
             if debug_buildTreeDmnsx:
                 print "ijR = (%2d,%2d)" % (iR, jR),  ", rt_Rpk: ", rt_Rpk[kR]
             #
+            
             kK = 0 # K => Core PK
             remove_kR = False
             while kK < len(rt_Kpk):
@@ -1566,6 +1872,7 @@ class Vienna2TreeNode(SortPair):
                 if debug_buildTreeDmnsx:
                     print "ijz = (%2d,%2d)" % (iz, jz), ", rt_Kpk: ", rt_Kpk[kK]
                 #
+                
                 """
                               |----------  linkage  ---------|
                               v                              v
@@ -1620,10 +1927,12 @@ class Vienna2TreeNode(SortPair):
                         print "02 ijR = (%2d, %2d) is embedded in ijz = (%2d,%2d)" \
                             % (iR, jR, iz, jz)
                     #
+                    
                 elif iR < iz and jz < jR:
                     if debug_buildTreeDmnsx:
                         print "4 ijz = (%2d, %2d) internal to ijR = (%2d,%2d)" \
                             % (iz, jz, iR, jR)
+                    #
                     
                 elif iR <  iz and jz  <= jR:
                     """#@@@@@
@@ -1653,6 +1962,7 @@ class Vienna2TreeNode(SortPair):
                         print "rt_Kpk[%2d][1] = %s, rt_Kpk[%2d][1] = %s" \
                             % (kK, rt_Kpk[kK][1], kR, rt_Rpk[kR][1])
                     #
+                    
                     rt_Kpk[kK][0]  = rt_Rpk[kR][0] 
                     # include all domains of ijR in the root box ([0]) of core PK
                     rt_Kpk[kK][1] += rt_Rpk[kR][1]
@@ -1660,6 +1970,7 @@ class Vienna2TreeNode(SortPair):
                     del rt_Rpk[kR]
                     remove_kR = True
                     # print "buildTreeDmns: stopped in mixture section 1"; sys.exit(0)
+                    
                 elif iR <= iz and jz <  jR:
                     
                     """#@@@@@
@@ -1689,6 +2000,7 @@ class Vienna2TreeNode(SortPair):
                         print "rt_Kpk[%2d][1] = %s, rt_Kpk[%2d][1] = %s" \
                             % (kK, rt_Kpk[kK][1], kR, rt_Rpk[kR][1])
                     #
+                    
                     rt_Kpk[kK][0]  = rt_Rpk[kR][0]
                     # include all domains of ijR in the root box ([0]) of core PK
                     rt_Kpk[kK][1] += rt_Rpk[kR][1]
@@ -1697,15 +2009,20 @@ class Vienna2TreeNode(SortPair):
                     remove_kR = True
                     # print "buildTreeDmns: stopped in mixture section 2"; sys.exit(0)
                 #
+                
                 kK += 1
                 # here also, we just scroll through rt_Kpk without
                 # deleting anything. The only thing that can be
                 # deleted is rt_Rpk.
-            #
+                
+            #endWhile
+            
             if not remove_kR:
                 kR += 1
             #
-        #
+            
+        #endWhile
+        
         if debug_buildTreeDmns:
             print "final rt_Kpk: ", rt_Kpk
             print "final rt_Rpk: ", rt_Rpk
@@ -1737,9 +2054,10 @@ class Vienna2TreeNode(SortPair):
             for pkx in pklinks:
                 pL = pkx[0]; qL = pkx[1]
                 newpk.linkages += [getStem(pL, qL, pk_stemlist)]
-            #
+            #endFor
+            
             self.pkstructs += [newpk]
-        #
+        #endFor
         
         if debug_buildTreeDmnsx:
             print "current pkstructs after running R"
@@ -1770,10 +2088,13 @@ class Vienna2TreeNode(SortPair):
                 if pL < pLmin:
                     pLmin = pL
                 #
+                
                 if qL > qLmax:
                     qLmax = qL
                 #
-            #
+                
+            #endFor
+            
             if debug_buildTreeDmnsx:
                 # print pkK
                 # print pkK[0]
@@ -1784,6 +2105,7 @@ class Vienna2TreeNode(SortPair):
                 print "pklinks: ", pklinks
                 
             #
+            
             newpk = None
             
             iK = self.N; jK = 0
@@ -1791,10 +2113,12 @@ class Vienna2TreeNode(SortPair):
                 #print "1"
                 iK = pLmin; jK = jz
                 newpk = PseudoKnot(iK, jK, 'K')
+                
             elif iz < pLmin and jz < qLmax and  pLmin < jz:
                 #print "2"
                 iK = iz; jK = qLmax
                 newpk = PseudoKnot(iK, jK, 'K')
+                
             else:
                 print "ERROR(buildTreeDmns near 10): somehow, core PK is not properly defined"
                 print "       iz(%2d)   < pLmin(%2d) < jz(%2d)   < qLmax(%2d)" \
@@ -1811,8 +2135,10 @@ class Vienna2TreeNode(SortPair):
                 pL = pkx[0]; qL = pkx[1]
                 newpk.linkages += [getStem(pL, qL, pk_stemlist)]
             #
+            
             self.pkstructs += [newpk]
-        #
+        #endFor
+        
         if debug_buildTreeDmns:
             print "current pkstructs after running K"
             for pkk in self.pkstructs:
@@ -1832,7 +2158,7 @@ class Vienna2TreeNode(SortPair):
             for kpk in range(0, len(self.pkstructs)):
                 ipk = self.pkstructs[kpk].it; jpk = self.pkstructs[kpk].jt
                 if (ipk == iss and jss <= jpk) or (ipk <= iss and jss == jpk):
-
+                    
                     
                     if len(self.pkstructs[kpk].rootstems) > 0:
                         
@@ -1853,6 +2179,7 @@ class Vienna2TreeNode(SortPair):
                                 len(self.pkstructs[kpk].rootstems)
                             #print "stop at 11 in buildTreeDmns"; sys.exit(0)
                         #
+                        
                         continue
                     #
                     
@@ -1867,9 +2194,11 @@ class Vienna2TreeNode(SortPair):
                         elif (ipk == iss and jss <= jpk):
                             print "pk linkage on the right hand side"
                         #
+                        
                         print "ijpk(%2d,%2d), ijss(%2d,%2d)" % (ipk,jpk, iss, jss)
                         # print "del ijss region: ", self.pkstructs[kpk].roottmp
                     #
+                    
                     for kv in range(0, len(self.pkstructs[kpk].roottmp)):
                         idv = self.pkstructs[kpk].roottmp[kv][0];
                         jdv = self.pkstructs[kpk].roottmp[kv][1];
@@ -1877,6 +2206,7 @@ class Vienna2TreeNode(SortPair):
                             print "ijdv: (%2d,%2d)" \
                                 % (idv, jdv), ", roottmp: ", self.pkstructs[kpk].roottmp[kv]
                         #
+                        
                         for lv in range(0, len(self.ssStems)):
                             issv = self.ssStems[lv].it; jssv = self.ssStems[lv].jt
                             if issv == idv and jssv == jdv:
@@ -1884,10 +2214,12 @@ class Vienna2TreeNode(SortPair):
                                     print "marking ijssv = (%2d,%2d) <=> ijdv = (%2d,%2d)" \
                                         % (issv, jssv, idv, jdv)
                                 #
+                                
                                 stem = copyStem(self.ssStems[lv].stem)
                                 self.pkstructs[kpk].rootstems += [stem]
                                 self.ssStems[lv].mark = True
                             #
+                            
                             if debug_buildTreeDmnsx:
                                 if len(self.pkstructs[kpk].rootstems) > 0:
                                     print "ijssv = (%2d,%2d) vs ijdv = (%2d,%2d)" \
@@ -1896,21 +2228,29 @@ class Vienna2TreeNode(SortPair):
                                         print "pkstructs[%2d].rootstem: %s" \
                                             % (kpk, self.pkstructs[kpk].rootstems)
                                     #
+                                    
                                 #
+                                
                             #
-                        #
-                    #
+                            
+                        #endfor
+                        
+                    #endfor
                             
                     
                     flag_del = True
                     kss += 1
                     break
                 #
-            #
+                
+            #endfor
+            
             if not flag_del:
                 kss += 1
             #
-        #
+            
+        #endwhile
+        
         self.ssStems = ins_sort_StemList(self.ssStems)
         if debug_buildTreeDmns:
             print "---------------------------------------------------"
@@ -1920,6 +2260,7 @@ class Vienna2TreeNode(SortPair):
             for pkk in self.pkstructs:
                 print pkk.disp_PseudoKnot()
             #
+            
             #print "stop at 12 in buildTreeDmns"; sys.exit(0)
         #
         
@@ -1930,11 +2271,13 @@ class Vienna2TreeNode(SortPair):
             if self.ssStems[k].mark:
                 stem.mark = True
             #
+            
             self.genStems += [stem]
-        #
+        #endfor
+        
         for pks in self.pkstructs:
             self.genStems += [pks]
-        #
+        #endfor
         
         self.genStems = ins_sort_StemList(self.genStems)
         self.ssStems = ins_sort_StemList(self.ssStems)
@@ -1953,18 +2296,24 @@ class Vienna2TreeNode(SortPair):
             if debug_buildTreeDmnsx:
                 print "%s(%2d,%2d) " % (typenm, i, j)
             #
+            
             if typenm == "Stem":
                 if self.genStems[k].mark:
                     if debug_buildTreeDmnsx:
                         print "delete ", self.genStems[k]
                     #
+                    
                     del self.genStems[k]
                 else:
                     k += 1
+                #
+                
             else:
                 k += 1
             #
-        #
+            
+        #endwhile
+        
         if debug_buildTreeDmns:
             print "---------------------------------------------------"
             print dispStemList(self.genStems, "general stem structure (after pruning)")
@@ -1972,7 +2321,8 @@ class Vienna2TreeNode(SortPair):
             
             for astm in self.genStems:
                 print disp_Motif(astm)
-            #
+            #endFor
+            
             #print "stop at 14 in buildTreeDmns"; sys.exit(0)
         #
         
@@ -2000,7 +2350,7 @@ class Vienna2TreeNode(SortPair):
         buildTreeStruct assume that the boundaries (ib,jb) are actual
         indices of actual positions _on_ the sequence, not convenient
         notation conventions.
-
+        
         """
         # ###########################################################
         # print genTree
@@ -2012,32 +2362,32 @@ class Vienna2TreeNode(SortPair):
             print "BProots"
             for vv in self.vsBProots:
                 print vv.disp_Pair()
-            #
+            #endFor
             
             print "rt_Kpk:    "
             for rt_Kpk_k in rt_Kpk:
                 print rt_Kpk_k
-            #
+            #endFor
             
             print "rt_Rpk:    "
             for rt_Rpk_k in rt_Rpk:
                 print rt_Rpk_k
-            #
+            #endFor
             
             print "rt_ppKpk:    "
             for rt_ppKpk_k in rt_ppKpk:
                 print rt_ppKpk_k
-            #
+            #endFor
             
             print "sstails:   "
             for sst in self.ssaptails:
                 print sst.disp_Pair()
-            #
+            #endFor
             
             print "pktails:   "
             for pkt in self.pkaptails:
                 print pkt.disp_Pair()
-            #
+            #endFor
             
             print self.dispTreeStruct(self.ssTree,  "Secondary Structure Tree")
             print self.dispTreeStruct(self.genTree, "Full Structure Tree")
@@ -2045,8 +2395,9 @@ class Vienna2TreeNode(SortPair):
             
             if 0: #debug_buildTreeDmnsx:
                 print "planned exit at end of buildTreeDmns: "
-                print "stop at 15 in buildTreeDmns"; sys.exit(0)
+                #print "stop at 15 in buildTreeDmns"; sys.exit(0)
             #
+            
         #
         
         """
@@ -2153,11 +2504,12 @@ class Vienna2TreeNode(SortPair):
         
         
         if stop_at_end:
-            print "planned stop at the end of buildTreeDmns()"
-            sys.exit(0)
+            print "planned stop at the end of buildTreeDmns()";
+            # sys.exit(0)
         #
+        
         return rt_Kpk, rt_ppKpk, rt_Rpk
-    #
+    #endMethod
     
     
     
@@ -2166,67 +2518,73 @@ class Vienna2TreeNode(SortPair):
     # ########################################################
     
     
-    def is_corePK(self, pk):
+    def is_corePK(self, lnkg):
         debug_is_corePK = False # True # 
         
         
         flag_adjoining_region = False
-        ipk = pk.i; jpk = pk.j
+        ilk = lnkg.i; jlk = lnkg.j
         contact_l = 0
         contact_r = 0
         contact_point = {}
         for kr in range(0, len(self.ssaptails)):
             ikr = self.ssaptails[kr].i; jkr = self.ssaptails[kr].j
-            if ipk == ikr and jpk == jkr:
+            if ilk == ikr and jlk == jkr:
                 if debug_is_corePK:
                     print "skip: (%2d,%2d)" % (ikr, jkr)
                 #
+                
                 continue
             #
-            if ipk < ikr and jpk < jkr and ikr < jpk:
+            
+            if ilk < ikr and jlk < jkr and ikr < jlk:
                 
                 # ...[[...((((......]]...))))...
                 #    ^    ^          ^      ^
-                #   ipk  ikr        jpk    jkr
+                #   ilk  ikr        jlk    jkr
                 #              (right side)
                 
                 if debug_is_corePK:
-                    print "adjoining ipk(%2d) < ikr(%2d) < jpk(%2d) < jkr(%2d)" \
-                        % (ipk, ikr, jpk, jkr)
+                    print "adjoining ilk(%2d) < ikr(%2d) < jlk(%2d) < jkr(%2d)" \
+                        % (ilk, ikr, jlk, jkr)
                 #
                 
                 contact_r += 1
-                contact_point.update({(ikr,jkr) : (ipk,jpk)})
+                contact_point.update({(ikr,jkr) : (ilk,jlk)})
                 
-            elif ikr < ipk and jkr < jpk and ipk < jkr:
+            elif ikr < ilk and jkr < jlk and ilk < jkr:
                 
                 # ...((((...[[.....)))).....]]...
                 #    ^      ^         ^      ^
-                #   ikr    ipk       jkr    jpk
+                #   ikr    ilk       jkr    jlk
                 #       (left side)
                 
                 if debug_is_corePK:
-                    print "adjoining ikr(%2d) < ipk(%2d) < jkr(%2d) < jpk(%2d)" \
-                        % (ikr, ipk, jkr, jpk)
+                    print "adjoining ikr(%2d) < ilk(%2d) < jkr(%2d) < jlk(%2d)" \
+                        % (ikr, ilk, jkr, jlk)
                 #
                 
                 contact_l += 1
-                contact_point.update({(ikr,jkr) : (ipk,jpk)})
+                contact_point.update({(ikr,jkr) : (ilk,jlk)})
                 
             #
+            
             if flag_adjoining_region:
                 break
             #
-        #
+            
+        #endFor
         if debug_is_corePK:
             print "contact_lr: ", contact_l, contact_r
             print "contact_point: ", contact_point
         #
+        
         if contact_l > 0 and contact_r > 0:
             flag_adjoining_region = True
         #
+        
         return not flag_adjoining_region
-    #
+    #endMethod
     
     
     def is_extendedPK(self, iR, jR, pk):
@@ -2240,6 +2598,7 @@ class Vienna2TreeNode(SortPair):
             for ssk in self.ssaptails:
                 print ssk
             #
+            
         #
         
         flag_is_extendedPK  = False # True # 
@@ -2249,11 +2608,13 @@ class Vienna2TreeNode(SortPair):
             if debug_is_extendedPK:
                 print "ie: ijkr = (%2d,%2d)[%2d]" % (ikr, jkr, kr)
             #
+            
             if ipk == ikr and jpk == jkr:
                 if debug_is_extendedPK:
                     print "ie: kr=%2d: pk(%2d,%2d) <=> sstail(%2d,%2d), skip" \
                         % (kr, ipk, jpk, ikr, jkr)
                 #
+                
                 kr += 1
                 continue
             elif not (iR <= ikr and jkr <= jR):
@@ -2261,6 +2622,7 @@ class Vienna2TreeNode(SortPair):
                     print "ie: kr=%2d: not (iR(%2d) <= ikr(%2d) < jkr(%2d) <= jR(%2d), skip" \
                         % (kr, iR, ikr, jkr, jR)
                 #
+                
                 kr += 1
                 continue
             elif (ikr < ipk and jkr < jpk and ipk < jkr):
@@ -2274,26 +2636,33 @@ class Vienna2TreeNode(SortPair):
                         print "recursion problems: ikr(%d) < ipk(%d) < jkr(%d) < jpk(%d)" \
                             % (ikr, ipk, jkr, jpk)
                         #
+                        
                         sys.exit(1)
                     #
+                    
                     iks = self.ssaptails[ks].i; jks = self.ssaptails[ks].j
                     if debug_is_extendedPK:
                         print "ie: ijks = (%2d,%2d)[%2d]" % (iks, jks, ks)
                     #
+                    
                     if ipk == iks and jpk == jks:
                         if debug_is_extendedPK:
                             print "ie: ks=%2d: pk(%2d,%2d) <=> sstail(%2d,%2d), skip" \
                                 % (ks, ipk, jpk, ikr, jkr)
                         #
+                        
                         ks += 1
                         continue
+                    
                     elif not (iR <= ikr and jkr <= jR):
                         if debug_is_extendedPK:
                             print "ie: ks=%2d: not (iR(%2d) <= ikr(%2d) < jkr(%2d) <= jR(%2d), skip" \
                                 % (ks, iR, ikr, jkr, jR)
                         #
+                        
                         ks += 1
                         continue
+                    
                     elif (ipk < iks and jpk < jks and iks < jpk):
                         if debug_is_extendedPK:
                             print "found ss(%2d,%2d)[kr=%d], ss(%2d,%2d)[ks=%d]: -> ijR(%d, %d)" \
@@ -2317,6 +2686,7 @@ class Vienna2TreeNode(SortPair):
                         ks_cont = False
                         ks += 1
                         break
+                    
                     elif jpk < iks:
                         # ordered list!!!!
                         if debug_is_extendedPK:
@@ -2330,21 +2700,24 @@ class Vienna2TreeNode(SortPair):
                         ks += 1
                     #
                     
-                #
+                #endwhile
                 if flag_is_extendedPK:
                     break
                 #
+                
                 kr += 1
             #
+            
             kr += 1
-        #
-
+        #endwhile
+        
         if debug_is_extendedPK:
             print "Exiting is_extendedPK"
             #print "stop at 0 (return from) in is_extended"; sys.exit(0)
         #
+        
         return flag_is_extendedPK
-    #
+    #endMethod
     
     
     
@@ -2357,13 +2730,15 @@ class Vienna2TreeNode(SortPair):
         else:
             return self.scanForRdmnsUtil(tree, pk)
         #
-    #
+        
+    #endMethod
     
     def scanForRdmnsUtil(self, curr, pk):
         debug_scanForRdmns = False # True # 
         if curr == None:
             # no information! ... node could be empty
             return 0, 0
+        
         else:
             iR = curr.name.it; jR = curr.name.jt
             n = len(curr.children)
@@ -2380,10 +2755,13 @@ class Vienna2TreeNode(SortPair):
                         elif ir < pk.j and pk.j < jr:
                             jRndx = kr
                         #
+                        
                     #
+                    
                     if debug_scanForRdmns:
                         print "ijRndx: ", iRndx, jRndx
                     #
+                    
                     if iRndx >= 0 and iRndx < jRndx:
                         iR = curr.children[iRndx].name.it
                         jR = curr.children[jRndx].name.jt
@@ -2393,17 +2771,23 @@ class Vienna2TreeNode(SortPair):
                             if jR_t > 0:
                                 iR = iR_t; jR = jR_t
                             #
+                            
                         #
+                        
                     #
+                    
                 else:
                     iR = 0; jR = 0       
                 #
+                
             else:
                 iR = 0; jR = 0       
             #
+            
             return iR, jR
         #
-    #
+        
+    #endMethod
     
     def scanForKdmns(self, tree, pk):
         if tree.name == None:
@@ -2415,7 +2799,8 @@ class Vienna2TreeNode(SortPair):
         else:
             return self.scanForKdmnsUtil(tree, pk)
         #
-    #
+        
+    #endMethod
     
     def scanForKdmnsUtil(self, curr, pk):
         debug_scanForKdmns = False # True # 
@@ -2424,17 +2809,20 @@ class Vienna2TreeNode(SortPair):
             #print "n"
             # no information! ... node could be empty
             return 0, 0
+        
         else:
             id_r = curr.name.it; jd_r = curr.name.jt
             ib  = curr.name.ih; jb  = curr.name.jh
             if ib == 0 and jb == self.N-1:
                 ib = -1; jb = self.N
             #
-
+            
             if debug_scanForKdmns:
                 print "ijd_r(%2d,%2d), ijb(%2d,%2d) ijpk(%2d,%2d)" \
                     % (id_r, jd_r, ib, jb, pk.i, pk.j)
                 print "pk.i(%d) < id_r(%d) < pk.j(%d) < jd_r(%d)" % (pk.i, id_r, pk.j, jd_r)
+            #endif
+            
             if ((id_r < pk.i and jd_r < pk.j and pk.i < jd_r) or
                 (pk.i < id_r and pk.j < jd_r and id_r < pk.j)):
                 if debug_scanForKdmns:
@@ -2445,13 +2833,17 @@ class Vienna2TreeNode(SortPair):
                         print "pk.i(%2d) < id_r(%2d) < pk.j(%2d) < jd_r(%2d)" \
                             % (pk.i, id_r, pk.j, jd_r)
                     #
+                    
                 #
+                
                 return id_r, jd_r
+            
             elif ib < pk.i and pk.j < jb:
                 if debug_scanForKdmns:
                     print "ib(%2d) < pk.i(%2d) < pk.j(%2d) < jb(%2d)" \
                         % (ib, pk.i, pk.j, jb)
                 #
+                
                 n = len(curr.children)
                 if n > 0:
                     for k in range(0, len(curr.children)):
@@ -2459,16 +2851,21 @@ class Vienna2TreeNode(SortPair):
                         if jd_t > 0:
                             id_r = id_t; jd_r = jd_t
                         #
+                        
                     #
+                    
                 else:
                     id_r = 0; jd_r = 0       
                 #
+                
             else:
                 id_r = 0; jd_r = 0       
             #
+            
             return id_r, jd_r
         #
-    #
+        
+    #endMethod
     
     
     def findDmnsInRegion(self, tree, iK, jK):
@@ -2480,7 +2877,8 @@ class Vienna2TreeNode(SortPair):
         else:
             return self.findDmnsInRegionUtil(tree, iK, jK)
         #
-    #
+        
+    #endMethod
     
     def findDmnsInRegionUtil(self, curr, iK, jK):
         debug_findDmnsInRegion = False # True # 
@@ -2491,11 +2889,13 @@ class Vienna2TreeNode(SortPair):
         if curr == None:
             # no information! ... node could be empty
             return []
+        
         else:
             ib = curr.name.it; jb = curr.name.jt
             if debug_findDmnsInRegion:
                 print "ib(%2d) <= iK(%2d) < jK(%2d) <= jb(%2d)" % (ib, iK, jK, jb)
             #
+            
             if ib <= iK and jK <= jb:
                 
                 n = len(curr.children)
@@ -2503,6 +2903,7 @@ class Vienna2TreeNode(SortPair):
                 if debug_findDmnsInRegion:
                     print "n = ", n
                 #
+                
                 for k in range(0, n):
                     iV = curr.children[k].name.it; jV =  curr.children[k].name.jt
                     if debug_findDmnsInRegion:
@@ -2515,12 +2916,16 @@ class Vienna2TreeNode(SortPair):
                         if debug_findDmnsInRegion:
                             print "ijV = (%d,%d)" % (iV, jV)
                         #
+                        
                         dmns += [(iV, jV)]
                     #
-                #
+                    
+                #endfor
+                
                 if debug_findDmnsInRegion:
                     print "dmns: ", dmns
                 #
+                
                 # print dmns, len(dmns)
                 if len(dmns) == 0:
                     # print "entered len(dmns) = 0"
@@ -2532,19 +2937,27 @@ class Vienna2TreeNode(SortPair):
                                 print "ib(%2d) <= iK(%2d) < jK(%2d) <= jb(%2d)" \
                                     % (ibx, iK, jK, jbx)
                             #
+                            
                             if ibx <= iK and jK <= jbx:
                                 dmns = self.findDmnsInRegionUtil(curr.children[k], iK, jK)
                             #
-                        #
+                            
+                        #endfor
+                        
                     #
+                    
                 #
+                
                 # print "xx: ", dmns
                 return dmns
+            
             else:
                 return []
             #
+            
         #
-    #
+        
+    #endMethod
     
     # #################################################
     # #####    General Tree Building Utilities    #####
@@ -2556,7 +2969,7 @@ class Vienna2TreeNode(SortPair):
         na.structLayout(tree)
         s += na.disp_structLayout()
         return s
-    #
+    #endMethod
     
     def buildTreeStruct(self, stems, ib, jb):
         debug_bts = False # True # 
@@ -2564,7 +2977,7 @@ class Vienna2TreeNode(SortPair):
         root = Pair()
         root.put_ssPair(ib, jb, 'X', 'base')
         # the base of the structure is the root of the tree
-        base = Stem([root])
+        base = Stem([root]) # <<<====
         base.vtype = "root"
         base.name  = "Base"
         tb.tree.name = base
@@ -2575,8 +2988,9 @@ class Vienna2TreeNode(SortPair):
             print self.dispTreeStruct(tb.tree, "check results")
             #print "stop at 0 (end of) in buildTreeStruct"; sys.exit(0)
         #
+        
         return tb.tree
-    #
+    #endMethod
     
     def increment_child(self, set_arr):
         ch_arr = []
@@ -2586,7 +3000,7 @@ class Vienna2TreeNode(SortPair):
         ch_arr[0] += 1
         ch_arr += [0]
         return ch_arr
-    #
+    #endMethod
     
     def buildTreeStructUtil(self, node, stems, kstm, level, set_arr, ib, jb):
         debug_btsU = False # True # 
@@ -2594,6 +3008,7 @@ class Vienna2TreeNode(SortPair):
             print "buildTreeStructUtil{kstm(%2d), level(%2d), set_arr(%s), ijb(%2d,%2d)" \
                 % (kstm, level, set_arr, ib, jb)
         #
+        
         if level > 30:
             print "ERROR: !! something must be wrong in the recursion"
             print "kstm = %d, level = %d, set_arr %s" % (kstm, level, set_arr)
@@ -2604,6 +3019,7 @@ class Vienna2TreeNode(SortPair):
             if debug_btsU:
                 print "kstm(%d) + 1 = %d is out of range" % (kstm, kstm+1)
             #
+            
             return kstm, node
         #
         
@@ -2612,6 +3028,7 @@ class Vienna2TreeNode(SortPair):
             print "ib(%2d) < it1(%2d) < jt1(%2d) < jb(%2d), level = %d" \
                 % (ib, it1, jt1, jb, level)
         #
+        
         if ib <= it1 and jt1 <= jb:
             ch_arr = self.increment_child(set_arr)
             new_level = level + 1
@@ -2635,6 +3052,7 @@ class Vienna2TreeNode(SortPair):
                     % (level, kstm) 
                 print "node = %s" % (node)
             #
+            
             flag_cont = True
             while kstm < len(stems) and flag_cont:
                 set_arr[level] += 1
@@ -2646,15 +3064,18 @@ class Vienna2TreeNode(SortPair):
                     print "                 ijt1 = (%2d,%2d), ijb(%2d,%2d)" \
                         % (it1, jt1, ib, jb)
                 #
+                
                 if not (ib <= it1 and jt1 <= jb):
                     if debug_btsU: print "break"
                     flag_cont = False
+                    
                 else:
                     ch_arr = self.increment_child(set_arr)
                     #ch_arr[new_level] += 1
                     if debug_btsU:
                         print "                              ch_arr(%s)" % (ch_arr)
                     #
+                    
                     node.children += [Node(stems[kstm])]
                     kstm, node.children[set_arr[level]] \
                         = self.buildTreeStructUtil(node.children[set_arr[level]],
@@ -2664,7 +3085,9 @@ class Vienna2TreeNode(SortPair):
                                                    ch_arr,
                                                    it1, jt1)
                 #
+                
             #
+            
             if debug_btsU:
                 print "return from buildTreeStructUtil: kstm = %2d, level = %2d"  \
                     % (kstm, level)
@@ -2672,12 +3095,16 @@ class Vienna2TreeNode(SortPair):
             #
             
             return kstm, node
+        
         else:
             if debug_btsU:
                 print "return from level %d, kstm = %d" % (level, kstm)
             #
+            
             return kstm, node
+        
         #
+        
         if debug_btsU:
             print "got to here!!! xxxx"
             print "ijb = ", (ib, jb), ", tree = ", tree
@@ -2686,9 +3113,9 @@ class Vienna2TreeNode(SortPair):
             print "tree:   ", node
             #print "stop at 0 (return from) in buildTreeStructUtil"; sys.exit(0)
         #
+        
         return kstm, node
-        #
-    #
+    #endMethod
     
     
     # ###################################vvvvvvvvvvvvvvvvvvv
@@ -2713,10 +3140,12 @@ class Vienna2TreeNode(SortPair):
                 stemlist[j], stemlist[j-1] = stemlist[j-1], stemlist[j]
                 # syntactic sugar: swap the items
                 j=j-1 
-            #
-        #
+            #endwhile
+            
+        #endfor
+        
         return stemlist
-    #
+    #endMethod
     
     
     def disp_stem(self, stem):
@@ -2724,10 +3153,11 @@ class Vienna2TreeNode(SortPair):
         
         for k in range(0, len(stem)-1):
             s += "%s, " % stem[k].disp_Pair()
-        #
+        #endfor
+        
         s += "%s" % stem[len(stem)-1].disp_Pair()
         return s
-    #
+    #endMethod
     
     def build_apStem(self, tailtags, Xlist):
         """
@@ -2800,38 +3230,61 @@ class Vienna2TreeNode(SortPair):
         
         
         debug_build_apStem = False # True # 
+        if debug_build_apStem:
+            print "Enter build_apStem:"
+            print "tailtags: ", tailtags
+            print "Xlist:    ", Xlist
+            #sys.exit(0)
+        #
         
         stemlist = []
         for sst in tailtags:
             if debug_build_apStem:
                 print "sst = ", sst
             #
-            for k in range(0, len(Xlist)):
-                ib = Xlist[k].i; jb = Xlist[k].j
+            
+            for k_apr in range(0, len(Xlist)):
+                ib = Xlist[k_apr].i; jb = Xlist[k_apr].j
+                if Xlist[k_apr].v == 'p':
+                    # parallel stem!
+                    continue
+                #
+                
                 if ib == sst.i and jb == sst.j:
                     if debug_build_apStem:
                         print "ijb = ", (ib, jb)
                     #
-                    stem = self.scanFor_apStem(Xlist, k)
-                    # print stem, len(stem)
-                    # sys.exit(0)
+                    
+                    stem = self.scanFor_apStem(Xlist, k_apr)
+                    if debug_build_apStem:
+                        print "build_apStem result:"
+                        print stem, len(stem)
+                        # sys.exit(0)
+                    #endif
+                    
                     stemlist += [stem]
                     break
+                
                 #
-            #
+                
+            #endfor
+            
         #
         
         if debug_build_apStem:
             for k in range(0, len(stemlist)):
                 print k, stemlist[k]
             #
+            
         #
         
         kr = 0
         while kr < (len(stemlist)):
             if debug_build_apStem:
-                print stemlist[kr]
+                print kr, stemlist
+                print "kr(%2d), stemlist: %s" % (kr, stemlist[kr])
             #
+            
             tail = 0
             i_tr = stemlist[kr][tail].i; j_tr = stemlist[kr][tail].j
             head = len(stemlist[kr])-1
@@ -2839,12 +3292,14 @@ class Vienna2TreeNode(SortPair):
             if debug_build_apStem:
                 print "stem{(%2d,%2d):(%2d,%2d)}" % (i_tr, j_tr, i_hr, j_hr)
             #
+            
             kt = kr + 1
             while kt < len(stemlist):
                 i_tt = stemlist[kt][tail].i; j_tt = stemlist[kt][tail].j
                 if debug_build_apStem:
-                    print "test (k=%2d)(%2d,%2d)" % (kt, i_tt, j_tt)
+                    print "build_apStem, test (k=%2d)(%2d,%2d)" % (kt, i_tt, j_tt)
                 #
+                
                 if (i_tr <= i_tt and
                     i_tt <= i_hr and 
                     j_hr <= j_tt and
@@ -2856,24 +3311,33 @@ class Vienna2TreeNode(SortPair):
                 else:
                     kt += 1
                 #
-            #
+                
+            #endwhile
+            
             if debug_build_apStem:
                 print "kr(%d) -> %d" % (kr, kr + 1)
             #
+            
             kr += 1
-        #
+        #endwhile
+        
         if debug_build_apStem:
             print "results from build_apStem:"
             for slk in stemlist:
                 print slk
-            #
+            #endfor
+            
             #print "stop at 0 (end of) build_apStem"; sys.exit(0)
         #
+        
         return stemlist
-    #
+    #endMethod
     
     
-    def scanFor_apStem(self, Xlist, k):
+    
+    
+    
+    def scanFor_apStem(self, Xlist, k_init):
         """
         This is a support method for build_apStem(). Anti-parallel stems
         have a property that follows the rule
@@ -2884,56 +3348,191 @@ class Vienna2TreeNode(SortPair):
         generally, ki = kj = 1.
         """
         
-        debug_scanFor_apStem = False # True # 
-        
-        max_gap = 8
         stem_len = 1
-        i_t = Xlist[k].i; j_t = Xlist[k].j
-        i_p = i_t; j_p = j_t
-        stem = [Xlist[k]]
-        kr = k
+        i_t = Xlist[k_init].i; j_t = Xlist[k_init].j
+        
+        debug_scanFor_apStem = False # True # 
+        if debug_scanFor_apStem:
+            print "Enter scanFor_apStem(%2d,%2d):" % (i_t, j_t)
+            print Xlist
+        #
+        
+        i_prv = i_t; j_prv = j_t # prv = previous
+        cnStemSegs = [] # proposed connected stem segments (list of lists)  
+        stem_n = [Xlist[k_init]]
+        kr = k_init
         flag_cont = True
-        gap = 2
-        while flag_cont and kr < (len(Xlist)-1):
+        gap = 2 # allowed gap in [bp]
+        nx = len(Xlist)-1
+        while flag_cont and kr < nx:
             kr += 1
             if Xlist[kr].v == 'p':
                 # parallel stem!
                 continue
             #
-            i_nx = Xlist[kr].i; j_nx = Xlist[kr].j
+            
+            i_nxt = Xlist[kr].i; j_nxt = Xlist[kr].j # nxt = next
             
             
             if debug_scanFor_apStem:
-                print "kr = ", kr, "ij_t = ", (i_t, j_t), ", ij_nx = ", (i_nx, j_nx)
+                print "kr = %2d, ij_t(%2d,%2d), ij_nxt(%2d,%2d)" \
+                    % (kr, i_t, j_t, i_nxt, j_nxt)
+                
+                print "i_nxt(%2d) - i_prv(%2d) <= gap(%2d)" % (i_nxt, i_prv, gap)
+                print "j_prv(%2d) - j_nxt(%2d) <= gap(%2d)" % (j_prv, j_nxt, gap)
             #
             
-            if i_nx - i_p <= gap and j_p - j_nx <= gap:
-                if i_t <= i_nx and j_nx <= j_t:
-                    stem += [Xlist[kr]]
-                    stem_len += 1
-                    gap = stem_len / 2 + 1
-                    if gap > max_gap:
-                        gap = max_gap
-                    #
-                    
-                    if debug_scanFor_apStem:
-                        print "gap  = ", gap
-                        print "slen = ", stem_len
-                    #
+            
+            if i_nxt - i_prv == 1 and j_prv - j_nxt == 1:
+                stem_n += [Xlist[kr]]
+                stem_len += 1
+                gap = stem_len / 2 + 1 # <== integer!!!!
+                if gap > self.max_bp_gap:
+                    gap = self.max_bp_gap
                 #
-                i_p = i_nx; j_p = j_nx
+                
+                if kr == nx:
+                    
+                    cnStemSegs += [deepcopy(stem_n)]
+                    # close out all stem_n and save in cnStemSegs
+                    stem_n = []      # reset stem_n 
+                    flag_cont = False
+                #
                 
             else:
-                flag_cont = False
+                
+                cnStemSegs += [deepcopy(stem_n)] # close out stem_n and save in cnStemSegs
+                stem_n = []      # reset stem_n 
+                
+                # now test if the next stem_n (if exists) is also
+                # satisfied by the current criteria
+                if i_nxt - i_prv <= gap and j_prv - j_nxt <= gap:
+                    if i_t < i_nxt and j_nxt < j_t: 
+                        stem_n += [Xlist[kr]]
+                        stem_len += 1
+                        gap = stem_len / 2 + 1 # <== integer!!!!
+                        if gap > self.max_bp_gap:
+                            gap = self.max_bp_gap
+                        #
+                        
+                        if debug_scanFor_apStem:
+                            print "gap  = ", gap
+                            print "slen = ", stem_len
+                        #
+                        
+                    #
+                    
+                else:
+                    flag_cont = False
+                #
+                
             #
+            
+            i_prv = i_nxt; j_prv = j_nxt
         #
+        
+        
+        # VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+        # VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+        # VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+        """@
+        
+        Here we finalize the true effective length of the stem
+        according to the rules used in RNAModules(). This ensures that
+        the estimations are consistent between the two independent
+        ways of tackling the problem (the predictions obtained from
+        Calculate vs the reverse calculation using this thread
+        engine).
+        
+        """
+        stem = []
+        stem_lenf = 0
+        if len(cnStemSegs) > 1:
+            """@
+            
+            Whereas normally we might want to use the free energy to
+            decide if we will end matters with the previous stem or
+            combine the previous stem with this next stem (and any
+            additional cnStemSegs that satisfied the rules), here we
+            claim that this _is_ the linkage structure
+            (fact). Therefore, we simply say, "you asked for it, you
+            got it" in the later parts where the free energy is
+            assigned.
+            
+            """
+            
+            n = len(cnStemSegs)
+            stem_p = deepcopy(cnStemSegs[0])
+            if debug_scanFor_apStem:
+                print "stem_p", stem_p
+            #
+            
+            n_p = len(stem_p) - 1
+            ph_p = stem_p[n_p].i; qh_p = stem_p[n_p].j;
+            slen_p = len(stem_p)
+            
+            stem_lenf += slen_p
+            stem += stem_p 
+            for k in range(1, n):
+                stem_n = deepcopy(cnStemSegs[k])
+                if debug_scanFor_apStem:
+                    print "stem_n", stem_n
+                #
+                
+                slen_n = len(stem_n)
+                pt_n = stem_n[0].i; qt_n = stem_n[0].j;
+                
+                is_connect = self.fe.is_connected_aaStem(slen_p, ph_p, qh_p,
+                                                         slen_n, pt_n, qt_n)
+                
+                if is_connect:
+                    stem += stem_n
+                    stem_lenf += slen_n
+                    
+                    if k < n - 1:
+                        stem_p = deepcopy(cnStemSegs[k])
+                        if debug_scanFor_apStem:
+                            print "stem_p", stem_p
+                        #
+                        
+                        slen_p = len(stem_p)
+                        n_p  = slen_p - 1
+                        ph_p = stem_p[n_p].i; qh_p = stem_p[n_p].j;
+                    else:
+                        break
+                    #
+                    
+                else:
+                    break
+                #
+                
+            #
+            
+            # print "stem_lenf:", stem_lenf
+            stem_len = stem_lenf
+        elif len(cnStemSegs) > 0:
+            stem = deepcopy(cnStemSegs[0])
+        else:
+            stem = [Xlist[k_init]]
+        #
+        
+        # AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        # AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        # AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        
+        
         if debug_scanFor_apStem:
-            print "stem_len: ", stem_len
-            print "gap:      ", gap
-            print "stem:     ", stem
+            print "stem_len:     ", stem_len
+            print "gap:          ", gap
+            print "cnStemSegs:   ", cnStemSegs
+            print "stem (final): ", stem
+            #self.fe.stopWhenMatchFound(i_t, j_t, 17, 24, "scanFor_apStem")
+            
+            #print "planned exit, end of scanFor_apStem"; sys.exit(0)
         #
+        
         return stem
-    #
+    #endMethod
     
     
     def build_ppStem(self, tailtags, Xlist):
@@ -2994,6 +3593,7 @@ class Vienna2TreeNode(SortPair):
                 if debug_build_ppStem:
                     print "sst = ", sst, "ijb = ", (ib, jb)
                 #
+                
                 if ib == sst.i and jb == sst.j:
                     stem = self.scanFor_ppStem(Xlist, k)
                     # print stem, len(stem)
@@ -3001,13 +3601,16 @@ class Vienna2TreeNode(SortPair):
                     stemlist += [stem]
                     break
                 #
-            #
-        #
+                
+            #endfor
+            
+        #endfor
         
         if debug_build_ppStem:
             for k in range(0, len(stemlist)):
                 print k, stemlist[k]
             #
+            
         #
         
         kr = 0
@@ -3015,6 +3618,7 @@ class Vienna2TreeNode(SortPair):
             if debug_build_ppStem:
                 print stemlist[kr]
             #
+            
             tail = 0
             i_tr = stemlist[kr][tail].i; j_tr = stemlist[kr][tail].j
             head = len(stemlist[kr])-1
@@ -3022,12 +3626,14 @@ class Vienna2TreeNode(SortPair):
             if debug_build_ppStem:
                 print "stem{(%2d,%2d):(%2d,%2d)}" % (i_tr, j_tr, i_hr, j_hr)
             #
+            
             kt = kr + 1
             while kt < len(stemlist):
                 i_tt = stemlist[kt][tail].i; j_tt = stemlist[kt][tail].j
                 if debug_build_ppStem:
-                    print "test (k=%2d)(%2d,%2d)" % (kt, i_tt, j_tt)
+                    print "build_ppStem, test (k=%2d)(%2d,%2d)" % (kt, i_tt, j_tt)
                 #
+                
                 if (i_tr <= i_tt and
                     i_tt <= i_hr and 
                     j_hr <= j_tt and
@@ -3039,14 +3645,18 @@ class Vienna2TreeNode(SortPair):
                 else:
                     kt += 1
                 #
-            #
+                
+            #endwhile
+            
             if debug_build_ppStem:
                 print "kr(%d) -> %d" % (kr, kr + 1)
             #
+            
             kr += 1
-        #
+        #endwhile
+        
         return stemlist
-    #
+    #endMethod
     
     
     def scanFor_ppStem(self, Xlist, k):
@@ -3076,6 +3686,7 @@ class Vienna2TreeNode(SortPair):
             if debug_scanFor_ppStem:
                 print "kr = ", kr, "ij_t = ", (i_t, j_t), ", ij_nx = ", (i_nx, j_nx)
             #
+            
             if i_nx - i_p <= gap and j_nx - j_p <= gap:
                 if i_t <= i_nx and j_t <= j_nx:
                     stem += [Xlist[kr]]
@@ -3089,20 +3700,25 @@ class Vienna2TreeNode(SortPair):
                         print "gap  = ", gap
                         print "slen = ", stem_len
                     #
+                    
                 #
+                
                 i_p = i_nx; j_p = j_nx
                 
             else:
                 flag_cont = False
             #
-        #
+            
+        #endwhile
+        
         if debug_scanFor_ppStem:
             print "pp stem_len: ", stem_len
             print "pp gap:      ", gap
             print "pp stem:     ", stem
         #
+        
         return stem
-    #
+    #endMethod
     
     
     
@@ -3125,15 +3741,17 @@ class Vienna2TreeNode(SortPair):
             print "ppPKtails: (before)"
             for rpkk in ppPKtails:
                 print rpkk
-            #
+            #endfor
+            
             print "BPlist:"
             for vv in self.vsBPlist:
                 print vv.disp_Pair()
-            #
+            #endfor
+            
             print "PKlist:"
             for vv in self.vsPKlist:
                 print vv.disp_Pair()
-            #
+            #endfor
         #
         
         pkppTailList = copyList(ppPKtails)
@@ -3191,18 +3809,23 @@ class Vienna2TreeNode(SortPair):
                     print "iaprt(%2d) < ipprt(%2d) < japrt(%2d) < jpprt(%2d)" \
                         % (iaprt, ipprt, japrt, jpprt)
                 #
+                
                 if iaprt < ipprt and japrt < jpprt and ipprt < japrt:
                     if debug_findStemsIn_ppListx:
                         print "rearranging to pklist", ssppTailList[kr]
                     #
+                    
                     pkppTailList += [(ipprt, jpprt)]
                     shiftinfo += [(ipprt, jpprt)]
                     del ssppTailList[kr]
+                    
                 else:
                     kr += 1
                 #
-            #
-        #
+                
+            #endwhile
+            
+        #endfor
         
         pkppTailList = sortPairListWRT_n(pkppTailList, 0)
         if debug_findStemsIn_ppListx:
@@ -3223,6 +3846,7 @@ class Vienna2TreeNode(SortPair):
                         if debug_findStemsIn_ppListx:
                             print "del matching BP(%d,%d) in PK list" % (it, jt)
                         #
+                        
                         self.vsPKlist += [self.vsBPlist[kt]]
                         del self.vsBPlist[kt]
                         
@@ -3231,13 +3855,17 @@ class Vienna2TreeNode(SortPair):
                         if debug_findStemsIn_ppListx:
                             print "move from BP(%d,%d) to PK list" % (it, jt)
                         #
+                        
                         self.vsPKlist += [self.vsBPlist[kt]]
                         del self.vsBPlist[kt]
+                        
                     else:
                         kt += 1
                     #
-                #
-            #
+                    
+                #endwhile
+                
+            #endfor
             
             for kr in range(0, len(self.vsPKlist)):
                 it = self.vsPKlist[kr].i; jt = self.vsPKlist[kr].j
@@ -3255,12 +3883,16 @@ class Vienna2TreeNode(SortPair):
                         if debug_findStemsIn_ppListx:
                             print "delete BProots(%d,%d)" % (it, jt)
                         #
+                        
                         del self.vsBProots[kt]
+                        
                     else:
                         kt += 1
                     #
-                #
-            #
+                    
+                #endwhile
+                
+            #endfor
             
         #
         
@@ -3269,25 +3901,29 @@ class Vienna2TreeNode(SortPair):
             print "BPlist:"
             for vv in self.vsBPlist:
                 print vv.disp_Pair()
-            #
+            #endfor
+            
             print "BProots:"
             for vv in self.vsBProots:
                 print vv.disp_Pair()
-            #
+            #endfor
+            
             print "PKlist:"
             for vv in self.vsPKlist:
                 print vv.disp_Pair()
-            #
+            #endfor
+            
             print "PKroots:"
             for vv in self.vsPKroots:
                 print vv.disp_Pair()
-            #
+            #endfor
+            
             #print "stop at 1 in findStemsIn_ppList"; sys.exit(0)
         #
         
         # Now we address potential overlaps with closely neighoring
         # parallel pairs that are present in the pk list.
-
+        
         # --> keep only the stemtails and remove all the extraneous
         # --> stuff.
         
@@ -3299,19 +3935,24 @@ class Vienna2TreeNode(SortPair):
                 print "ikr0(%2d) < ikr1(%2d) < jkr0(%2d) < jkr1(%2d)" \
                     % (ikr0, ikr1, jkr0, jkr1)
             #
+            
             if ikr0 < ikr1 and jkr0 < jkr1 and ikr1 < jkr0:
                 if (ikr1 - ikr0) == 1 and (jkr1 - jkr0) == 1:
                     if debug_findStemsIn_ppListx:
                         print "removing from pklist", pkppTailList[kr+1]
                     #
+                    
                     del pkppTailList[kr+1]
+                    
                 else:
                     kr += 1
                 #
+                
             else:
                 kr += 1
             #
-        #
+            
+        #endwhile
         
         # 190328: had to make some major fixes here to resolve a
         # problem with the counter in TreeNode2DotBracket where the
@@ -3325,12 +3966,15 @@ class Vienna2TreeNode(SortPair):
             for vv in self.vsPKlist:
                 print vv.disp_Pair()
             #
+            
             print "======="
         #
+        
         if not new_way:
             self.vsPKlist += matchTupleList2VsList(shiftinfo, self.vsPKlist)
             self.vsPKlist += matchTupleList2VsList(shiftinfo, self.vsBPlist)
         #
+        
         self.vsPKlist = self.sortvsList(self.vsPKlist, 'i')
         
         # AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
@@ -3370,9 +4014,12 @@ class Vienna2TreeNode(SortPair):
                     else:
                         kt += 1
                     #
-                #
+                    
+                #endwhile
+                
                 kr += 1
-            #
+            #endwhile
+            
         #
         
         
@@ -3385,12 +4032,13 @@ class Vienna2TreeNode(SortPair):
             print "pp sstails: "
             for vv in self.sspptails:
                 print vv.disp_Pair()
-            #
+            #endfor
+            
             print "pp pktails"
             for vv in self.pkpptails:
                 print vv.disp_Pair()
-            #
-
+            #endfor
+            
             self.disp_ViennaLists("ViennaList: findStemsIn_ppList")
             print "-------"
             #print "stop at 2 in findStemsIn_ppList"; sys.exit(0)
@@ -3406,32 +4054,35 @@ class Vienna2TreeNode(SortPair):
         if debug_findStemsIn_ppList:
             for vv in self.vsPKlist:
                 print vv.disp_Pair()
-            #
+            #endfor
+            
             print self.pkpptails
         #
         
         pk_ppstemlist  = self.build_ppStem(self.pkpptails, self.vsBPlist)
         pk_ppstemlist += self.build_ppStem(self.pkpptails, self.vsPKlist)
         pk_ppstemlist  = self.ins_sort_stemlist(pk_ppstemlist)
-
+        
         if debug_findStemsIn_ppList:
             
             print "pp ssstem (ss_ppstemlist):"
             for k in range(0, len(ss_ppstemlist)):
                 print "%2d: %s" % (k, self.disp_stem(ss_ppstemlist[k]))
-            #
+            #endfor
+            
             print "pp pkstem (pk_ppstemlist): "
             for k in range(0, len(pk_ppstemlist)):
                 print "%2d: %s" % (k, self.disp_stem(pk_ppstemlist[k]))
-            #
+            #endfor
+            
             #print "stop at 3 (end of) findStemsIn_ppList"; sys.exit(0)
         #
         
         return ss_ppstemlist, pk_ppstemlist
         ##################################
-    #
+    #endMethod
     
-        
+    
     
     
     
@@ -3450,10 +4101,12 @@ class Vienna2TreeNode(SortPair):
             print "ERROR: antiparallel secondary structure or PK data not initialized"
             sys.exit(1)
         #
+        
         bpTailList = []
         for vv in self.vsBProots:
             bpTailList += [vv]
-        #
+        #endfor
+        
         #print "bpTailList: ", bpTailList
         # sys.exit(0)
         
@@ -3510,7 +4163,8 @@ class Vienna2TreeNode(SortPair):
                     if cik.i < bpk.i and  bpk.j < cik.j:
                         mbllist += [bpk]
                     #
-                #
+                    
+                #endfor
                 if debug_build_MPstruct:
                     print "mbllist: ", mbllist
                 #
@@ -3524,11 +4178,13 @@ class Vienna2TreeNode(SortPair):
                 else:
                     itype = '-'
                 #
+                
                 cldict[(cik.i,cik.j)] = itype
                 
                 a.internal = mbllist
                 a.btype    = itype
                 ww.arches  = [a]
+                
             else:
                 if debug_build_MPstruct:
                     print "n MP islands:", len(MPisland)
@@ -3551,7 +4207,9 @@ class Vienna2TreeNode(SortPair):
                         if cik.i < bpk.i and  bpk.j < cik.j:
                             mbllist += [bpk]
                         #
-                    #                    
+                        
+                    #endfor
+                    
                     if debug_build_MPstruct:
                         print "mbllist: ", mbllist
                     #
@@ -3571,8 +4229,10 @@ class Vienna2TreeNode(SortPair):
                     a.internal = mbllist
                     a.btype    = itype
                     ww.arches += [a]
-                #
+                #endfor
+                
             #
+            
             self.MPlist += [ww]
             
         #
@@ -3584,1324 +4244,22 @@ class Vienna2TreeNode(SortPair):
                 print "islands: "
                 for ww in self.MPlist:
                     print disp_Motif(ww)
-                #
+                #endfor
+                
             #
+            
             print "islands: "
             for ww in self.MPlist:
                 print ww.disp_MultiPair()
-            #
+            #endfor
+            
             print "len(self.vsMPlist): ", len(self.vsMPlist)
             for k in range(0, len(self.vsMPlist)):
                 print self.vsMPlist[k].disp_Pair()
-            #
-        #
-    #
-    
-#
-
-
-
-
-
-"""
-For an explanation why!?! we need object, please see
-https://stackoverflow.com/questions/4015417/python-class-inherits-object
-
-The short answer is that it is not necessary for Python 3, but it is
-necessary for backward compatibility in Python 2.x.
-
-it seems according that source, it seems the best strategy is to use
-this style because it gives you access to mnay different python
-features. In particular, descriptors. See
-
-https://docs.python.org/3/howto/descriptor.html
-
-The write up in the above refence adds ... One of the downsides of
-new-style classes is that the class itself is more memory
-demanding. Unless you're creating many class objects, though, I
-doubt this would be an issue and it's a negative sinking in a sea of
-positives.
-
-Note, instead of the system "NodeVisitor", we could have written
-visit(node) in the following way. Here is one way to do it...
-
-
-def visit(node):
-    node_type = type(node).__name__
-    if node_type == 'BinOp':
-        return self.visit_BinOp(node)
-    elif node_type == 'Num':
-        return self.visit_Num(node)
-    elif ...
-    # ...
-
-
-Another alternative way of doing this is as follows:
-
-
-def visit(node):
-    if isinstance(node, BinOp):
-        return self.visit_BinOp(node)
-    elif isinstance(node, Num):
-        return self.visit_Num(node)
-    elif ...
-
-
-The "visit(node)" is explained in some detail in part 7;
-https://ruslanspivak.com/lsbasi-part7/
-
-The "Visit" concept is actually quite a sophisticated approach. There
-is considerable discussion and examples at the following link.
-https://en.wikipedia.org/wiki/Visitor_pattern
-
-In the wiki reference, they use yet a different way to achieve this
-same approach with module "abc".  Apparently, Visit is basically a way
-to permit flexible code so you can use various objects and reference
-them from a rather simple procedure. ... "my brain is full". 
-
-In this program, NodeVisitor is used by LThreadBuilder and TreeNode2Motif
-
-"""
-
-class NodeVisitor(object):
-    def visit(self, node):  # HERE is where visit goes first
-        """
-        This is really cool! I could use this with class Motif() to permit
-        objects to be built for stem, PK, etc without fighting the
-        type issues. The fact that Parse in this example actually
-        remembers the tree after builting it is an encouraging point.
-
-        """
-        debug_visit = False
-        method_name = 'visit_' + type(node.name).__name__
-        if debug_visit:
-            print method_name
-        #
-        
-        # method_name takes the form of the following strings:
-        # visit_BinOp, visit_UnaryOp, visit_Num
-        
-        visitor = getattr(self, method_name, self.generic_visit)
-        """
-        If method_name is valid, this generates a number
-        
-           getattr(...)
-           getattr(object, name[, default]) -> value
-        
-        Get a named atrribute from an object; getattr(x, 'y') is
-        equivalent to x.y. When a default argument is given, it is
-        returned when the attribute doesn't exist; without it, an
-        exception is raise in that case.
-        
-        In this case
-        
-        getattr(self, method_name ... ) -> self.<method_name>
-        
-        """
-        
-        return visitor(node)
-    #
-    
-    def generic_visit(self, node):
-        raise Exception('No visit_{} method'.format(type(node).__name__))
-    #
-#
-
-
-"""
-Originally, I though that I would use LThread as an intermediate
-for moving between the Vienna format to the Motif format. However, I
-found LThread to be a very inadequete appoach to this problem and
-eventually discovered that building trees was far more effective.
-
-Nevertheless, although LThread is not all that much better than the
-Vienna notation when it comes to easily parsing complex pseudoknot
-structures, it carries information on free energy wich is useful for
-building a structure computational engine. Likewise, since LThread is
-used in the structure prediction part to help paste different
-suboptimal structures together, it is still a convenient intermediate
-tool. Finally, one of the current problems with the structure
-prediction part is that rather complicated twisted up structures can
-be generated during the folding process. Whereas some such structures
-may still be hard to understand, the general tools developed here to
-convert Vienna to TreeNode representation can be extended further to
-convert LThread to TreeNode representations -- which means that the
-calculated results can be put in some standard form.
-
-Therefore, whereas LThread (though systematic) is not a really good
-notation system for describing the structure of RNA, chromatin or
-other biomolecules -- it still takes considerable effort (which is
-highly error prone) to read and understand it -- LThread is useful for
-building the engine and converting predicted structures into some
-standard representation. In short, LThread is useful for computing the
-free energy of the structure with the intermediary of applying
-Vienna2TreeNode.
-
-"""
-
-class LThreadBuilder(NodeVisitor):
-    def __init__(self, v2t):
-        inputObject = type(v2t).__name__
-        if not inputObject == "Vienna2TreeNode":
-            print "Error: TreeNode2Motif requires objects of class Vienna2TreeNode."
-            print "       object entered: %s" % inputObject
-            sys.exit(1)
-        #
-        self.ssStems  = v2t.ssStems # helps with searching out branching
-        self.MPlist   = v2t.MPlist
-        self.N        = v2t.N
-        self.lt       = LThread(self.N)
-        self.fe = FreeEnergy() # basic FE/entropy function for chromatin
-
-        self.write_MultiPairs()
-        
-        if len(self.ssStems) == 0:
-            print "WARNING: structure list is empty"
-        #
-        self.initalized = True
-        """
-        LNode
-        def __init__(self, ij_ndx, dGij_B, ctp, btp):
-           self.ij_ndx = ij_ndx # (i, j) This is very important!
-           # probably should have ij_ndx.i, ij_ndx.j calling it a pair.
-           
-           self.dGij_B = dGij_B # the FE of the specific bond at ij
-           self.ctp    = ctp    # connection type
-           self.btp    = btp    # bond type
-        #
-        """
-    #
-    
-    
-    
-    def write_MultiPairs(self):
-        if len(self.MPlist) > 0:
-            for island in self.MPlist:
-                 
-                i_W = island.it; j_W = island.jt
-                self.lt.thread += [LNode((i_W,j_W), 0.0, 'W', 'bgn')]
-                dG = -100/float(len(island.arches))
-                for k in range(0, len(island.arches)):
-                    ctp = 'w'
-                    if k == 0:
-                        ctp = 'W'
-                    #
-                    ww =  island.arches[k]
-                    i_w = ww.it; j_w = ww.jt
-                    self.lt.thread += [LNode((i_w,j_w), dG, ctp, 'wyspa')]
-                    # print "ww.internal: ij_w(%2d,%2d)" % (i_w, j_w), ww.internal
-                    if len(ww.internal) > 0:
-                        for vv in ww.internal:
-                            self.lt.thread += [LNode((vv.i,vv.j), 0.0, ww.btype, 'wyspa')]
-                        #
-                    #
-                #            
-                self.lt.thread += [LNode((i_W,j_W), 0.0, 'W', 'end')]
-            #
-        #
-    #
-        
-
-    def visit_Stem(self, node):
-        vstem = node.name
-        if not vstem.vtype == "root":
-            self.write_StemThread(vstem)
-        #
-        
-        if not node.children == None:
-            if len(node.children) > 0:
-                for child in node.children:
-                    self.visit(child)
-                #
-            #
-        #
-    #
-    
-    def visit_PseudoKnot(self, node):
-        vpk = node.name
-        ipk = vpk.it; jpk = vpk.jt
-        
-        
-        debug_visit_PseudoKnot = False # True # 
-        if debug_visit_PseudoKnot:
-            print "Enter TreeBuilder.visit_PseudoKnot ijpk(%2d,%2d)" % (ipk, jpk)
-            print vpk
-        #
-        
-        
-        pktp = vpk.pktype
-        self.lt.thread += [LNode((ipk,jpk), 0.0, pktp, 'bgn')]
-        
-        if len(vpk.rootstems) == 1:
-            self.lt.thread += [LNode((ipk,jpk), 0.0, 'J', 's')]
-        elif len(vpk.rootstems) > 1:
-            self.lt.thread += [LNode((ipk,jpk), 0.0, 'P', 's')]
-        else:
-            print "ERROR(visit_PseudoKnot): (%d,%d)" % (ipk, jpk)
-            print vpk.rootstems
-            print vpk.linkages
-            sys.exit(1)
-        #
-            
-        for stem in vpk.rootstems:
-            if debug_visit_PseudoKnot:
-                print "rootstem: ", stem
-            #
-            self.write_StemThread(stem)
-        #
-
-        self.lt.thread += [LNode((ipk,jpk), 0.0, 'l', 'bgn')]
-        for stem in vpk.linkages:
-            if debug_visit_PseudoKnot:
-                print "linkages: ", stem
-            #
-            self.write_StemThread(stem, 'l')
-        #
-        self.lt.thread += [LNode((ipk,jpk), 0.0, 'l', 'end')]
-        
-        self.lt.thread += [LNode((ipk,jpk), 0.0, pktp, 'end')]
-        if not node.children == None:
-            if len(node.children) > 0:
-                for child in node.children:
-                    self.visit(child)
-                #
-            #
-        #
-    #
-    
-    
-    def write_StemThread(self, vstem, stype = 's'):
-        # stype = 's' (strandard) or 'l' (linkage)
-        debug_write_StemThread = False # True # 
-        i_t = vstem.it; j_t = vstem.jt
-        i_h = vstem.ih; j_h = vstem.jh
-        
-        branches = self.get_branches(i_h, j_h)
-        nbranches = len(branches)
-        
-        if debug_write_StemThread:
-            print "Enter write_StemThread{(%2d,%2d):(%2d,%2d), stype(%s)" \
-                % (i_t, j_t, i_h, j_h, stype)
-            print "branches: ", branches
-        #
-        # presently, branches is not needed directly, but in the
-        # future with the RNA engine, it is more important to have
-        # this kind of information for determining the free energy.
-        ctp = 'S'
-        self.lt.thread += [LNode((i_t, j_t),  0.0, ctp, 'bgn')]
-        dG = 0.0
-        n = vstem.slen - 1
-        for k in range(0, n): # bpk in vstem.stem:
-            bpk = vstem.stem[k]
-            i = bpk.i; j = bpk.j
-            dG = self.fe.calc_dG(i, j, 5.0, self.fe.T)
-            btp = "%s%s" % (stype, bpk.v)
-            if not (bpk.v == 'a' or bpk.v == 'p'):
-                btp = bpk.name
-            #
-            nth = LNode((i,j), dG, ctp, btp)
-            self.lt.thread += [nth]
-
-            if debug_write_StemThread:
-                print "(%2d,%2d)[ctp=%s][btp=%s]" % (i,j, ctp, btp)
-            #
-        #
-        
-        bpk = vstem.stem[n]
-        # print vstem.stem
-        i = bpk.i; j = bpk.j; v = bpk.v
-        dG = self.fe.calc_dG(i, j, 5.0, self.fe.T)
-        btp = "%s%s" % (stype, bpk.v)
-        if not (bpk.v == 'a' or bpk.v == 'p'):
-            btp = bpk.name
-        #
-        
-        # write the terminal part of the stem
-        
-        ctp_term = 'x'
-        if nbranches == 1:
-            # i-loop
-            # print "iloop"
-            ctp_term = 'I'
-        elif nbranches > 1:
-            # print "mloop"
-            # m-loop
-            ctp_term = 'M'
-        else:
-            # no children = leaf
-            # print "hloop"
-            ctp_term = 'B'
-        #
-        self.lt.thread += [LNode((i_h, j_h), dG, ctp_term, btp)]
-        
-        if debug_write_StemThread:
-            print "(%2d,%2d)[ctp=%s][btp=%s]" % (i,j, ctp, btp)
-        #
-        
-        # write the structure end note
-        self.lt.thread += [LNode((i_t, j_t),  0.0, ctp, 'end')]
-    #
-    
-    def get_branches(self, ib, jb):
-        debug_count_branches = False # True # 
-        
-        branches = []
-        for vstem in self.ssStems:
-            gstemtype = type(vstem).__name__
-            # print gstemtype
-            if not gstemtype == "Stem":
-                print "ERROR: ssStem contains objects other than type Stem"
-                print "       %s: ijss = (%2d,%2d)" % (gstemtype, vstem.it, vstem.jt)
-                sys.exit(1)
-            #
-            iss = vstem.it; jss = vstem.jt
-            if ib < iss and jss < jb:
-                branches += [(iss, jss)]
-            #
-        #
-        return branches
-    #
-    
-    def disp_lt(self):
-        for ltk in self.lt.thread:
-            print ltk.disp_lnode()
-        #
-    #
-    
-#
-
-
-class TreeNode2DotBracket(NodeVisitor):
-    def __init__(self, v2t):
-        inputObject = type(v2t).__name__
-        if not inputObject == "Vienna2TreeNode":
-            print "Error: TreeNode2Motif requires objects of class Vienna2TreeNode."
-            print "       object entered: %s" % inputObject
-            sys.exit(1)
-        #
-        self.genTree = v2t.genTree # the main tree we need
-        self.ssStems = v2t.ssStems # helps with searching out branching
-        self.MPlist  = v2t.MPlist
-        self.N       = v2t.N
-        
-        # sequence stuff 
-        self.seqv    = []
-        self.sssv    = []
-        self.wwsv    = []
-        self.counter = 1
-        self.counter = 1
-        self.reset_counter()
-        #
-        
-        self.chromatin = True # specifies that the sequence is chromatin
-        
-        for i in range(0, self.N):
-            self.seqv += ['c']
-            self.sssv += ['.']
-        #
-        self.vstr = self.makeFinal(self.sssv)
-        self.wstr = self.vstr # just dots!
-        self.vseq = ''
-        
-        
-        # presently, MP structures are automatically written. I am
-        # thinking that these should be written on a separate line,
-        # but it is convenient presently to have the { | | | }
-        # notation present.
-        self.write_MP()
-        
-        
-        self.initialize_t2m   = True
-        #print "initialized TreeNode2DotBracket(), counter = ", self.counter
-    #
-    
-    def make_dotbracket(self, is_chromatin = True):
-        self.chromatin = is_chromatin
-        self.reset_counter()
-        # chromatin also generates the sequence
-        self.visit(self.genTree)
-        self.vstr = self.makeFinal(self.sssv)
-        
-        if is_chromatin:
-            self.vseq = self.makeFinal(self.seqv)
-        #
-        
-        if len(self.wwsv) > 0:
-            for ww in self.wwsv:
-                self.vstr += '\n'
-                self.vstr += self.makeFinal(ww)
-            #
-        #
-        return self.vstr
-    #        
-    
-    def set_seqv(self, seqv):
-        self.seqv = list(seqv)
-    #
-    
-    
-    
-    def makeFinal(self, seqv):
-        seqx = string.join(seqv, '') 
-        # also: python> ''.join(sssv); python> ''.join(seqv) 
-        return seqx
-    #
-    
-    def reset_counter(self):
-        self.counter = 1
-    #
-    
-    def inc_count(self):
-        self.counter += 1
-        if self.counter == 2:
-            """
-            avoids current MP notations {...}; i.e., "..{...|...|...}.."
-            
-            I think in the future, I would prefer to use WXYZwxyz but
-            for representation, VARNA (which recognizes this general
-            format) only goes up to Nn. So, since the appearance is
-            nice, I am still using this rather personal definition for
-            islands. At any rate, this problem will emerge whether I
-            like it not, even if I go to Ww/Xx/Yy/Zz.
-            
-            """
-            self.counter += 1
-        #
-        if self.counter >= len(num2lpr):
-            self.reset_counter() # self.counter = 1
-        #
-        
-        #print "counter: ", self.counter
-    #
-    
-    def visit_Stem(self, node):
-        debug_visit_Stem = False # True # 
-        if debug_visit_Stem:
-            print "Enter visit_Stem: ", node.name
-        vstem = node.name
-        if not vstem.vtype == "root":
-            self.write_Stem(vstem)
-        #
-        
-        if not node.children == None:
-            if len(node.children) > 0:
-                for child in node.children:
-                    self.visit(child)
-                #
-            #
-        #
-    #
-    
-    
-    
-    def visit_PseudoKnot(self, node):
-        debug_visit_PseudoKnot = False # True # 
-        
-        vpk = node.name
-        ipk = vpk.it; jpk = vpk.jt
-        if debug_visit_PseudoKnot:
-            print "Enter visit_PseudoKnot", vpk, vpk.pktype
-            print vpk
-        #
-        
-        for stem in vpk.rootstems:
-            if debug_visit_PseudoKnot:
-                print "vpk: rootstem: ", stem, stem.vtype
-            #
-            self.write_Stem(stem)
-        #
-        
-        if debug_visit_PseudoKnot:
-            print "all linkages: ", vpk.linkages
-        #
-        for stem in vpk.linkages:
-            if debug_visit_PseudoKnot:
-                print "vpk: linkage: ", stem, stem.vtype
-            #
-            self.write_Linkage(stem)
-            self.inc_count() # self.counter += 1
-        #
-        
-        if not node.children == None:
-            if len(node.children) > 0:
-                for child in node.children:
-                    self.visit(child)
-                #
-            #
-        #
-    #
-    
-    
-    def write_Linkage(self, vstem):
-        # stype = 's' (strandard) or 'l' (linkage)
-        
-        debug_write_Linkage = False # True # 
-        
-        i_t = vstem.it; j_t = vstem.jt
-        i_h = vstem.ih; j_h = vstem.jh
-        
-        vtype = vstem.vtype
-        if vtype == 'p':
-            for stmk in vstem.stem:
-                self.sssv[stmk.i] = num2lpr[self.counter]
-                self.sssv[stmk.j] = num2rpr[self.counter]
-                self.inc_count() # self.counter += 1
-                if self.chromatin:
-                    self.seqv[stmk.i] = 'x'
-                    self.seqv[stmk.j] = 'y'
-                #
-            #
-        else:
-            for stmk in vstem.stem:
-                self.sssv[stmk.i] = num2lpr[self.counter]
-                self.sssv[stmk.j] = num2rpr[self.counter]
-                if self.chromatin:
-                    self.seqv[stmk.i] = 'x'
-                    self.seqv[stmk.j] = 'y'
-                #
-            #
-        #
-    #
-    
-    
-    def write_Stem(self, vstem):
-        # stype = 's' (strandard) or 'l' (linkage)
-        
-        debug_write_StemThread = False # True #
-        
-        i_t = vstem.it; j_t = vstem.jt
-        i_h = vstem.ih; j_h = vstem.jh
-        
-        vtype = vstem.vtype
-        if vtype == 'p':
-            for stmk in vstem.stem:
-                self.sssv[stmk.i] = num2lpr[self.counter]
-                self.sssv[stmk.j] = num2rpr[self.counter]
-                self.inc_count()  # self.counter += 1
-                if self.chromatin:
-                    self.seqv[stmk.i] = 'x'
-                    self.seqv[stmk.j] = 'y'
-                #
-            #
-        else:
-            for stmk in vstem.stem:
-                self.sssv[stmk.i] = '('
-                self.sssv[stmk.j] = ')'
-                if self.chromatin:
-                    self.seqv[stmk.i] = 'x'
-                    self.seqv[stmk.j] = 'y'
-                #
-            #
+            #endfor
             
         #
-    #
-    
-    
-    def write_MP(self):
-        if len(self.MPlist) > 0:
-            for wyspa in self.MPlist:
-                ww = []
-                for i in range(0, self.N):
-                    ww += ['.']
-                #
-                i_W = wyspa.it; j_W = wyspa.jt
-                
-                if self.chromatin:
-                    self.seqv[i_W] = 'W'; self.seqv[j_W] = 'Z'
-                #
-                
-                for k in range(0, len(wyspa.arches)):
-                    iw = wyspa.arches[k].it
-                    jw = wyspa.arches[k].jt
-                    
-                    if k == 0:
-                        ww[i_W] = '{'
-                        ww[j_W] = '}'
-                    else:
-                        if i_W <= iw and jw < j_W:
-                            ww[jw] = '|'
-                            if self.chromatin:
-                                self.seqv[jw] = 'I'
-                            #
-                        #
-                    #
-                    
-                #
-                self.wwsv += [ww]
-
-            #
-        # end [if len(self.MPlist) > 0:]
-    #
-    
-#
-
-
-
-class TreeNode2Motif(NodeVisitor):
-    def __init__(self, v2t):
-        inputObject = type(v2t).__name__
-        if not inputObject == "Vienna2TreeNode":
-            print "Error: TreeNode2Motif requires objects of class Vienna2TreeNode."
-            print "       object entered: %s" % inputObject
-            sys.exit(1)
-        #
-        
-        self.ssStems  = v2t.ssStems  # List of Stem from secondary structure
-        self.genStems = v2t.genStems # List of Stem and PseudoKnot types 
-        self.MPlist   = v2t.MPlist
-        self.N        = v2t.N
-        self.fe       = FreeEnergy() # basic FE/entropy function for chromatin
-        self.smap     = Map(self.N)
-        self.initialize_t2m   = True
-        
-        # print "initialized TreeNode2Motif()"
-    #
-
-    def build_wyspa(self, mpstruct):
-        debug_build_wyspa = False # True #
-        if debug_build_wyspa:
-            print mpstruct
-            print type(mpstruct).__name__
-        #
-        if len(mpstruct.arches) > 0:
-            wyspa = []
-            iW = mpstruct.arches[0].it; jW = mpstruct.arches[0].jt
-            for k in range(1, len(mpstruct.arches)):
-                ww = mpstruct.arches[k]
-                iw = ww.it; jw = ww.jt
-                
-                if debug_build_wyspa:
-                    print "ijW(%2d,%2d) <- ijw(%2d,%2d)" % (iW, jW, iw, jw)
-                #
-                
-                if jw < jW:
-                    wyspa += [jw]
-                #
-            #
-        #
-        return wyspa
-    #
-    
-    
-    def post_graftMP(self):
-        
-        if len(self.MPlist) > 0:
-            debug_post_graftMP = False # True #
-            
-            dGMP = 0.0
-            MProots = []
-            for island in self.MPlist:
-                
-                i_W = island.it; j_W = island.jt
-                MProots += [(i_W, j_W)]
-                join = [(i_W, j_W)]
-                wyspa = self.build_wyspa(island)
-                dGW = -10.0 # just an arbitrary value presently
-                for k in range(0, len(island.arches)):
-                    ww =  island.arches[k]
-                    i_w = ww.it; j_w = ww.jt
-                    wbr = []
-                    if k > 0 or len(island.arches) == 1:
-                        wbr = self.get_ssbranches(i_w, j_w)
-                    #
-                    
-                    for vv in wbr:
-                        iv = vv[0]; jv = vv[1]
-                        dGW += self.smap.glink[iv][jv].lg[0].Vij
-                    #
-                #
-                
-                link_W = Link(i_W, j_W, dGW, 'W', 'wyspa', join, [], wyspa)
-                self.smap.glink[i_W][j_W].add_link(link_W)
-                dGMP += dGW
-            #
-
-            i_t = 0; j_t = self.N-1
-            self.assign_P(i_t, j_t, dGMP, MProots, 'P', '-')
-            
-            if debug_post_graftMP:
-                print "result"
-                for mm in self.smap.glink[i_t][j_t].lg:
-                    print mm.motif[0].show_Motif()
-                #
-            #
-
-        #
-    #
-        
-    
-    
-    def visit_Stem(self, node):
-        debug_visit_Stem = False # True # 
-        if debug_visit_Stem:
-            print "Enter visit_Stem"
-        #
-        
-        # depth first
-        if not node.children == None:
-            if len(node.children) > 0:
-                for child in node.children:
-                    self.visit(child)
-                #
-            #
-        #
-        
-        # << postorder action >>
-        
-        vstem = node.name
-        
-        if vstem.vtype == "base":
-            # The root of Tree only contains referemce to beginning
-            # and end of the sequence and the connections expandind
-            # from there.
-            
-            i_t = vstem.ih; j_t = vstem.jh
-            ssbranches = self.get_ssbranches(i_t, j_t, False)
-            nssbranches = len(ssbranches)
-            if debug_visit_Stem:
-                print "base: (%3d,%3d): branches -> %s" % (i_t, j_t, ssbranches)
-            #
-            
-            rctp = 'X'
-            if nssbranches == 0:
-                self.assign_X(i_h, j_h, rctp, '-')
-            else:
-                
-                if nssbranches > 1:
-                    rctp = 'P'
-                else:
-                    rctp = 'J'
-                #
-            
-                gbranches   = self.get_genbranches(i_t, j_t, False)
-                ngbranches  = len(gbranches)
-                Vss  = self.compute_iMBL(ssbranches)
-                Vgen = self.compute_iMBL(gbranches)
-                
-                if debug_visit_Stem:
-                    print "base Vss(%8.2f), ssbranches:  %s" % (Vss,  ssbranches)
-                    print "base Vgen(%8.2f), gbranches:  %s" % (Vgen, gbranches)
-                #
-                self.assign_P(i_t, j_t, Vss, ssbranches, rctp, '-')
-                
-                if not Vgen == Vss:
-                    # print "add Vgen"
-                    self.assign_P(i_t, j_t, Vgen, gbranches, rctp, '-')
-                    
-                    # self.smap.mergeSortLinks(self.smap.glink[i_h][j_h].lg)
-                    
-                    # In general, we should sort this FE so that the
-                    # optimal structure ends up on top. However,
-                    # presently, the final structure is what we ask for,
-                    # even if it is not the optimal on at this position.
-                #
-            #
-            if debug_visit_Stem:
-                print "result"
-                for mm in self.smap.glink[i_t][j_t].lg:
-                    print mm.motif[0].show_Motif()
-                #
-            #
-            
-            
-        else:
-            # in general, we will be writing here
-            
-            # print "went in here "
-            self.write_StemMotif(vstem)
-            #sys.exit(0)
-        #
-        
-        
-    #
-    
-    def visit_PseudoKnot(self, node):
-        debug_visit_PseudoKnot = False # True # 
-        # depth first
-        if not node.children == None:
-            if len(node.children) > 0:
-                for child in node.children:
-                    self.visit(child)
-                #
-            #
-        #
-        
-        # << postorder action >>
-        
-        vpk = node.name
-        ipk = vpk.it; jpk = vpk.jt
-        # print vpk
-        
-        vtype = 'a'
-        pktype = vpk.pktype
-        
-        
-        ssbranches = []
-        for stem in vpk.rootstems:
-            # print "rootstem: ", stem
-            ssbranches += [(stem.it, stem.jt)]
-            self.write_StemMotif(stem, 's')
-        #
-        if debug_visit_PseudoKnot:
-            print "ssbranches: ", ssbranches
-        #
-        nssbranches = len(ssbranches)
-        
-        
-        linkages = []
-        linkroots = []
-        for stem in vpk.linkages:
-            slist = vsPair2list(stem.stem)
-            linkroots += [(stem.it, stem.jt)]
-            #print "linkage: ", stem
-            #print "slist: ", slist
-            linkages += slist
-            self.write_StemMotif(stem, 'l')
-        #
-        if debug_visit_PseudoKnot:
-            print "linkages:   ", linkages
-            print "linkroots:  ", linkroots
-        #
-        
-        # !!!!!
-        if nssbranches > 0:
-            rctp = 'J'
-            if nssbranches > 1:
-                rctp = 'P'
-            #
-            Vss  = self.compute_iMBL(ssbranches)
-            
-            if debug_visit_PseudoKnot:
-                print "Vss(%8.2f), ssbranches:  %s" % (Vss,  ssbranches)
-            #
-            
-            self.assign_P(ipk, jpk, Vss, ssbranches, rctp, vtype)
-            
-        else:
-            print "ERROR: ??? don't understand what to make of this case!"
-            print "       nssbranches = %d, ij_h(%2d,%2d)[%s]" % (i_h, j_h, vtype)
-            sys.exit(1)
-        #
-        
-        
-        dG_root = self.smap.glink[ipk][jpk].lg[0].motif[0].Vij
-        if debug_visit_PseudoKnot:
-            print "dG root V   ijv(%3d,%3d)[dG=%8.2f)" % (ipk, jpk, dG_root)
-        #
-        
-        dG_link = 0.0
-        for ll in linkroots:
-            pL = ll[0]; qL = ll[1]
-            # print "dG linkage pqL(%3d,%3d)" % (pL, qL)
-            dG_link += self.smap.glink[pL][qL].lg[0].motif[0].Vij
-        #
-        if debug_visit_PseudoKnot:
-            print "dG linkages ijv(%3d,%3d)[dG=%8.2f)" % (ipk, jpk, dG_link)
-        #
-        
-        dGK = dG_root + dG_link
-        # print "pk(%3d,%3d), dG = %8.2f" % (ipk, jpk, dGK)
-        link_K = Link(ipk, jpk, dGK, pktype, '-', ssbranches, linkages)
-        self.smap.glink[ipk][jpk].add_link(link_K)
-        if debug_visit_PseudoKnot:
-            for mm in self.smap.glink[ipk][jpk].lg:
-                print mm.motif[0].show_Motif()
-            #
-            #sys.exit(0)
-        #
-        
-    #
-    
-    def assign_B(self, i_h, j_h, stype, vtype):
-        debug_assign_B = False # True # 
-        
-        # this is the case of a leaf, there is no other
-        # interaction but this one.
-        
-        ctp = 'B'
-        btp = "%s%s" % (stype, vtype)
-        if not (vtype == 'a' or vtype == 'p'):
-            btp = vtype
-        #
-        
-        dGt = self.fe.calc_dG(i_h, j_h, 5.0, self.fe.T)
-        
-        # add any corrections for tetraloop, local loop
-        # entropy or whatever here
-        
-        dGB = 0.0 # currently nothing to be done
-        
-        dG = dGt + dGB
-        
-        link_B = Link(i_h, j_h, dG, ctp, btp, [(i_h,j_h)])
-        self.smap.glink[i_h][j_h].add_link(link_B)
-        if debug_assign_B:
-            for mm in self.smap.glink[i_h][j_h].lg:
-                print mm.motif[0].show_Motif()
-            #
-        #
-    #
-    
-    def assign_X(self, i_h, j_h, stype, vtype):
-        debug_assign_X = False # True # 
-        
-        # this is the case of a leaf with empty pairing
-        # interaction. Not only is there is no other interactions,
-        # there is no pairing interaction at all.
-        
-        ctp = 'B'
-        btp = "%s%s" % (stype, vtype)
-        if not (vtype == 'a' or vtype == 'p'):
-            btp = vtype
-        #
-        
-        dGt = self.fe.calc_dG(i_h, j_h, 0.0, self.fe.T)
-        
-        dG = dGt
-        
-        link_X = Link(i_h, j_h, dG, ctp, btp, [(i_h,j_h)])
-        self.smap.glink[i_h][j_h].add_link(link_X)
-        if debug_assign_X:
-            for mm in self.smap.glink[i_h][j_h].lg:
-                print mm.motif[0].show_Motif()
-            #
-        #
-        
-    #
-    
-    # VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
-    # VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
-    # VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
-    """
-    On compute_iMBL/pMBL doing both M-loop and I-loops ... ... ...
-    
-    Certainly for chromatin, there is _no_ difference in treatment
-    between I-/M-loops or J-/P-loops. I think this should also be
-    viewed the same way for RNA, but momentarily, I may still
-    entertain the idea that there is maybe a higher ordering cost for
-    a single branch because the internal loop can form a
-    semi-contiguous connection if the I-loop is relatively short and
-    symmetric    
-    """
-    
-    
-    def compute_iMBL(self, branches): # both type I and M 
-        dG_V = 0.0
-        dG_local = 0.0 # presently, this is always zero
-        for Vk in branches:
-            i_Vk = Vk[0]; j_Vk = Vk[1]
-            dG_V += self.smap.glink[i_Vk][j_Vk].lg[0].Vij
-            
-            # add any corrections for the cost of forming the branch
-            # (or branches) between (i_h,j_h) and [(pV0,qV0),
-            # (pV1,qV1) ... ]; e.g., purine corrections, loop size,
-            # etc.
-        #
-        
-        
-        # add the FE contributions together 
-        dGloop = dG_local + dG_V
-        
-        return dGloop
-    #
-    
-    
-    def compute_pMBL(self, branches): # both type J and P
-        dG_V = 0.0
-        dG_local = 0.0 # presently, this is always zero
-        for Vk in branches:
-            i_Vk = Vk[0]; j_Vk = Vk[1]
-            dG_V += self.smap.glink[i_Vk][j_Vk].lg[0].Vij
-            
-            # Presently, I think aside from the contribution of
-            # dangling bonds, there should be no other source of
-            # internal FE for pMBLs.
-        #
-        # add the FE contributions together 
-        dGloop = dG_local + dG_V
-        
-        return dGloop
-    #
-    
-    # AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-    # AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-    # AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
-    
-    
-    
-    def assign_I(self, i_h, j_h, dG_iloop, branches, stype, vtype):
-        debug_assign_I = False # True # 
-        
-        ctp = 'I'
-        btp = "%s%s" % (stype, vtype)
-        if not (vtype == 'a' or vtype == 'p'):
-            btp = vtype
-        #
-        
-        dGh = self.fe.calc_dG(i_h, j_h, 5.0, self.fe.T)
-        # pairing at i_h, j_h
-        
-        dG = dGh + dG_iloop
-        
-        pI = branches[0][0]; qI = branches[0][1]
-        link_I = Link(i_h, j_h, dG, ctp, btp, [(pI, qI)])
-        # should probably separate dG_It and dG_Sh in the formulation 
-        self.smap.glink[i_h][j_h].add_link(link_I)                
-        if debug_assign_I:
-            print "assign_I: ij_h(%2d,%2d)[%s][%s], pqI(%2d,%2d), dG(%8.2f)" \
-                % (i_h, j_h, ctp, btp, pI, qI, dG)
-            for mm in self.smap.glink[i_h][j_h].lg:
-                print mm.motif[0].show_Motif()
-            #
-        #
-    #
-    
-    
-    def assign_M(self, i_h, j_h, dG_mloop, branches, stype, vtype):
-        debug_assign_M = False # True # 
-        
-        ctp = 'M'
-        btp = "%s%s" % (stype, vtype)
-        if not (vtype == 'a' or vtype == 'p'):
-            btp = vtype
-        #
-        
-        
-        dGh = self.fe.calc_dG(i_h, j_h, 5.0, self.fe.T)
-        # pairing at i_h, j_h
-        
-        
-        
-        dG = dGh + dG_mloop
-        link_M = Link(i_h, j_h, dG, ctp, btp, branches)
-        self.smap.glink[i_h][j_h].add_link(link_M)                
-        if debug_assign_M:
-            if debug_assign_M:
-                print "ij_h(%2d,%2d)[%s][%s] -> dG(%8.2f)" \
-                    % (i_h, j_h, ctp, btp, dG), branches
-            #
-            for Vk in self.smap.glink[i_h][j_h].lg[0].motif:
-                print Vk.show_Motif()
-            #
-        #
-    #
-    
-    def assign_P(self, i_h, j_h, dG_loop, branches, stype, vtype):
-        debug_assign_P = False # True # 
-        if debug_assign_P:
-            print "Enter assign_P{ij_h(%d,%d), branches = %s" % (i_h, j_h, branches)
-        #
-        
-        ctp = stype
-        btp = "s%s" % (vtype)
-        if not (vtype == 'a' or vtype == 'p'):
-            btp = vtype
-        #
-        
-        # the main difference between iMBL and pMBL is that we don't
-        # have a jumping point (i_h,j_h) so we also don't have a free
-        # energy contribution from (i_h,j_h), only the branches that
-        # join these parts.
-        
-        dG = dG_loop
-        link_P = Link(i_h, j_h, dG, ctp, btp, branches)
-        self.smap.glink[i_h][j_h].add_link(link_P)
-        
-        if debug_assign_P:
-            if debug_assign_P:
-                print "ij_h(%2d,%2d)[%s][%s] -> dG(%8.2f)" \
-                    % (i_h, j_h, ctp, btp, dG), branches
-            #
-            for Vk in self.smap.glink[i_h][j_h].lg[0].motif:
-                print Vk.show_Motif()
-            #
-        #
-    #
-    
-    def assign_S(self, i_t, j_t, i_h, j_h, vstem, stype, vtype):
-        debug_assign_S = False # True # 
-        if debug_assign_S:
-            print "Enter assign_S{(%2d,%2d):(%2d,%2d)[vstem=%s][stype=%s][vtype=%s]" \
-                % (i_t, j_t, i_h, j_h, vstem, stype, vtype)
-        #
-        
-        ctp = 'S'
-        stm = [(i_h, j_h)]
-        dG = self.smap.glink[i_h][j_h].lg[0].motif[0].Vij
-        n = vstem.slen - 2
-        if debug_assign_S:
-            print "ij_h(%2d,%2d), n = %d, dG = %8.2f" % (i_h, j_h, n, dG)
-        #
-        
-        for k in range(n, -1, -1): # bpk in vstem.stem:
-            # print "k = ", k
-            bpk = vstem.stem[k]
-            iss = bpk.i; jss = bpk.j
-            dG += self.fe.calc_dG(iss, jss, 5.0, self.fe.T)
-            btp = "%s%s" % (stype, bpk.v)
-            if not (bpk.v == 'a' or bpk.v == 'p'):
-                btp = bpk.name
-            #
-            stm += [(iss, jss)]
-            # print stm
-            link_S = Link(iss, jss, dG, ctp, btp, stm)
-            self.smap.glink[iss][jss].add_link(link_S)
-            #
-            if debug_assign_S:
-                print "a%s stem: ijss(%3d,%3d):ijh(%3d,%3d), stemlen = %2d, stem: " \
-                    % (vtype, iss, jss, i_h, j_h, len(stm)), stm
-            #
-        #
-        
-        
-        if debug_assign_S:
-            print "summary(assign_S){(%2d,%2d):(%2d,%2d)}:" % (i_t, j_t, i_h, j_h)
-            for bpk in vstem.stem:
-                iss = bpk.i; jss = bpk.j
-                
-                for ijSt in self.smap.glink[iss][jss].lg[0].motif:
-                    print ijSt.show_Motif()
-                #
-            #
-        #
-    #
-    
-    
-    
-    def write_StemMotif(self, vstem, stype = 's'):
-        # stype = 's' (strandard) or 'l' (linkage)
-        debug_write_StemMotif = False # True #
-        
-        i_t = vstem.it; j_t = vstem.jt
-        i_h = vstem.ih; j_h = vstem.jh
-        vtype = vstem.vtype
-        ssbranches = self.get_ssbranches(i_h, j_h)
-        nssbranches = len(ssbranches)
-        if debug_write_StemMotif:
-            print "Enter write_StemMotif{(%2d,%2d):(%2d,%2d)}[%s]" % (i_t, j_t, i_h, j_h, stype)
-            print "      stemlen:     %d" % vstem.slen
-        #
-        
-        # presently, ssbranches is not needed directly, but in the
-        # future with the RNA engine, it is more important to have
-        # this kind of information for determining the free energy.
-        
-        
-        # We start at the head of the stem
-        if nssbranches > 0:
-            gbranches = self.get_genbranches(i_h, j_h, True)
-            ngbranches = len(gbranches)
-            Vss  = self.compute_iMBL(ssbranches)
-            Vgen = self.compute_iMBL(gbranches)
-            
-            if debug_write_StemMotif:
-                print "Vss(%8.2f), ssbranches:  %s" % (Vss,  ssbranches)
-                print "Vgen(%8.2f), gbranches:  %s" % (Vgen, gbranches)
-            #
-            
-            if nssbranches == 1:
-                self.assign_I(i_h, j_h, Vss, ssbranches, stype, vtype)
-            else:
-                self.assign_M(i_h, j_h, Vss, ssbranches, stype, vtype)
-            #
-            
-            if not Vgen == Vss:
-                if ngbranches == 1:
-                    self.assign_I(i_h, j_h, Vgen, gbranches, stype, vtype)
-                else:
-                    self.assign_M(i_h, j_h, Vgen, gbranches, stype, vtype)
-                #
-                
-                # self.smap.mergeSortLinks(self.smap.glink[i_h][j_h].lg)
-                
-                # In general, we should sort this FE so that the
-                # optimal structure ends up on top. However,
-                # presently, the final structure is what we ask for,
-                # even if it is not the optimal on at this position.
-                
-            #
-        elif nssbranches == 0:
-            self.assign_B(i_h, j_h, stype, vtype)
-        else:
-            print "ERROR: ??? don't understand what to make of this case!"
-            print "       nssbranches = %d, ij_h(%2d,%2d)[%s]" % (i_h, j_h, vtype)
-            sys.exit(1)
-        #
-        
-        # now that we have finished the head, go to the rest of the
-        # stem till the tail (if the stem is longer than 1 Pair).
-        if vstem.slen > 1:
-            self.assign_S(i_t, j_t, i_h, j_h, vstem, stype, vtype)
-        #
-        
-    #
-    
-    
-    
-    def get_ssbranches(self, ib, jb, closed = True):
-        debug_get_ssbranches = False # True # 
-        if debug_get_ssbranches:
-            print "Enter get_ssbranches(), closed = %s" % closed
-        #
-        
-        branches = []
-        for vstem in self.ssStems:
-            gstemtype = type(vstem).__name__
-            # print gstemtype
-            if not gstemtype == "Stem": # this __must__ be class Stem
-                print "ERROR: ssStem contains objects other than type Stem"
-                print "       %s: ijss = (%2d,%2d)" % (gstemtype, vstem.it, vstem.jt)
-                sys.exit(1)
-            #
-            iV = vstem.it; jV = vstem.jt
-            if debug_get_ssbranches:
-                print "ib(%2d) <  iV(%2d) < jV(%2d) <  jb(%d)" % (ib, iV, jV, jb)
-            #
-            if closed:
-                if ib < iV and jV < jb:
-                    branches += [(iV, jV)]
-                #
-            else:
-                if ib <= iV and jV <= jb:
-                    branches += [(iV, jV)]
-                #
-            #
-        #
-        return branches
-    #
-    
-    
-    def get_genbranches(self, ib, jb, closed = True):
-        debug_get_genbranches = False # True # 
-        if debug_get_genbranches:
-            print "Enter get_genbranches(), closed = %s" % closed
-        #
-        
-        branches = []
-        for vstem in self.genStems:
-            gstemtype = type(vstem).__name__
-            # print gstemtype
-            if not gstemtype == "Stem" and not gstemtype == "PseudoKnot":
-                print "ERROR: genStem contains objects other than type Stem and PseudoKnot"
-                print "       %s: ijV = (%2d,%2d)" % (gstemtype, vstem.it, vstem.jt)
-                sys.exit(1)
-            #
-            iV = vstem.it; jV = vstem.jt
-            if debug_get_genbranches:
-                print "ib(%2d) <= iV(%2d) < jV(%2d) <= jb(%d)" % (ib, iV, jV, jb)
-            #
-            if closed:
-                if ib < iV and jV < jb:
-                    branches += [(iV, jV)]
-                #
-            else:
-                if ib <= iV and jV <= jb:
-                    branches += [(iV, jV)]
-                #
-            #
-        #
-        return branches
-    #
+    #endMethod
     
 #
 
@@ -4911,7 +4269,7 @@ def test0(cl):
     
     N = 100
     dG = -1.0  # this is not important for most tests of this type
-    dt = DispLThreads(N)
+    dt = DispLThread(N)
     lt = [] # [LThread()] #
     
     ndx = 0
@@ -4923,19 +4281,30 @@ def test0(cl):
         print thr.disp_lnode()
     #
     print dt.makeLThreadDotBracket_VARNA(lt[ndx], 0)
+    # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+    from ChPair     import LThread2ChPair
     chdt = LThread2ChPair(lt[ndx], "test0")
     # the argument "test0" is just used to give this data set a name.
     chdt.print_ChPairData()
     # no argument in print_ChPairData() means that the output will
     # only be displayed.
+    # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     
 #
+
+def test0(cl):
+    aList = [123, 'xyz', 'zara', 'abc']
+    aList.insert( 3, 2009)
+    print "Final List : ", aList
+#
+
 
 def test1(cl):
     vs = Vstruct()
     #          0         10        20        30        40        50        60        70        80        90
     #          |         |         |         |         |         |         |         |         |         |
-    ss_seq = ".(((.(((((((.[[...)))))..]].((((...))))..))))).....([)]([)].......(..)..((..)).(..)..........................."
+    ss_seq  = ".(((.(((.(((....))).))).)))."
+    #ss_seq = ".(((.(((((((.[[...)))))..]].((((...))))..))))).....([)]([)].......(..)..((..)).(..)..........................."
     #ss_seq = "{(((.(((((((.[[...)))))..]].((((...))))..)))))..|..([)]([)]...}.{.(..)..((..)).(..)..}...{.....|...|....|....}"
     #ss_seq = "{((((((.A.AAAAA......))))).BBBB........a..aaaaa....bbbb..).|..([)]([)].ABC.abc.}....{.....}"
     #ss_seq = "{((((((.A.AAAAA......))))).((((........a..aaaaa....))))..).|..([)]([)].ABC.abc.}....{.....}"
@@ -4950,6 +4319,7 @@ def test1(cl):
     vs.parse_fullDotBracketStructure(ss_seq, True)
     v2t = Vienna2TreeNode(vs)
     v2t.vienna2tree()
+    print "planned exit"; sys.exit(0);
     
     tf = LThreadBuilder(v2t)
     tf.visit(v2t.genTree)
@@ -4980,37 +4350,71 @@ def test1(cl):
     
 #    
 
+def usage_test2():
+    print "Usage: %s [structure_sequence]" % PROGRAM
+    print "       %s [sequence    structure_sequence]" % PROGRAM
+#
 def test2(cl):
-    aList = [123, 'xyz', 'zara', 'abc']
-    aList.insert( 3, 2009)
-    print "Final List : ", aList
-#
-
-def usage_test3():
-    print "Usage: %s [sequence]" % PROGRAM
-#
-def test3(cl):
     
     # Evidently, Vienna() still has a few problems presently because
     # it cannot convert ".ABCD.......abcd...." properly.
     
-    
+    rnaseq = ""
     # regular secondary structure
-    #          0         10        20        30        40        50        60        70        80        90
-    #          |    .    |    .    |    .    |    .    |    .    |    .    |    .    |    .    |    .    |
+    #          0         10        20        30        40        50        60        70
+    #          |    .    |    .    |    .    |    .    |    .    |    .    |    .    |
+    #ss_seq  = "(..............)"
+    #rnaseq  = "GuuuuuuuuuuuuuuC"
+    #ss_seq  = ".(..............).."
+    #rnaseq  = "uGuuuuuuuuuuuuuuCuu"
     #ss_seq  = ".((............)).."
+    #rnaseq  = "uGGuuuuuuuuuuuuCCuu"
     #ss_seq  = ".((((........)))).."
+    #rnaseq  = "uGGGGuuuuuuuuCCCCuu"
     #ss_seq  = ".((((..(...).)))).."
-    #ss_seq  = ".((((........))))...((((........)))).."
+    #rnaseq  = "uGGGGuuGuuuCuCCCCuu"
+    #ss_seq   = ".(((....)))."
+    #rnaseq   = "uGGGuuuuCCCu"
+    #ss_seq   = ".(((.(((.(((....))).))).)))."
+    #rnaseq   = "uGGGuGGGuGGGuuuuCCCuCCCuCCCu"
     #ss_seq  = ".((((..(((..........))).)))).."
+    #rnaseq  = "uGGGGuuGGGuuuuuuuuuuCCCuCCCCuu"
+    #ss_seq   = ".(((.(((......(((....))).......))).)))."
+    #rnaseq   = "uGGGuGGGuuuuuuGGGuuuuCCCuuuuuuuCCCuCCCu"
+    ss_seq  = ".((((........))))...((((........)))).."
+    rnaseq  = "uGGGGuuuuuuuuCCCCuuuGGGGuuuuuuuuCCCCuu"
+    #ss_seq  = "((((........))))...((((........))))"
+    #rnaseq  = "GGGGuuuuuuuuCCCCuuuGGGGuuuuuuuuCCCC"
+    #ss_seq  = "(((.((((........))))...((((........)))).)))"
+    #rnaseq  = "GGGuGGGGuuuuuuuuCCCCuuuGGGGuuuuuuuuCCCCuCCC"
     #ss_seq  = ".((((..(((..(...)..))).)))).."
+    #rnaseq  = "uGGGGuuGGGuuGuuuCuuCCCuCCCCuu"
+    #          0         10        20        30        40        50        60        70
+    #          |    .    |    .    |    .    |    .    |    .    |    .    |    .    |
     #ss_seq  = "...(((..(..((((..(...).))))..)...))).."
+    #rnaseq  = "uuuGGGuuGuuGGGGuuGuuuCuCCCCuuCuuuCCCuu"
     #ss_seq  = "...(((..((((........))))..(((.........)))..))).."
+    #rnaseq  = "uuuGGGuuGGGGuuuuuuuuCCCCuuGGGuuuuuuuuuCCCuuCCCuu"
     #ss_seq  = "...(((..((((..(...).))))..(((.(.....).)))..))).."
+    #rnaseq  = "uuuGGGuuGGGGuuGuuuCuCCCCuuGGGuGuuuuuCuCCCuuCCCuu"
     #ss_seq  = ".(.(.(.(..).).).)..(.(.........).).."
+    #rnaseq  = "uGuGuGuGuuCuCuCuCuuGuGuuuuuuuuuCuCuu"
+    #ss_seq  = ".(.(.(.(.....).).).)..(.(.........).).."
+    #rnaseq  = "uGuGuGuGuuuuuCuCuCuCuuGuGuuuuuuuuuCuCuu"
     #ss_seq  = ".((((........))))..(((.........))).."
+    #rnaseq  = "uGGGGuuuuuuuuCCCCuuGGGuuuuuuuuuCCCuu"
     #ss_seq  = ".((((..(...).))))..(((.(.....).))).."
+    #rnaseq  = "uGGGGuuGuuuCuCCCCuuGGGuGuuuuuCuCCCuu"
     #ss_seq  = "..(((((...(((..((((..(...).))))..(((.(.....).)))..)))..)))))."
+    #rnaseq  = "uuGGGGGuuuGGGuuGGGGuuGuuuCuCCCCuuGGGuGuuuuuCuCCCuuCCCuuCCCCCu"
+    
+    #ss_seq  = ".((((...[[[[.))))..]]]].."
+    #rnaseq  = "uGGGGuuuGGGGuCCCCuuCCCCuu"
+    #ss_seq  = ".((((...AAAA.......BBBB..))))..aaaa.......bbbb"
+    #rnaseq  = "uGGGGuuuGGGGuuuuuuuGGGGuuCCCCuuCCCCuuuuuuuCCCC"
+    #ss_seq  = ".((((...AAAA.......BBBB..))))..bbbb.......aaaa"
+    #rnaseq  = "uGGGGuuuGGGGuuuuuuuGGGGuuCCCCuuCCCCuuuuuuuCCCC"
+    
     
     #          0         10        20        30        40        50        60        70        80        90
     #          |    .    |    .    |    .    |    .    |    .    |    .    |    .    |    .    |    .    |
@@ -5024,7 +4428,9 @@ def test3(cl):
     #ss_seq  = "..A..B..C..D..a..b..c..d.."
     #ss_seq  = "..A..B..C..D..a..b..c..d....E..F..G....e...f...g..."
     #ss_seq  = ".ABCD..EFG......abcd......efg...."
-    ss_seq  = ".ABCD..EFG..H...abcd......efg..h."
+    #@@@
+    #ss_seq  = ".ABCD..EFG..H...abcd......efg..h."
+    #@@@
     #ss_seq  = ".ABCD.......abcd....EFG...efg."
     #ss_seq  = ".ABCD.......abcd....((...))."
     #ss_seq  = "..((...))...ABCD......abcd.."
@@ -5032,7 +4438,9 @@ def test3(cl):
     #ss_seq  = ".ABCD...EF....abcd..ef...((...))."
     #ss_seq  = ".ABCD....EFG...efg.....HIJ...hij....abcd.."
     #ss_seq  = ".ABCD....EFG...efg..((.....)).....HIJ...hij....abcd.."
-    ss_seq  = ".ABCD....EFG...efg..((..[[.)).]]..HIJ...hij....abcd.."
+    #@@@
+    #ss_seq  = ".ABCD....EFG...efg..((..[[.)).]]..HIJ...hij....abcd.."
+    #@@@
     #ss_seq  = ".AB..CD....EFG...efg.....HI..JK...hi..jk....ab..cd.."
     
     #          0         10        20        30        40        50        60        70        80        90
@@ -5072,7 +4480,9 @@ def test3(cl):
     #ss_seq  = "..(.[.).].."
     #ss_seq  = "..([)]..([)].."
     #ss_seq  = "(.).(.([)])(.)(.)(())(..)(.).(())(..).((.))"
-    ss_seq  = "(.).(.([)])"
+    #@@@
+    #ss_seq  = "(.).(.([)])"
+    #@@@
     #ss_seq  = "(.).(.ABab)"
     #ss_seq  = "(....(.[..)..]...)..."
     #ss_seq  = "((...(.[..)..]..))..."
@@ -5111,7 +4521,7 @@ def test3(cl):
     
     #ss_seq = ".((....AA..BB..CC..))..((....aa..bb..cc...DD...EE..FF..)).....dd..ee..ff." # structure 2 R/K-type
     #@@@@@
-    ss_seq = ".((....AA..BB..CC..))..DD....aa..bb..cc...EE...FF..GG..dd.....ee..ff..gg." # structure 2 K-type only
+    #ss_seq = ".((....AA..BB..CC..))..DD....aa..bb..cc...EE...FF..GG..dd.....ee..ff..gg." # structure 2 K-type only
     #ss_seq = ".......AA..BB..CC......((....aa..bb..cc...DD...EE..FF..))..GG...dd..ee..ff...gg.." # structure 2 K-type only
     #ss_seq = ".....(((....AAA....)))...(((....[[[...)))...(((...]]]....)))....aaa...."
     #@@@@@
@@ -5182,28 +4592,57 @@ def test3(cl):
     #ss_seq  = "{((((((.A.AAAAA.<BC..))))).((((.>bc....a..aaaaa....))))..).|..([)]([)]...}....{.ABC..DEF..abc..def...}"
     #ss_seq  = ".((((((.A.AAAAA.<BC..))))).((((.>bc....a..aaaaa....))))..)."
     vs = Vstruct()
+    vs.set_system("RNA")
+    #vs.set_system("Chromatin")
     
-    if len(cl) > 1:
-        ss_seq = cl[1]
+    if len(cl) == 2:
+        ss_seq = cl[1] # only the structure sequence given
+        rnaseq = len(ss_seq)*'A' # no information, so just make it poly A
+    elif len(cl) == 3:
+        rnaseq = cl[1]
+        ss_seq = cl[2]
+    else:
+        if len(cl) > 2:
+            print "Too many arguments for this test!"
+            print cl
+            usage_test2()
+            sys.exit(1)
+        else:
+            print "using defaults for test2"
+        #
+        
     #
+    
+    
     try:
         print "main: input structure sequence:"
+        if not rnaseq == "": print rnaseq
         print ss_seq
+        
     except(UnboundLocalError):
         print "ERROR, ss_seq is not assigned -- you idiot!"
-        usage_test3()
+        usage_test2()
         sys.exit(1)
     #
-    vs.parse_fullDotBracketStructure(ss_seq, True) # True = print results
+    vs.parse_fullDotBracketStructure(ss_seq, rnaseq, True) # True = print results
     #print "planned exit after running parse_fullDotBracketStructure"; sys.exit(0);
     
     print "next: calculate the tree structure:"
-    v2t = Vienna2TreeNode(vs)
+    v2t = Vienna2TreeNode(vs, None, rnaseq)
     v2t.vienna2tree()
     
     print v2t.dispTreeStruct(v2t.ssTree,  "Secondary Structure Tree")
     print v2t.dispTreeStruct(v2t.genTree, "Full Structure Tree")
-    # print "planned exit before running LThreadBuilder"; sys.exit(0);
+    #print "planned exit before running TreeNode2Motif"; sys.exit(0);
+    
+    
+    t2m = TreeNode2Motif(v2t)
+    t2m.visit(v2t.genTree)
+    # print v2t.MPlist
+    t2m.post_graftMP()
+    print "finished TreeNode2Motif"
+    print "%10.2f" % t2m.dGmin
+    print "planned exit before running LThreadBuilder"; sys.exit(0);
     
     
     # Test LThread building abilities
@@ -5215,7 +4654,7 @@ def test3(cl):
     
     print "review structures in vs"
     vs.disp_allLists()
-    #print "planned exit before running LThread2Vienna"; sys.exit(0);
+    print "planned exit after running LThreadBuilder"; sys.exit(0);
     
     
     # Test transformation between LThread and Vienna Pair
@@ -5239,14 +4678,14 @@ def test3(cl):
     tn2db = TreeNode2DotBracket(v2tp)
     tn2db.make_dotbracket(True)
     print "display the thread -> dot-bracket results (vsp)"
-    print tn2db.vseq
+    print tn2db.vSeq
     print tn2db.vstr
 
     print "display the original (vs)" 
     tn2dbo = TreeNode2DotBracket(v2t)
     tn2dbo.make_dotbracket(True)
     print tn2db.vstr
-    print tn2db.vseq
+    print tn2db.vSeq
     # print "planned exit after running LThread2Vienna"; sys.exit(0);
     
     
@@ -5277,7 +4716,7 @@ def test3(cl):
     tn2db.make_dotbracket(True)
     #tn2db.visit(v2t.genTree)
     #print tn2db.makeFinal(tn2db.sssv)
-    print tn2db.vseq
+    print tn2db.vSeq
     print tn2db.vstr
     #print "planned exit before running TreeNode2Motif"; sys.exit(0);
     
@@ -5297,9 +4736,10 @@ def main(cl):
         test0(cl)
     elif TEST == 1:
         test1(cl)
-    #
+        
     elif TEST == 2:
         test2(cl)
+        
     elif TEST == 3:
         test3(cl)
 #
