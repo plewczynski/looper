@@ -186,12 +186,12 @@ For more information on how to run the program, please run
     > anal_loops.py -h
 
 
-### How to run Make_HeatMap? ###
+### How to run Visualize_HeatMap? ###
 
 To generate visuals of the 2D heatmaps from the standard input heatmap files, 
 
     > cd tests/test_anal_loops/eheat_files
-    > make_heatmap.py chr10_64313472_64921344_res5kb.heat
+    > visualize_heatmap.py chr10_64313472_64921344_res5kb.heat
 
 More recent file design includes extended heatmaps that contain more information 
 than just the 2D contact weights. Extended heatmaps are valuable for inputing 
@@ -199,7 +199,7 @@ specific information about about CTCF orientations, where the older heatmap file
 version only offers a generic intensity as a means to distinguish CTCF sites
 
     > cd tests/test_anal_loops/eheat_files
-    > make_heatmap.py chr1_1890973_2316695.eheat 
+    > visualize_heatmap.py chr1_1890973_2316695.eheat 
 
 where the extension `*.eheat` indicates an extended heatmap file.
 
@@ -369,7 +369,7 @@ available at some point at the contributing laboratory;
 Please consult Dariusz Plewczynski for access to such data that can 
 be used in this venue: 
 
-email: dariuszplewczynski@cent.uw.edu.pl
+email: d.plewczynski@cent.uw.edu.pl
 
 
 * How to run tests
