@@ -2,7 +2,8 @@
 
 # README #
 
-This README would normally document whatever steps are necessary to get your application up and running.
+This README would normally document whatever steps are necessary to
+get your application up and running.
 
 ### What is this repository for? ###
 
@@ -16,11 +17,13 @@ program. It calculates the optimal and suboptmal structures of
 chromatin the Boltzmann distribution of the principal structures.
 
 
-anal_loops.py
+analyze_loops.py
 
 + this is a driver for carrying out analysis of the bed files with
-corresponding heat maps. See directory tests/test_anal_loops for
-an example.
+corresponding heat maps. For a simple example, see the directory
+tests/test_analyze_loops in this distribution and, for complete
+calculations of AB compartments and CCDs using this tool, see the
+directory results_in_manuscript/ in this distribution.
 
 
 make_heatmap.py
@@ -60,10 +63,11 @@ determining the most probably chromatin structure arrangement as well
 as the distribution of chromatin structure arrangements as a function
 of free energy of various motifs found in the structure.
 
-_Anal_loops_ is for handling a group of heatmap files with the
+_Analyze_loops_ is for handling a group of heatmap files with the
 properly. The format is Przemek's bed format. The program calls
 Chreval. You should make sure that the files listed in the bed file
-also exist in your directory.
+also exist in your directory. Please see the directories tests and
+results_in_manuscript for examples of using this tool.
 
 _Make_heatmap_ is a tool to generate heatmaps either from *.heat files
 or the output from Chreval *.clust
@@ -106,7 +110,7 @@ used to calculate the example heatmap:
 
 or, another example
 
-> cd tests/test_anal_loops/eheat_files
+> cd tests/test_analyze_loops/eheat_files
 > chreval.py -f chr1_1890973_2316695.eheat
 
 
@@ -143,12 +147,14 @@ There are a variety of additional options. Please run
 to obtain additional information on additional command line options.
 
 
-* How to run Anal_loops?
+* How to run analyze_loops?
 
-An example for anal_loops.py is provided in the directory "tests/test_anal_loops"
+Examples of using analyze_loops.py are provided in the directories
+"tests/test_anal_loops" and "results_in_manuscript" included in this
+distribution.
 
-> cd tests/test_anal_loops
-> anal_loops.py -ff test_loops.CTCF.withAandB.annotated.bed
+> cd tests/test_analyze_loops
+> analyze_loops.py -ff test_loops.CTCF.withAandB.annotated.bed
 
 The program anal_loops.py will look up files in the same directory as
 the *.bed file and try to compute the free energy using the object
@@ -156,7 +162,7 @@ Chreval.
 
 For more information on how to run the program, please run
 
-> anal_loops.py -h
+> analyze_loops.py -h
 
 
 * How to run make_heatmap.py? Other programs
@@ -167,7 +173,7 @@ in this set.
 
 > make_heatmap.py chr1_1890973_2316695.eheat + extended heatmap files
 + makes a 2D heat map of the file. contain more detailed information. See the directory
-"tests/test_anal_loops/eheat_files"
+"tests/test_analyze_loops/eheat_files"
 
 > make_heatmap.py chr10_64313472_64921344_res5kb.heat
 + makes a heat map of the file. 
