@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -16,7 +16,7 @@ Functions:      convert_to_basic_heatmap
 
 Author:        Wayne Dawson
 creation date: 2016
-last update:   180718
+last update:   200416 various updates and minor adjustments
 version:       0.1
 
 Purpose:
@@ -38,11 +38,11 @@ import sys
 from copy import deepcopy
 from FileTools  import FileTools
 from FileTools  import getHeadExt
-from Chromosome import Chromosome
-from Chromosome import Chromatin
-from Chromosome import Segment
-from Chromosome import allowed_tags
-from Chromosome import assign_bed_tags
+from Chromosome import Chromosome      # not used
+from Chromosome import Chromatin       # not used
+from Chromosome import Segment         # not used
+from Chromosome import allowed_tags    # not used
+from Chromosome import assign_bed_tags # this is used
 
 
 ####################################################################
@@ -53,15 +53,15 @@ PROGRAM = "HeatMapTools.py"
 
 
 def usage():
-    print "USAGE: %s -option args" % PROGRAM
-    print "        option       arguments"
-    print "       -basic_hm     file.clust    -- read a cluster file"
-    print "       -fcsv         <file>.csv    -- format csv file"
-    print "       -o            <file>.heat   -- output from csv input"
-    print "       -opcsv_weight \"lin\"       -- linear rescaling"
-    print "                     \"exp\"       -- exponential rescaling"
-    print "       -opcsv_scale  N             -- maximum of the data set"
-    print "       -histogram <file>           -- histogram of heatmap <file>"
+    print ("USAGE: %s -option args" % PROGRAM)
+    print ("        option       arguments")
+    print ("       -basic_hm     file.clust    -- read a cluster file")
+    print ("       -fcsv         <file>.csv    -- format csv file")
+    print ("       -o            <file>.heat   -- output from csv input")
+    print ("       -opcsv_weight \"lin\"       -- linear rescaling")
+    print ("                     \"exp\"       -- exponential rescaling")
+    print ("       -opcsv_scale  N             -- maximum of the data set")
+    print ("       -histogram <file>           -- histogram of heatmap <file>")
      
 #
 
@@ -138,6 +138,8 @@ class GenerateHeatMapTools(object):
         
         # other handling matters
         self.allowed_extns       = ["heat", "data"]
+    #
+    
 #
 
 
@@ -283,7 +285,7 @@ class HeatMapTools(object):
         # here, we can search the file using the rules above.
         
         if self.debug_HeatMapTools:
-            print self.mtools.disp_fmatrix(hv, "enthalpy: ")
+            print (self.disp_fmatrix(hv, "enthalpy: "))
         #
 
         """@@@@
@@ -312,7 +314,7 @@ class HeatMapTools(object):
         """
         
         if self.add_PET_wt:
-            # 
+            
             if self.add_PET_wt_to_edges:
                 
                 """@@@@@
@@ -332,8 +334,8 @@ class HeatMapTools(object):
                 hv[0  ][self.N-1] = self.PETwt
                 hv[self.N-1][0  ] = self.PETwt
                 cv = {(0, self.N-1) : self.PETwt }
-                print "Note: Additional weight added to PET cluster"
-                print "      borders at (%d,%d)" % (0, self.N-1)
+                print ("Note: Additional weight added to PET cluster")
+                print ("      borders at (%d,%d)" % (0, self.N-1))
                 
             else:
                 """@@@@
@@ -345,13 +347,13 @@ class HeatMapTools(object):
                 
                 """
                 
-                hv, cv = self.mtools.add_boundaryWt(self.N, hv, self.PETwt)
+                hv, cv = self.add_boundaryWt(self.N, hv, self.PETwt)
             # 
         # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         # #####  READJUSTMENT FOR PET CLUSTER WEIGHTS  ##### 
         
         if self.debug_HeatMapTools:
-            print disp_fmatrix(hv, "enthalpy: ")
+            print (self.disp_fmatrix(hv, "enthalpy: "))
         #
         
         return hv, cv, self.N
@@ -383,10 +385,11 @@ class HeatMapTools(object):
                     sj += " %4d " % v[j][i]
                 #
                 
-            #
+            #|endfor
             
             s += sj + '\n'
-        #
+        #|endfor
+        
         return s
     #
     
@@ -404,8 +407,8 @@ class HeatMapTools(object):
         for j in range(0,N):
             sj = ''
             if not len(v[j]) == N:
-                print "ERROR(HeatMapTools.make_heatmap): undiscernable matrix dimesions."
-                print "     matrix size %d, for column %d: %d" % (N, j, len(v[j]))
+                print ("ERROR(HeatMapTools.make_heatmap): undiscernable matrix dimesions.")
+                print ("     matrix size %d, for column %d: %d" % (N, j, len(v[j])))
                 sys.exit(1)
             #
             
@@ -416,10 +419,10 @@ class HeatMapTools(object):
                     sj += "%d\t" % v[j][i]
                 #
                 
-            #
+            #|endfor
             
             s += sj + '\n'
-        #
+        #|endfor
         
         return s
     #
@@ -450,10 +453,10 @@ class HeatMapTools(object):
                     s += " %8.4g " % mtrx[j][i]
                 #
                 
-            #
+            #|endfor
             
             s += '\n'
-        #
+        #|endfor
         
         return s
     #
@@ -474,20 +477,20 @@ class HeatMapTools(object):
         self.fileformat = ext
         
         if debug_read_heatmap:
-            print "file name: %s" % flnm
+            print ("file name: %s" % flnm)
         #
         
         ft = FileTools()
         if not ft.check_ext(flnm, EXTS):
-            print "ERROR: %s only accepts files with extention '%s'." % (PROGRAM, EXTS)
-            print "       input file '%s' --> (extension(s) '%s')" % (flnm, ext)
+            print ("ERROR: %s only accepts files with extention '%s'." % (PROGRAM, EXTS))
+            print ("       input file '%s' --> (extension(s) '%s')" % (flnm, ext))
             sys.exit(1)
         #
         
         try:
             fp = open(flnm, 'r')
         except IOError:
-            print "ERROR: cannot open file '%s'." % flnm
+            print ("ERROR: cannot open file '%s'." % flnm)
             sys.exit(1)
         #
         
@@ -502,15 +505,16 @@ class HeatMapTools(object):
             if fileInfoLine[0] == "file version":
                 self.fileformat = "eheat"
             else:
-                print "ERROR: %s does not appear to be a recognizable file type" % flnm
-                print "       first line: '%s'" % fileInfoLine
+                print ("ERROR: %s does not appear to be a recognizable file type" % flnm)
+                print ("       first line: '%s'" % fileInfoLine)
                 sys.exit(1)
             #
             
-        elif ext == "heat" or ext == "clust":
+        elif ext == "heat" or ext == "clust" or ext == "cpif":
             if debug_read_heatmap:        
-                print "attempt to read basic format heatmap file"
+                print ("attempt to read basic format heatmap file")
             #
+            
             try:
                 if ext == "heat":
                     n = int(fileInfoLine[0])
@@ -518,50 +522,53 @@ class HeatMapTools(object):
                     s = fileInfoLine[0].strip().split()
                     n = int(s[1])
                 #
+                
             except(ValueError):
-                print "ERROR: first line of %s should contain an integer" % flnm
-                print "       first line: ", fileInfoLine
+                print ("ERROR: first line of %s should contain an integer" % flnm)
+                print ("       first line: ", fileInfoLine)
                 sys.exit(1)
             #
             
         elif ext == "csv":
             if debug_read_heatmap:        
-                print "attempt to read a csv format heatmap file"
+                print ("attempt to read a csv format heatmap file")
             #
             
             try:
-                #print fileInfoLine[0]
+                #print (fileInfoLine[0])
                 line = fileInfoLine[0].strip().split(',')
                 
                 n = len(line)
-                #print n, line
+                #print (n, line)
             except(ValueError):
-                print "ERROR: first line of %s does not contain recognizable data" % flnm
-                print "       first line: ", fileInfoLine
+                print ("ERROR: first line of %s does not contain recognizable data" % flnm)
+                print ("       first line: ", fileInfoLine)
                 sys.exit(1)
             #
             
         else:
-            print "ERROR: Unrecognized file format (%d)" % flnm
+            print ("ERROR: Unrecognized file format (%s)" % flnm)
             sys.exit(1)
         #
-
+        
         gmtrx = None
         if self.fileformat == "eheat":
             if debug_read_heatmap:
-                print "going to read_extended_heatmap()"
+                print ("going to read_extended_heatmap()")
             #
+            
             gmtrx = self.read_extended_heatmap(flnm, PROGRAM, flag_display)
-        elif self.fileformat == "heat" or ext == "clust":
+        elif self.fileformat == "heat" or ext == "clust" or ext == "cpif":
             if debug_read_heatmap:
-                print "going to read_basic_heatmap()"
+                print ("going to read_basic_heatmap()")
             #
             
             gmtrx = self.read_basic_heatmap(flnm, PROGRAM, flag_display)
         elif self.fileformat == "csv":
             if debug_read_heatmap:
-                print "going to read_csv_heatmap()"
+                print ("going to read_csv_heatmap()")
             #
+            
             gmtrx = self.read_csv_heatmap(flnm, PROGRAM, flag_display)
         #
         
@@ -588,7 +595,7 @@ class HeatMapTools(object):
         gmtrx = HeatMapData("PrzemekS")
         
         if flag_display:
-            print "file name: %s" % flnm
+            print ("file name: %s" % flnm)
         #
         
         # this program is called by read_heatmap, so there SHOULD NOT
@@ -601,31 +608,33 @@ class HeatMapTools(object):
         # read in the number of elements in the matrix
         try:
             s = lfp[0].strip().split()
-            # print s
+            # print (s)
             N = int(s[len(s)-1]) # read the last field from line 0
             if len(s) > 2:
                 nj = len(lfp)
                 ni = len(s)
-                # print ni, nj
+                # print (ni, nj)
                 if ni == nj:
-                    print "heatmap: using Michal K format"
+                    print ("heatmap: using Michal K format")
                     N = ni
                     start = 0
                 else:
-                    print "ERROR: unrecognized format for heatmap file %s" % flnm
+                    print ("ERROR: unrecognized format for heatmap file %s" % flnm)
                     sys.exit(1)
                 #
+                
             #
                     
             
         except ValueError:
-            print "ERROR: first line of %s cannot be read properly. " % flnm
-            print "       Format should be '\"some text\"    integer'; i.e., '%s %d'. "
-            print "       Please check the file and confirm."
+            print ("ERROR: first line of %s cannot be read properly. " % flnm)
+            print ("       Format should be '\"some text\"    integer'; i.e., '%s %d'. ")
+            print ("       Please check the file and confirm.")
             sys.exit(1)
         #
+        
         if flag_display: 
-            print "size of matrix: %d" % N
+            print ("size of matrix: %d" % N)
         #
         
         gmtrx.length  = N
@@ -640,7 +649,7 @@ class HeatMapTools(object):
         
         return gmtrx
     #
-
+    
     def read_extended_heatmap(self, flnm, PROGRAM = "read_heatmap", flag_display = False):
         """@ 
         
@@ -650,12 +659,13 @@ class HeatMapTools(object):
         resolution, etc..
         
         """
+        xsflag_display = True
         
         flhd, ext = getHeadExt(flnm)
         
         
         if flag_display:
-            print "file name: %s" % flnm
+            print ("file name: %s" % flnm)
         #
         
         # this program is called by read_heatmap, so there SHOULD NOT
@@ -664,68 +674,101 @@ class HeatMapTools(object):
         lfp = fp.readlines()
         fp.close()
         
+        # get version number
         s = lfp[0].strip().split(':')
         version =  s[1].strip()
-        print "reading version: %s" % version
+        print ("reading version: %s" % version)
         gmtrx = HeatMapData(version)
         start = 1
         N = -1
-        if version == "0.0":
+        if version == "0.0": # presently the only version
             try:
                 # note
                 # s = lfp[1].strip().split(':')[1]
                 # ss = s.strip().split()[0])
                 
+                # map resolution:
                 gmtrx.resolution = int(lfp[1].strip().split(':')[1].strip().split()[0])
+                # start position:
                 gmtrx.position   = int(lfp[2].strip().split(':')[1].strip().split()[0])
+                # chain length:
                 gmtrx.length     = int(lfp[3].strip().split(':')[1].strip().split()[0])
+                
                 if flag_display:
-                    print "resolution: %10d" % gmtrx.resolution
-                    print "position:   %10d" % gmtrx.position
-                    print "length:     %10d" % gmtrx.length
+                    print ("resolution: %10d" % gmtrx.resolution)
+                    print ("position:   %10d" % gmtrx.position)
+                    print ("length:     %10d" % gmtrx.length)
                 #
+                
             except ValueError:
-                print "ERROR: first lines of %s are not formatted properly. " % flnm
+                print ("ERROR: first lines of %s are not formatted properly. " % flnm)
                 for k in range(0, 5):
-                    print "line %2d:  %s" % (k, lfp[k].strip())
+                    print ("line %2d:  %s" % (k, lfp[k].strip()))
                 #
-                print "       Please check the file and confirm."
+                print ("       Please check the file and confirm.")
                 sys.exit(1)
             #
+            
+            # now read the heat map
             start = 5
             gmtrx.heatmap = self.read_matrix(start, gmtrx.length, lfp)
-            print "loaded matrix"
-            #print gmtrx.heatmap
+            print ("loaded matrix")
+            #print (gmtrx.heatmap)
             
             k = start + gmtrx.length
             if not lfp[k].strip() == "//":
-                print "ERROR: %s format has some incompatibilities" % flnm
+                print ("ERROR: %s format has some incompatibilities" % flnm)
                 sys.exit(1)
             #
+            
             k += 1
+            
+            # read "genome segments" part 
             try:
+                # begining and end of the segment
                 s = lfp[k].strip().split(':')[1]
                 gmtrx.g_bgn = int(s.strip().split()[0])
                 gmtrx.g_end = int(s.strip().split()[1])
             except ValueError:
-                print "ERROR: %s, cluster line after heatmap data cannot be read properly." % flnm
+                print ("ERROR: %s, cluster line after heatmap data cannot be read properly." % flnm)
                 for k in range(5+gmtrx.length, len(lfp)):
-                    print "line %2d:  %s" % (k, lfp[k].strip())
+                    print ("line %2d:  %s" % (k, lfp[k].strip()))
                 #
-                print "       Please check the file and confirm."
+                print ("       Please check the file and confirm.")
                 sys.exit(1)
             #
+            
             k += 1
+            
+            print ("loading in CTCF loop info:")
+            # read taglist
             taglist = lfp[k].strip().split(':')[1].strip().split()
-            print taglist
+            #print (taglist)
+            
+            
+            print ("chr        bgn         end       lCTCF  rCTCF    PETcnt   cmplx1     cmplx2     cmplx3        &bgn      &end")
             k += 1
             while not lfp[k].strip() == "//":
                 sbedfl = lfp[k].strip().split()
-                chrmtn = assign_bed_tags(taglist, sbedfl)
-                gmtrx.clusters += [chrmtn]
-                print chrmtn.disp_data()
-                k += 1
-            #
+                
+                #print ("k = %2d, sbedfl: %s" % (k, sbedfl))
+
+                # ignore the information at the beginning and end of this list
+                if  sbedfl[1] == "---------------------------------------------------------------------------------":
+                    k += 1
+                elif sbedfl[3] == "---------------------------------------------------------------------------------":
+                    k += 1
+                    
+                else:
+                    chrmtn = assign_bed_tags(taglist, sbedfl)
+                    gmtrx.clusters += [chrmtn]
+                    print ("%s" % (chrmtn.disp_data()))
+                    #print ("k = %2d, %s" % (k, chrmtn.disp_data()))
+                    k += 1
+                    
+                #
+            #|endwhile
+            
         #
         
         
@@ -749,7 +792,7 @@ class HeatMapTools(object):
         gmtrx = HeatMapData("MichalL")
         
         if flag_display:
-            print "file name: %s" % flnm
+            print ("file name: %s" % flnm)
         #
         
         # this program is called by read_heatmap, so there SHOULD NOT
@@ -762,30 +805,32 @@ class HeatMapTools(object):
         # read in the number of elements in the matrix
         try:
             s = lfp[0].strip().split(',')
-            # print "xx: ", s
+            # print ("xx: ", s)
             N = len(s) # read the last field from line 0
-            # print N
+            # print (N)
             if len(s) > 2:
                 nj = len(lfp)
                 ni = len(s)
-                # print ni, nj
+                # print (ni, nj)
                 if ni == nj:
-                    print "heatmap: using Michal Lazniewski format"
+                    print ("heatmap: using Michal Lazniewski format")
                     N = ni
                     start = 0
                 else:
-                    print "ERROR: unrecognized format for heatmap file %s" % flnm
+                    print ("ERROR: unrecognized format for heatmap file %s" % flnm)
                     sys.exit(1)
                 #
+                
             #
             
             
         except ValueError:
-            print "       Please check the file and confirm."
+            print ("       Please check the file and confirm.")
             sys.exit(1)
         #
+        
         if flag_display: 
-            print "size of matrix: %d" % N
+            print ("size of matrix: %d" % N)
         #
         
         gmtrx.length  = N
@@ -806,7 +851,7 @@ class HeatMapTools(object):
     def read_matrix(self, start, N, lfp):
         debug_read_martix = False # True # 
         if debug_read_martix:
-            print "entered read_matrix():"
+            print ("entered read_matrix():")
         #
         
         s = ''
@@ -825,7 +870,7 @@ class HeatMapTools(object):
                 # probably should make sure that the dimensions are
                 # exactly equal, but anyway, they should at least be
                 # such that you take some part of the matrix!
-                print "ERROR: something wrong with the dimensions of the matrix!"
+                print ("ERROR: something wrong with the dimensions of the matrix!")
                 sys.exit(1)
             #
             
@@ -836,51 +881,60 @@ class HeatMapTools(object):
                     
                     if not (w >= 0.0 or ext == "clust"):
                         # just so stupid stuff doesn't get in.
-                        print "ERROR: Encountered a negative value in the chromatin "
-                        print "       input data. "
-                        print "       This cannot be heat map data for chromatin!"
-                        print "       => position (i,j) = (%d,%d), value = " % (i, j), w
-                        print "       -- all data in the heat map must be positive"
-                        print "       Please verify or correct the file '%s'." % flnm
+                        print ("ERROR: Encountered a negative value in the chromatin ")
+                        print ("       input data. ")
+                        print ("       This cannot be heat map data for chromatin!")
+                        print ("       => position (i,j) = (%d,%d), value = " % (i, j), w)
+                        print ("       -- all data in the heat map must be positive")
+                        print ("       Please verify or correct the file '%s'." % flnm)
                         sys.exit(1)
                     #
+                    
                     if w < ij_min:
                         ij_min = w
                     #
                     
                     mtrxj += [w]
-                    #
+                    
                 except ValueError:
                     if s[i] == 'x':
                         mtrxj += [0.0]
                     else:
-                        print "ERROR: matrix contains unrecognized terms"
-                        print "       from ", s
-                        print "       cannot recognize '%s'" % s[i]
+                        print ("ERROR: matrix contains unrecognized terms")
+                        print ("       from ", s)
+                        print ("       cannot recognize '%s'" % s[i])
                         sys.exit(1)
                     #
+                    
                 #
-            #
+                
+            #|endfor
             
             mtrx += [mtrxj]
-        #
+            
+        #|endfor
         
         # this is a patch to fix some older data
         if ij_min < 0.0 and ext == "clust":
             shift = - ij_min
-            print "unshifting free energy data by ", shift
+            print ("unshifting free energy data by ", shift)
             for j in range(0, N):
                 for i in range(0, N):
                     if not mtrx[i][j] == 0.0:
                         mtrx[i][j] += shift
                         mtrx[j][i] += shift
                     #
-                #
-            #
+                    
+                #|endfor
+                
+            #|endfor
+            
         #
+        
         if debug_read_martix:
-            print "finished read_matrix()"
+            print ("finished read_matrix()")
         #
+        
         return mtrx
     #
     
@@ -891,7 +945,12 @@ class HeatMapTools(object):
             s_j = ''
             for i in range(0, N):
                 s_j += "%8.4g\t" % mtrx[i][j]
+            #|endfor
+            
             s += s_j + '\n'
+            
+        #|endfor
+        
         return s
     #
     
@@ -903,13 +962,13 @@ class HeatMapTools(object):
         # presently only the most simplest format of Michal Kadlof
         flhd, ext = getHeadExt(flnm)
         if self.debug_HeatMapTools:
-            print "output file name: %s" % flnm
+            print ("output file name: %s" % flnm)
         #
         
         try:
             fp = open(flnm, 'w')
         except IOError:
-            print "ERROR: cannot open file '%s'." % flnm
+            print ("ERROR: cannot open file '%s'." % flnm)
             sys.exit(1)
         #
         
@@ -922,6 +981,25 @@ class HeatMapTools(object):
             s = self.disp_matrix(mtrx, N)
             fp.write(s)
             fp.close()
+            
+        elif fformat == "cpif":
+            fp.write("cpif  %d\n" % N) # should really be first
+            s = self.disp_matrix(mtrx, N)
+            fp.write(s)
+            fp.close()
+            
+        elif fformat == "clust":
+            fp.write("clust  %d\n" % N) # should really be first
+            s = self.disp_matrix(mtrx, N)
+            fp.write(s)
+            fp.close()
+            
+        elif fformat == "heat":
+            fp.write("%d\n" % N) # should really be first
+            s = self.disp_matrix(mtrx, N)
+            fp.write(s)
+            fp.close()
+            
         else:
             fp.write("%d\n" % N) # should really be first
             s = self.disp_matrix(mtrx, N)
@@ -937,14 +1015,15 @@ class HeatMapTools(object):
     def write_ExtHeatMap(self, flnm, domain, version = "0.0"):
         # presently only the most simplest format of Michal Kadlof
         flhd, ext = getHeadExt(flnm)
+        self.debug_HeatMapTools = True
         if self.debug_HeatMapTools:
-            print "output file name: %s" % flnm
+            print ("output file name: %s" % flnm)
         #
         
         try:
             fp = open(flnm, 'w')
         except IOError:
-            print "ERROR: cannot open file '%s'." % flnm
+            print ("ERROR: cannot open file '%s'." % flnm)
             sys.exit(1)
         #
         
@@ -961,12 +1040,15 @@ class HeatMapTools(object):
             s =  "//\n"
             s += "genome segment:  %10d   %10d\n" % (domain.gmin, domain.gmax)
             s += ":chr      bgn      end    lCTCF rCTCF  PETcnt  cmplx1 cmplx2 cmplx3   open    active       A        B   vi   vj\n"
-            s += domain.showDomain()
+            s += domain.showDomain(False) # false = don't show header
+            # assemble_heatmap_and_CCDs.Domain.showDomain() prints out
+            # the contents of the particular line in the bed file.
             s += "//\n"
             fp.write(s)
             fp.close()
+            
         else:
-            print "Sorry, no format for version '%s' is available presently" % version
+            print ("Sorry, no format for version '%s' is available presently" % version)
         #
         
     #
@@ -1014,7 +1096,7 @@ class HeatMapTools(object):
                         PROGRAM = "read_MatrixFile",
                         flag_display = True,
                         bgn_shift = 0):
-        #
+        
         #gmtrx = HeatMapData(version)
         gmtrx = self.read_heatmap(flnm, EXTS, PROGRAM, flag_display)
         N = gmtrx.length
@@ -1029,14 +1111,17 @@ class HeatMapTools(object):
             else:
                 gmtrx.heatmap, self.hm_min, self.hm_max, self.wt_range \
                     = self.filter_HiC_using_exp(gmtrx.heatmap, N)
-                
+            #
+            
+        #
+        
         # full rescale relative to a self.rescale_wt
         self.rescale_wt = rescale_wt
         gmtrx.heatmap = self.rescale_mtrx(gmtrx.heatmap, N, self.rescale_wt)
-        #
+        
         # obtain the final minimum and maximum weights
         self.hm_min, self.hm_max, self.wt_range = find_minmax(gmtrx.heatmap, N, True)
-        # print self.hm_min, self.hm_max, self.wt_range
+        # print (self.hm_min, self.hm_max, self.wt_range)
         
         # display a histogram of the data
         flag_use_minmax_hist = False
@@ -1044,16 +1129,17 @@ class HeatMapTools(object):
         if flag_use_minmax_hist:
             self.histogram = self.make_histogram_maxmin(gmtrx.heatmap, N, "histogram_minmax.dat")
         #
+        
         if flag_use_avg_hist:
             self.histogram = self.make_histogram_avg(gmtrx.heatmap, N, "histogram_avg.dat")
         #
         
         # find the CTCF points in the data
         if len(clusters) > 0:
-            print "used read in PET cluster information: %s" % flnm
+            print ("used read in PET cluster information: %s" % flnm)
             self.set_CTCF_points(gmtrx, True) # flag_display
         else:
-            print "estimate the PET cluster information: %s" % flnm
+            print ("estimate the PET cluster information: %s" % flnm)
             self.estimate_CTCF_points(gmtrx.heatmap, N, flag_display, bgn_shift)
         #
         
@@ -1066,7 +1152,7 @@ class HeatMapTools(object):
     def read_MatrixFile_wt(self, flnm,
                            EXTS = ["heat", "eheat"],
                            PROGRAM = "read_MatrixFile"):
-        #
+        
         gmtrx = self.read_heatmap(flnm, EXTS, PROGRAM)
         N     = gmtrx.length
         
@@ -1079,14 +1165,15 @@ class HeatMapTools(object):
                 gmtrx.heatmap, hm_min, hm_max, wt_range \
                     = self.filter_HiC_using_exp(gmtrx.heatmap, N)
             #
+            
         #
-                
+        
         
         # reweight the data to logarithmic weights
         gmtrx.heatmap, self.hm_min, self.hm_max, self.wt_range \
             = self.reweight_ln(gmtrx.heatmap, N)
         
-        print "hm_(min,max): ", self.hm_min, self.hm_max
+        print ("hm_(min,max): ", self.hm_min, self.hm_max)
         
         return gmtrx
     #
@@ -1094,15 +1181,25 @@ class HeatMapTools(object):
     # find the CTCF points in the data
     def estimate_CTCF_points(self, mtrx, N, flag_display = True, bgn_shift = 0):
         irh = N; jrh = 0
+        # identifies the largest region supported passing threshold
+        # PET count. Maybe the purpose is not as important as it once
+        # seemed, but I wanted to know the largest region encompassing
+        # suffiently large PET counts.
+        
         rhlist = {}
-        mx = 0.0
-        i_mx = 0
-        j_mx = 0
+        # marks CTCF-like elements found directly _in_ the heat map.
+        
+        
+        mx = 0.0;  i_mx = 0;  j_mx = 0
+        # marks the larges PET count weight, wherever it is found
+        
         for j in range(0,N):
             for i in range(0,N):
                 w = mtrx[i][j]
-                #
+                
                 if w >= self.ctcf_tthresh:
+                    # largest CTCF span
+                    
                     if i < j:
                         rhlist.update({(i, j): w})
                         # this will help identify the maximum
@@ -1110,22 +1207,30 @@ class HeatMapTools(object):
                         if i < irh:
                             irh = i
                         #
+                        
                         if j > jrh:
                             jrh = j
                         #
+                        
                     #
+                    
                 #
-                if w > mx:
+                
+                if w > mx: # largest PET count weight
                     if i < j:
                         mx = w
                         i_mx = i
                         j_mx = j
                     #
+                    
                 #
-            #
-        #
+                
+            #|endfor
+            
+        #|endfor
+        
         if flag_display:
-            print "maximum matrix element at (%d,%d)[value= %8.3f]" % (i_mx, j_mx, mx)
+            print ("maximum matrix element at (%d,%d)[value= %8.3f]" % (i_mx, j_mx, mx))
         #
         
         # Filter out the domain boundary CTCF since that will
@@ -1133,7 +1238,7 @@ class HeatMapTools(object):
         # if it is the only one, there are no other potential CTCF
         # interactions from which to evaluate or build any islands.
         self.pssbl_ctcf = {}
-        self.edge_ctcf = {}
+        self.edge_ctcf = {}   # largest PET count span
         if len(rhlist) > 0:
             for rh in rhlist.keys():
                 if not (rh[0] == irh and rh[1] == jrh):
@@ -1142,29 +1247,51 @@ class HeatMapTools(object):
                 else:
                     self.edge_ctcf.update({(rh[0],rh[1]) : rhlist[rh]})
                 #
-            #
+                
+            #|endfor
         #
-        print self.print_ctcf_dict("edge_ctcf ", self.edge_ctcf, bgn_shift)
-        print self.print_ctcf_dict("pssbl_ctcf", self.pssbl_ctcf, bgn_shift) 
+        
+        print (self.print_ctcf_dict("edge_ctcf ", self.edge_ctcf, bgn_shift))
+        print (self.print_ctcf_dict("pssbl_ctcf", self.pssbl_ctcf, bgn_shift))
         # sys.exit(0)
         return i_mx, j_mx, mx
     #
     
     def print_ctcf_dict(self, title, cdict, bgn_shift = 0):
         s = "%12s  {" % title
-        clist = cdict.keys()
+        clist = list(cdict.keys())
+        
+        """@
+        
+        https://stackoverflow.com/questions/16819222/how-to-return-dictionary-keys-as-a-list-in-python
+        
+        to produce an indexed list of keys, you need to do
+        list(dictionary.keys())
+        
+        """
+        
+        #print (s)
+        #print ("clist", clist)
         if len(clist) > 1:
             for k in range(0, len(clist)-1):
                 ck = clist[k]
-                # print "ck: ", ck, ck[0]
+                # print ("ck: ", ck, ck[0])
                 s += "(%d, %d) : %d, " % (ck[0]+bgn_shift, ck[1]+bgn_shift, cdict[ck])
+            #|endfor
+            
             ck = clist[len(clist)-1]
             s += "(%d, %d) : %d}" % (ck[0]+bgn_shift, ck[1]+bgn_shift, cdict[ck])
+            
         elif len(clist) == 1:
             ck = clist[0]
             s += "(%d, %d) : %d}" % (ck[0]+bgn_shift, ck[1]+bgn_shift, cdict[ck])
+            
         else:
             s += " }"
+        #
+        
+        #print (s)
+        #sys.exit(0)
         return s
     #
     
@@ -1205,19 +1332,23 @@ class HeatMapTools(object):
                     if vi < irh:
                         irh = int(vi)
                     #
+                    
                     if vj > jrh:
                         jrh = int(vj)
                     #
+                    
                 #
-            #
+                
+            #|endfor
             
             if flag_display:
-                print "maximum matrix element at  (%5d,%5d)[weight=   %8.1f]" % (i_mx, j_mx, mx)
-                print "total CTCF domain coverage (%5d,%5d)[length= %8d]" % (irh, jrh, (jrh-irh+1))
+                print ("maximum matrix element at  (%5d,%5d)[weight=   %8.1f]" % (i_mx, j_mx, mx))
+                print ("total CTCF domain coverage (%5d,%5d)[length= %8d]" % (irh, jrh, (jrh-irh+1)))
             #
             
             # sometimes the boundary  element is missing
-            if not rhlist.has_key((irh,jrh)):
+            #if not rhlist.has_key((irh,jrh)):
+            if not ((irh,jrh) in rhlist):
                 self.edge_ctcf.update({(irh,jrh): 5})
             #
             
@@ -1230,11 +1361,13 @@ class HeatMapTools(object):
                     # it is important to treat the border different
                     self.pssbl_ctcf.update({ (vi, vj) : nPET})
                 #
-            #
+                
+            #|endfor
+            
         #
         
-        print "edge_ctcf:  ", self.edge_ctcf
-        print "pssbl_ctcf: ", self.pssbl_ctcf
+        print ("edge_ctcf:  ", self.edge_ctcf)
+        print ("pssbl_ctcf: ", self.pssbl_ctcf)
         # sys.exit(0)
         return i_mx, j_mx, mx
     #
@@ -1250,25 +1383,34 @@ class HeatMapTools(object):
             for i in range(0,N):
                 w = mtrx[i][j]
                 if i < j:
-                    if histogram.has_key((j-i)):
+                    if (j-i) in histogram:
                         histogram[j-i] += [w]
-                    #
+                    
                     else:
                         histogram.update( { (j-i) : [w] })
                     #
+                    
                 #
-            #
-        #
+                
+            #|endfor
+            
+        #|endfor
+        
         fp = open(flnm, 'w')
+        
         for k in histogram.keys():
             wf = 0.0
             for w in histogram[k]:
                 wf += w
+            #
+            
             wf /= float(len(histogram[k]))
             fp.write("%4d   %12.2f\n" % (k, wf))
-        #
+            
+        #|endfor
+        
         fp.close()
-        #
+        
         return histogram
     #
     
@@ -1281,28 +1423,34 @@ class HeatMapTools(object):
                 w = mtrx[i][j]
                 if i < j:
                     jmi = j - i
-                    if histogram.has_key(jmi):
+                    if jmi in histogram:
                         if histogram[jmi][0] > w:
                             histogram[jmi][0] = w
                         #
+                        
                         if histogram[jmi][1] < w:
                             histogram[jmi][1] = w
                         #
-                    #
+                    
                     else:
                         histogram.update( { (jmi) : [w,w] })
                     #
+                    
                 #
-            #
-        #
+                
+            #|endfor
+            
+        #|endfor
+        
         fp = open(flnm, 'w')
         for k in histogram.keys():
             w_min = histogram[k][0]
             w_max = histogram[k][1]
             fp.write("%4d   %12.2f   %12.2f\n" % (k, w_min, w_max))
-        #
+        #|endfor
+        
         fp.close()
-        #
+        
         return histogram, w_min, w_max
     #
     
@@ -1317,13 +1465,14 @@ class HeatMapTools(object):
 
     """
     def filter_HiC_using_1_m_exp(self, mtrx, N):
-        """
+        """@
+        
         now settle on the data type
         
         Here, hm_max, hm_min, wt_range and mtrx are treated as local
         variables because there is the possibility that one does not
         wish to destroy the raw input data from the heatmap.
-
+        
         """
         hm_max = -1000.0
         hm_min = 1000.0
@@ -1332,14 +1481,19 @@ class HeatMapTools(object):
                 w = mtrx[i][j]*(1.0 - exp(-0.0035*(float(abs(j-i))-1.0)))
                 w = int(w + 0.5)
                 mtrx[i][j] = w
-                #
+                
                 if w > hm_max:
                     hm_max = w
+                #
+                
                 if w < hm_min:
                     hm_min = w
                 #
-            #
-        #
+                
+            #|endfor
+            
+        #|endfor
+        
         wt_range = hm_max
         # this is LINEAR data; i.e., it ranges between 0 to hm_max
         return mtrx, hm_min, hm_max, wt_range
@@ -1354,7 +1508,8 @@ class HeatMapTools(object):
     
     """
     def filter_HiC_using_exp(self, mtrx, N):
-        """
+        """@
+        
         now settle on the data type
         
         Here, hm_max, hm_min, wt_range and mtrx are treated as local
@@ -1377,15 +1532,21 @@ class HeatMapTools(object):
                     w = w/(4451*exp(-0.374*float(abs(j-i))-1.0) + 55.1 )
                     w = int(w + 0.5)
                 #
+                
                 mtrx[i][j] = w
-                #
+                
                 if w > hm_max:
                     hm_max = w
+                #
+                
                 if w < hm_min:
                     hm_min = w
                 #
-            #
-        #
+                
+            #|endfor
+            
+        #|endfor
+        
         wt_range = hm_max 
         # this is LINEAR data; i.e., it ranges between 0 to hm_max
         return mtrx, hm_min, hm_max, wt_range
@@ -1402,8 +1563,10 @@ class HeatMapTools(object):
                 w = mtrx[i][j]
                 w = int(w*rescale_wt+0.5)
                 mtrx[i][j] = w
-            #
-        #
+            #|endfor
+            
+        #|endfor
+        
         return mtrx
     #
     
@@ -1415,7 +1578,7 @@ class HeatMapTools(object):
         hm_min = log(hm_max). Anyway, it also has to be evaluated
         using find_minmax(), so either way, this step must be done
         somewhere.
-
+        
         """
         hm_max = -1000.0
         hm_min = 1000.0
@@ -1429,20 +1592,27 @@ class HeatMapTools(object):
                     else:
                         v = log(w)
                     #
+                    
+                #
+                
                 if v > hm_max:
                     hm_max = v
+                #
+                
                 if v < hm_min:
                     hm_min = v
                 #
                 
-            #
-        #
+            #|endfor
+            
+        #|endfor
+        
         wt_range = hm_max - hm_min
         if hm_max == hm_min:
             # this can happen if all the values in the matrix are 1,
             # for example.
             wt_range = 1.0
-            print "reseting wt_range = %.2f" % wt_range
+            print ("reseting wt_range = %.2f" % wt_range)
         #
         
         # reweight the data
@@ -1456,9 +1626,13 @@ class HeatMapTools(object):
                         w = hm_min / wt_range
                     else:
                         w = log(w) / wt_range
+                    #
+                    
                     mtrx[i][j] = w
-                #
-            #
+                #|endfor
+                
+            #|endfor
+            
         else:
             # Data is from a *.heat file [0, max]. Essentially
             # integers typically ranging between 0 and say 100, though
@@ -1472,48 +1646,61 @@ class HeatMapTools(object):
                         w = 0.3 / wt_range
                     else:
                         w = log(w) / wt_range
+                    #
+                    
                     mtrx[i][j] = w
-                #
-            #
+                    
+                #|endfor
+                
+            #|endfor
+            
         #
+        
         return mtrx, hm_min, hm_max, wt_range
     #
     
     
     def add_boundaryWt(self, N, mtrx, boundaryWt):
         i_min = 0; j_max = N-1
-        #
+        
         if mtrx[i_min][j_max] == 0.0:
             if self.debug_HeatMapTools:
-                print "adjusting borders (%d,%d)" % (i_min, j_max)
+                print ("adjusting borders (%d,%d)" % (i_min, j_max))
             #
+            
             j_max = 0
             i_min = N
             for j in range(N/2, N):
                 for i in range(N/2, -1, -1):
                     if mtrx[i][j] > 0.0:
                         if self.debug_HeatMapTools:
-                            print "ij = ", i, j
+                            print ("ij = ", i, j)
                         #
+                        
                         if i <= i_min and j >= j_max:
                             i_min = i
                             j_max = j
                         #
+                        
                     #
-                #
-            #
-        #
+                    
+                #|endfor
+                
+            #|endfor
+        
         else:
-            print "no need to adjust the location of the border"
+            print ("no need to adjust the location of the border")
+        #
         
         mtrx[i_min][j_max] = boundaryWt
         mtrx[j_max][i_min] = boundaryWt
-        print "Note: Additional weight added to PET cluster, borders at (%d,%d)" \
-            % (i_min, j_max)
+        print ("Note: Additional weight added to PET cluster, borders at (%d,%d)" \
+            % (i_min, j_max))
         flag_check = False #True
         if flag_check:
             sys.exit(0)
         #
+        
         return mtrx, {(i_min, j_max): boundaryWt }
     #
     
@@ -1522,8 +1709,8 @@ class HeatMapTools(object):
         # often postive
         
         if not (optimum == "neg" or optimum == "pos"):
-            print "ERROR: option 'optimum' requires either a 'pos' or 'neg' (default)"
-            print "       Don't know what you want!"
+            print ("ERROR: option 'optimum' requires either a 'pos' or 'neg' (default)")
+            print ("       Don't know what you want!")
             sys.exit(1)
         #
         
@@ -1539,10 +1726,11 @@ class HeatMapTools(object):
                     if mtrx[i][j] < m_min:
                         m_min = mtrx[i][j]
                     #
+                    
                     if mtrx[i][j] > m_max:
                         m_max = mtrx[i][j]
                     #
-                #
+                    
                 else:
                     if not (mtrx[i][j] == 0.0):
                         """                        
@@ -1555,12 +1743,16 @@ class HeatMapTools(object):
                         elements.
                         
                         """
-                        print "ERROR: diagonal element (%d,%d) is not zero!" % (i,j)
+                        print ("ERROR: diagonal element (%d,%d) is not zero!" % (i,j))
                         sys.exit(1)
                     #
+                    
                 #
-            #
-        #
+                
+            #|endfor
+            
+        #|endfor
+        
         wt = m_max - m_min
         
         if optimum == "neg":
@@ -1570,8 +1762,10 @@ class HeatMapTools(object):
         for j in range(0,N):
             for i in range(0,N):
                 mtrx[i][j] /= wt
-            #
-        #
+            #|endfor
+            
+        #|endfor
+        
         return mtrx
     #
 
@@ -1584,7 +1778,7 @@ def convert_to_basic_heatmap(flnm):
     removes any artifacts that are in some heatmaps that were
     generated for visualization and produces the most crude form --
     the heatmap and nothing else.
-
+    
     """
     mtools = HeatMapTools()
     gmtrx = mtools.read_heatmap(flnm, 
@@ -1592,11 +1786,11 @@ def convert_to_basic_heatmap(flnm):
     N        = gmtrx.length
     mtrx     = gmtrx.heatmap
     clusters = gmtrx.clusters
-
+    
     # construct a new file name from the old one
     flhd, ext = getHeadExt(flnm)
     flnm_rev = flhd + "_new." + ext
-    print "new file name: ", flnm_rev
+    print ("new file name: ", flnm_rev)
     
     mtools.write_BscHeatMap(flnm_rev, mtrx, N, "Michal_K")
 #
@@ -1618,25 +1812,29 @@ def get_energydist_histogram(hm, span = 10.0):
                     hm_max = hm[i][j]
                 #
                 
-                if histogram.has_key(k):
+                if k in histogram:
                     histogram[k][0] += 1
                     histogram[k][1] += hm[i][j]
                 else:
                     histogram.update({k : [1, hm[i][j]] })
                 #
+                
             #
-        #
-    #
+            
+        #|endfor
+        
+    #|endfor
 
     hist_range = int(hm_max/span) + 1
     
     for k in range(0, hist_range):
-        if histogram.has_key(k):
+        if k in histogram:
             histogram[k][1] /= float(histogram[k][0])
         #
-    #
+        
+    #|endfor
     
-    print disp_energydist_histogram(histogram, hist_range, span)
+    print (disp_energydist_histogram(histogram, hist_range, span))
     return histogram, span
 #
 
@@ -1645,13 +1843,15 @@ def disp_energydist_histogram(hist, hist_range, span = 10.0):
     s = "energy distribution histogram:\n"
     s += "   energy   counts     average\n"
     for k in range(0, hist_range):
-        if hist.has_key(k):
+        if k in hist:
             s +=  "%8.2f    %4d     %8.2f\n" \
                 % (span*(0.5 + k), hist[k][0], hist[k][1])
         else:
             s += "%8.2f       0\n" % (span*(0.5 + k))
         #
-    #
+        
+    #|endfor
+    
     return s
 #
 
@@ -1664,10 +1864,12 @@ the matrix elements and find the minimum and maximum value.
 """
 def find_minmax(mtrx, N, flag_linear):
     if not N == len(mtrx):
-        print "ERROR: matrix length not matching with proposed size"
-        print "matrix length(%d)  vs N(%d)" % (len(mtrx), N)
+        print ("ERROR: matrix length not matching with proposed size")
+        print ("matrix length(%d)  vs N(%d)" % (len(mtrx), N))
         sys.exit(1)
-    """#
+    #
+    
+    """@
     
     now settle on the data type
     
@@ -1684,11 +1886,16 @@ def find_minmax(mtrx, N, flag_linear):
             
             if w > hm_max:
                 hm_max = w
+            #
+            
             if w < hm_min:
                 hm_min = w
             #
-        #
-    #
+            
+        #|endfor
+        
+    #|endfor
+    
     if flag_linear:
         # In THESE problems, the linear data is in the form of
         # ChIA-PET or Hi-C data and is ALWAYS expressed from 0 to
@@ -1698,6 +1905,8 @@ def find_minmax(mtrx, N, flag_linear):
         # Presently, I use this when I rescale the linear data to
         # logarithmic data.
         wt_range = hm_max - hm_min
+    #
+    
     return hm_min, hm_max, wt_range
 #
 
@@ -1713,6 +1922,7 @@ class CSVmaps(HeatMapTools):
         if self.method == "lin":
             self.cutoff = 1.0 
         #
+        
         self.hm_max     = -100000.0
         self.hm_min     =  100000.0
         self.N          = -1
@@ -1726,9 +1936,9 @@ class CSVmaps(HeatMapTools):
         self.factor = factor
         
         if 0:
-            #print a.disp_matrix(gmtrx.heatmap, N)
+            #print (a.disp_matrix(gmtrx.heatmap, N))
             mn, mx, rng = find_minmax(gmtrx.heatmap, self.N, True)
-            print "min, max, range: ", mn, mx, rng
+            print ("min, max, range: ", mn, mx, rng)
             histogram1, w_min, w_max \
                 = self.make_histogram_maxmin(gmtrx.heatmap,
                                              self.N,
@@ -1747,6 +1957,7 @@ class CSVmaps(HeatMapTools):
         else:
             new_hm = self.reweight_and_scale(gmtrx.heatmap)
         #
+        
         get_energydist_histogram(new_hm, 2.0)
         self.write_BscHeatMap(outflnm, new_hm, self.N, "v0.0")
         
@@ -1769,34 +1980,40 @@ class CSVmaps(HeatMapTools):
                 if hmx[i][j] > self.hm_max:
                     self.hm_max = hmx[i][j]
                 #
+                
                 if hmx[i][j] < self.hm_min:
                     self.hm_min = hmx[i][j]
                 #
-            #
-        #
-        print "after exp reweighting:"
-        print "hm_max: ", self.hm_max
-        print "hm_min: ", self.hm_min
-        print mx, self.factor
+                
+            #|endfor
+            
+        #|endfor
+        
+        print ("after exp reweighting:")
+        print ("hm_max: ", self.hm_max)
+        print ("hm_min: ", self.hm_min)
+        print (mx, self.factor)
         #sys.exit(0)
         
         # now rescale the data to a maximum value scale
         wt = self.scale/self.hm_max
-        print "wt:     ", wt
-        print "cutoff: ", self.cutoff
-        print "scale:  ", self.scale
-        print "factor: ", self.factor
+        print ("wt:     ", wt)
+        print ("cutoff: ", self.cutoff)
+        print ("scale:  ", self.scale)
+        print ("factor: ", self.factor)
         
         for j in range(0,self.N):
             for i in range(0,self.N):
                 hmx[i][j] *= wt
                 hmx[i][j] = float(int( (10.0*hmx[i][j]+0.5)/10.0))
                 if hmx[i][j] < self.cutoff:
-                    # print "cut(%2d,%2d): %10.4g, wt(%.2f)" % (i, j, hmx[i][j], wt)
+                    # print ("cut(%2d,%2d): %10.4g, wt(%.2f)" % (i, j, hmx[i][j], wt))
                     hmx[i][j] = 0.0
                 #
-            #
-        #
+                
+            #|endfor
+            
+        #|endfor
         
         get_energydist_histogram(hmx, 2.0)
         #sys.exit(0)
@@ -1822,16 +2039,19 @@ class CSVmaps(HeatMapTools):
                 if hmx[i][j] > self.hm_max:
                     self.hm_max = hmx[i][j]
                 #
+                
                 if hmx[i][j] < self.hm_min:
                     self.hm_min = hmx[i][j]
                 #
-            #
-        #
+                
+            #|endfor
+            
+        #|endfor
         
         # now rescale the data to a maximum value scale
         
         wt = self.scale/self.hm_max
-        print "wt = ", wt
+        print ("wt = ", wt)
         for j in range(0,self.N):
             for i in range(0,self.N):
                 hmx[i][j] *= wt
@@ -1839,10 +2059,14 @@ class CSVmaps(HeatMapTools):
                 if hmx[i][j] < self.cutoff:
                     hmx[i][j] = 0.0
                 #
-            #
-        #
+                
+            #|endfor
+            
+        #|endfor
+        
         return hmx
     #
+    
 #
 
 
@@ -1867,66 +2091,74 @@ def main(cl):
             k += 1
             if k < n:
                 inflnm = cl[k]
-                print inflnm
+                print (inflnm)
             #
-        if arg == '-fcsv':
+        
+        elif arg == '-fcsv':
             in_option = "format_csv_heatmap_file"
             k += 1
             if k < n:
                 inflnm = cl[k]
-                print inflnm
+                print (inflnm)
             #
             
         elif arg == '-opcsv_weight':
             k += 1
             if k < n:
                 csv_weight = cl[k]
-                print csv_weight
+                print (csv_weight)
             #
+            
         elif arg == '-opcsv_scale':
             k += 1
             if k < n:
                 try:
                     csv_scale = float(cl[k])
                 except:
-                    print "ERROR(HeatMapTools) opcsv_scale requires a float variable"
-                    print "                    (%s) was entered" % cl[k]
+                    print ("ERROR(HeatMapTools) opcsv_scale requires a float variable")
+                    print ("                    (%s) was entered" % cl[k])
                 #
-                print csv_scale
+                
+                print (csv_scale)
             #
+            
         elif arg == '-o':
             out_option = True
             k += 1
             if k < n:
                 outflnm = cl[k]
-                print outflnm
+                print (outflnm)
             #
+            
         elif arg == '-histogram':
             op_hist = True
             in_option = "histogram"
             k += 1
             if k < n:
                 inflnm = cl[k]
-                print inflnm
+                print (inflnm)
             #
+            
         elif arg == '-h' or arg == "--help":
             usage()
             sys.exit(0)
         else:
-            print "unrecognized argument at %d" % k
-            print cl
+            print ("unrecognized argument at %d" % k)
+            print (cl)
             usage()
             sys.exit(1)
         #
+        
         k += 1
     #
+    
     if in_option == "convert_to_basic_hm":
         convert_to_basic_heatmap(inflnm)
-    #
+    
     elif in_option == "format_csv_heatmap_file":
         b = CSVmaps(csv_weight, csv_scale)
         b.process_csv_file(inflnm, outflnm, 100.0)
-    #
+        
     elif op_hist:
         # construct a new file name from the old one
         mtools = HeatMapTools()
@@ -1937,7 +2169,7 @@ def main(cl):
         clusters = gmtrx.clusters
         get_energydist_histogram(gmtrx.heatmap, 2.0)
         mn, mx, rng = find_minmax(gmtrx.heatmap, N, True)
-        print "min(%12.2f), max(%12.2f), range(%12.2f)" % (mn, mx, rng)
+        print ("min(%12.2f), max(%12.2f), range(%12.2f)" % (mn, mx, rng))
     #
     
 #

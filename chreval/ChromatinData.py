@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -10,14 +10,14 @@ Functions:     make_file_heading
 
 Author:        Wayne Dawson
 creation date: mostly 2016 a little bit in 2017 up to March
-last update:   190522
+last update:   200311 (fixed sorting dictionary keys on line 723)
 version:       0
 
 ChromatinData.py 
 
    This is supposed to be a self-contained data object. Not sure if
    it really functions as so, but I was able to decouple it from
-   Anal at least.
+   AnalyzeLoops at least.
 
    The input file is a list of loops formatted according to
    Przemek's approach (with extension 'bed') Teresa's approach
@@ -106,7 +106,7 @@ def make_file_heading(name, bgn, end, bp_resolution):
           
 
 
-class Data:
+class Data(object):
     def __init__(self):
         self.cdata       = {}
         self.chrmsm_grp  = {}
@@ -130,8 +130,8 @@ class Data:
     # makes a key out of the chromosome region specified
     def makekey(self, s):
         if not(len(s) == 3):
-            print "ERROR(makekey): input data does not contain the right number of fields"
-            print "                %s" % s
+            print ("ERROR(makekey): input data does not contain the right number of fields")
+            print ("                %s" % s)
             usage()
             sys.exit(1)
         #
@@ -142,6 +142,62 @@ class Data:
         
         return sp
     #
+    
+    def disp_cdata_head(self, with_hollerith = True):
+        s = ''
+        if not with_hollerith:
+            #   |xxxxx  xxxxxxxxx  xxxxxxxxx
+            s = "#chr   bgn        end      "
+        else:
+            #   |xxxxx xxxxxxxxxx xxxxxxxxxx
+            s = "#chr  bgn        end          "
+        #
+        
+        s += "CTCF1 CTCF2     PET   "
+        
+        v = ["active", "open", "A", "B"]
+        
+        for vk in v:
+            s += "%-8s  " % vk
+        #|endfor
+        
+        s += '\n'
+        
+        return s
+    #
+        
+    def disp_cdata_key(self, ckey, with_hollerith = True):
+        s = ''
+        if ckey in self.cdata:
+            sv_key = "%-30s" % ckey
+            if not with_hollerith:
+                sv = ckey.split('_')
+                sv_key = "%-5s  %9d  %9d" % (sv[0], int(sv[1]), int(sv[2]))
+            #
+            
+            nPET   = self.cdata[ckey].nPET
+            
+            s = sv_key
+            s += "  %s   " % self.cdata[ckey].ctcf1
+            s += "  %s   " % self.cdata[ckey].ctcf2
+            s += "  %4d" % self.cdata[ckey].nPET
+            
+            
+            v = ["active", "open", "A", "B"]
+            for vk in v: 
+                if vk in self.cdata[ckey].state:
+                    s += "    %6.4f" % self.cdata[ckey].state[vk]
+                #
+            #|endfor
+            
+        else:
+            s = "%s not found" % ckey
+        #
+        
+        return s
+    #
+    
+    
     
     def parse_basic_file_name_info(self, flnm):
         # First check the extensions to vet the input
@@ -164,8 +220,8 @@ class Data:
             # shouldn't actually have to call this, but it is here
             # anyway. Never know what bright ideas we have when it is
             # way past midnight.
-            print "ERROR(DATA): unrecognized file type '%s'" % flnm
-            print "accepted file types have extension 'txt' or 'bed'"
+            print ("ERROR(DATA): unrecognized file type '%s'" % flnm)
+            print ("accepted file types have extension 'txt' or 'bed'")
             sys.exit(1)
         #
         
@@ -177,12 +233,13 @@ class Data:
         # be read in principle and were read for the txt files.
         if len(self.ext) > 1:
             if not self.datatype == saved_datatype:
-                print "ERROR: program does not accept mixed file types."
-                print "       Files must have an extension 'txt' or 'bed'"
-                print "       but not both!"
-                print "       current requested extensions: ", self.ext
+                print ("ERROR: program does not accept mixed file types.")
+                print ("       Files must have an extension 'txt' or 'bed'")
+                print ("       but not both!")
+                print ("       current requested extensions: ", self.ext)
                 sys.exit(1)
             #
+            
         #
         
         # Next, we make sure the data types match for all the input
@@ -205,7 +262,8 @@ class Data:
             else:
                 interaction += (xtnsnk + " ")
             #
-        #
+            
+        #|endfor
         
         
         
@@ -226,33 +284,35 @@ class Data:
             else:
                 err_msg += "       + %s does not have sufficient information.\n" % flnm
             #
+            
             if flag_fail: 
-                print "ERROR: unrecognized file type in '%s'" % flnm
-                print "cause: ----"
-                print err_msg
-                print "       'bed' files should look as the following:"
-                print ""
-                print "       examples:"
-                print "       > loops.CTCF_RNAPII.annotated.bed"
-                print "       > structure.loops.GSE6352.annotated.bed"
-                print ""
-                print "       * The 'annotated' label is REQUIRED and should probably"
-                print "         be placed just before the file extension type, but that"
-                print "         is not essential."
-                print ""
-                print "       * The 'CTCF_RNAPII' or 'GSE6352' tag indicates the source"
-                print "         of the data and should probably be there for information,"
-                print "         though again, it is not required."
-                print ""
-                print "       please check your file for accuracy"
+                print ("ERROR: unrecognized file type in '%s'" % flnm)
+                print ("cause: ----")
+                print (err_msg)
+                print ("       'bed' files should look as the following:")
+                print ("")
+                print ("       examples:")
+                print ("       > loops.CTCF_RNAPII.annotated.bed")
+                print ("       > structure.loops.GSE6352.annotated.bed")
+                print ("")
+                print ("       * The 'annotated' label is REQUIRED and should probably")
+                print ("         be placed just before the file extension type, but that")
+                print ("         is not essential.")
+                print ("")
+                print ("       * The 'CTCF_RNAPII' or 'GSE6352' tag indicates the source")
+                print ("         of the data and should probably be there for information,")
+                print ("         though again, it is not required.")
+                print ("")
+                print ("       please check your file for accuracy")
                 sys.exit(1)
             #
+            
         else:
             self.interaction += ["type1"] # nothing else to call it
         #
         
         
-        #
+        
         return True
     #
     
@@ -270,10 +330,11 @@ class Data:
         try:
             fp = open(flnm, 'r')
         except IOError:
-            print "ERROR: cannot open '%s'" % flnm
+            print ("ERROR: cannot open '%s'" % flnm)
             usage()
             sys.exit(1)
         #
+        
         lfp = fp.readlines()
         fp.close()
         
@@ -284,9 +345,10 @@ class Data:
             self.read_ext_bed(lfp, flnm)
         else:
             # shouldn't be here!!!
-            print "ERROR(DATA): problems with readfile(%s)" % flnm
+            print ("ERROR(DATA): problems with readfile(%s)" % flnm)
             sys.exit(1)
         #
+        
         return 0
         
     #
@@ -294,7 +356,7 @@ class Data:
     def read_ext_bed(self, lfp, flnm):
         debug_read_ext_bed = False
         if debug_read_ext_bed:
-            print "read_ext_bed()"
+            print ("read_ext_bed()")
         #
         
         # I think this is getting too crazy, so I have to do some file
@@ -313,12 +375,13 @@ class Data:
         else:
             self.read_ext_bed_data_v0(lfp, flnm)
         #
+        
     #
     
     def read_bed_taglist(self, lfp, flnm):
-        debug_read_ext_bed = False
+        debug_read_ext_bed = False # True # 
         if debug_read_ext_bed:
-            print "read_bed_taglist()"
+            print ("read_bed_taglist()")
         #
         
         """@
@@ -375,7 +438,7 @@ class Data:
         09 chromatin_tags:
         10 chr      bgn      end    lCTCF rCTCF  PETcnt  cmplx1 cmplx2   cmplx3  open             active           A       B
         11 chromatin_data:
-
+        
         """
         
         k = 1
@@ -384,32 +447,44 @@ class Data:
         description = []
         while flag_continue:
             s = lfp[k].strip().split()
-            # print s
+            # print (s)
             if len(s) == 0:
                 k += 1
                 continue
             #
+            
             if s[0][0] == '#': # first element on the line is a comment
                 description += [lfp[k].strip("^#").strip()]
                 k += 1
                 continue
             #
+            
             if s[0] == "chromatin_tags:":
                 k += 1
                 taglist = lfp[k].strip().split()
-                # print "taglist: ", taglist
+                # print ("taglist: ", taglist)
                 k += 1
             #
+            
             if s[0] == "chromatin_data:":
+                # go on to next step
                 k += 1
                 break
             #
+            
             if s[0][:3] == "chr" and not s[0] == "chromatin_tags:":
-                print "ERROR: reading chromosome data before finished reading the tags!"
-                print "       Something is wrong with the file %s" % flnm
+                print ("ERROR: reading chromosome data before finished reading the tags!")
+                print ("       Something is wrong with the file %s" % flnm)
                 sys.exit(1)
             #
             
+        #
+        
+        if debug_read_ext_bed:
+            print ("number of tags: ", k)
+            print ("taglist:    ", taglist)
+            print ("description:", description)
+            #sys.exit(0)
         #
         
         return k, taglist, description
@@ -419,21 +494,24 @@ class Data:
     # versions.
     def read_ext_bed_data_v1(self, lfp, flnm):
         
-        debug_read_ext_bed = False
+        debug_read_ext_bed = False # True # 
         if debug_read_ext_bed:
-            print "read_ext_bed_data_v1()"
+            print ("read_ext_bed_data_v1()")
         #
         
-        print "scanning %s...." % flnm
+        print ("scanning %s...." % flnm)
         
         dtbgn, taglist, description = self.read_bed_taglist(lfp, flnm)
         self.taglist += [taglist]
         self.description += [description]
-
-        # print dtbgn
-        # print self.taglist
-        # print self.description
-
+        
+        if debug_read_ext_bed:
+            print ("dtbgn line no: ", dtbgn)
+            print ("taglist:       ", self.taglist)
+            print ("description:   ", self.description)
+            #sys.exit(0)
+        #
+        
         """@
         
         this obtains the tags below
@@ -448,18 +526,24 @@ class Data:
         16 chr15 25939090 26179721  R      L       7      1       -2      1      0.0750069608654  0.0585419168769 1.0     0.0
         """
         
-        #  
+        
         name = ''    # name of the chromosome
         bgn = -1     # beginning locus on the chromosome
         end = -1     # ending locus on the chromosome
-        #
+        
         
         
         for k in range(dtbgn, len(lfp)):
             s = lfp[k].strip().split()
-            # print s
+            # print (s)
+            if len(s) == 0:
+                continue
+            #
+            
             if s[0][0] == '#': # first element on the line is a comment
                 continue
+            #
+            
             kky = self.makekey(s[0:3])
             
             # chrmtn = Chromatin: this is assigned in assign_bed_tags()
@@ -467,25 +551,28 @@ class Data:
             name = chrmtn.name
             bgn  = chrmtn.bgn
             end  = chrmtn.end
-            # print chrmtn.disp_data()
+            # print (chrmtn.disp_data())
             
             # create a new dictionary entry if the key is new
-            if not self.cdata.has_key(kky):
+            if not kky in self.cdata:
                 self.cdata.update({ kky : chrmtn })
                 
-                if not self.chrmsm_grp.has_key(name):
+                if not name in self.chrmsm_grp:
                     self.chrmsm_grp.update( { name: Chromosome(name, bgn, end) } )
                 else:
                     self.chrmsm_grp[name].add_chrsegment(bgn, end)
+                #
+                
             #
             
-            
-        #
+        #|endfor
+        
         if debug_read_ext_bed:
             self.display_Data(False)
-            print "finished read_ext_bed"
+            print ("finished read_ext_bed_data_v1")
             sys.exit(0)
         #
+        
     #
     
     
@@ -497,13 +584,13 @@ class Data:
         # prior versions
         # ##############################
         
-        debug_read_ext_bed = False
+        debug_read_ext_bed = True # False # 
         if debug_read_ext_bed:
-            print "read_ext_bed_data_v0()"
+            print ("read_ext_bed_data_v0()")
         #
         
-        print "scanning %s...." % flnm
-
+        print ("scanning %s...." % flnm)
+        
         """@
         
         version 0 formats
@@ -534,12 +621,13 @@ class Data:
         """
         
         if len(self.ext) > 1:
-            print "SORRY: The file '%s' is version 0 type 'bed' file." % flnm
-            print ""
-            print "        Unfortunately, these version 0 files cannot be input "
-            print "        as a group. You can only read them one at a time."
+            print ("SORRY: The file '%s' is version 0 type 'bed' file." % flnm)
+            print ("")
+            print ("        Unfortunately, these version 0 files cannot be input ")
+            print ("        as a group. You can only read them one at a time.")
             sys.exit(1)
         #
+        
         nn = len(lfp[0].strip().split())
         if nn == 9:
             self.taglist = [['chr', 'bgn', 'end', 'lCTCF', 'rCTCF', 'PETcnt', 'cmplx1', 'open', 'active']]
@@ -551,9 +639,11 @@ class Data:
         kk = 0
         for lfpk in lfp:
             s = lfpk.strip().split()
-            # print s
+            # print (s)
             if s[0][0] == '#': # first element on the line is a comment
                 continue
+            #
+            
             kky = self.makekey(s[0:3])
             
             
@@ -578,29 +668,32 @@ class Data:
                 # integer. So what _is_ this variable?
                 if string.isFloat(s[3]):
                     nPET  = float(s[3])
-                    # print "set float"
+                    # print ("set float")
                 else:
                     nPET  = int(s[3])
-                    # print "set int"
+                    # print ("set int")
                 #
+                
                 cmplx = [int(s[4]), int(s[5]), int(s[6])]
                 popen  = float(s[7])
                 pactv  = float(s[8])
+                
             else:
-                print "ERROR: unrecognized structure of 'bed' file '%s'" % flnm
+                print ("ERROR: unrecognized structure of 'bed' file '%s'" % flnm)
                 sys.exit(1)
             #
-            #
             
             
             
-            if not self.cdata.has_key(kky):
+            if not kky in self.cdata:
                 self.cdata.update({ kky : Chromatin(name, bgn, end, ctcf1, ctcf2, nPET, cmplx) })
                 
-                if not self.chrmsm_grp.has_key(name):
+                if not name in self.chrmsm_grp:
                     self.chrmsm_grp.update( { name: Chromosome(name, bgn, end) } )
                 else:
                     self.chrmsm_grp[name].add_chrsegment(bgn, end)
+                #
+                
             #
             
             
@@ -614,13 +707,17 @@ class Data:
                     self.display_Data(True)
                     sys.exit(0)
                 #
+                
             #
-        #
+            
+        #|endfor
+        
         if debug_read_ext_bed:
             self.display_Data(False)
-            print "finished read_ext_bed"
+            print ("finished read_ext_bed_data_v0")
             sys.exit(0)
         #
+        
     #
     
     
@@ -628,6 +725,7 @@ class Data:
     # read file formats that Teresa set up. This was the initial set
     # of data.
     def read_ext_txt(self, lfp, flnm):
+        debug_read_ext_txt = False # True # 
         # file format:
         
         self.taglist += [['chr', 'bgn', 'end', 'lCTCF', 'open', 'active', 'repressed', 'A', 'B']]
@@ -658,14 +756,16 @@ class Data:
             kky = self.makekey(s[0:3])
             name = s[0]
             
-            if not self.cdata.has_key(kky):
+            if not kky in self.cdata:
                 c_bgn = int(s[1])
                 c_end = int(s[2])
                 self.cdata.update({ kky : Chromatin(s[0], c_bgn, c_end) })
-                if not self.chrmsm_grp.has_key(name):
+                if not name in self.chrmsm_grp:
                     self.chrmsm_grp.update( { name: Chromosome(name, c_bgn, c_end) } )
                 else:
                     self.chrmsm_grp[name].add_chrsegment(c_bgn, c_end)
+                #
+                
             #
             
             
@@ -673,9 +773,13 @@ class Data:
             l_end   = int(s[5])
             l_state = s[6]
             self.cdata[kky].add_segments(l_bgn, l_end, l_state)
+        #|endfor
+        
+        if debug_read_ext_txt:
+            self.display_Data(False)
+            sys.exit(0)
         #
-        # self.display_Data(False)
-        # sys.exit(0)
+        
     #
     
     
@@ -683,13 +787,13 @@ class Data:
     
     
     def display_Data(self, show_all = False):
-        # print "keys: ", self.cdata.keys()
+        # print ("keys: ", self.cdata.keys())
         keylist = self.cdata.keys()
         if len(self.keylist) > 0:
-            print " using ordered keylist"
+            print (" using ordered keylist")
             keylist = self.keylist
         #
-            
+        
         for ky in keylist:
             
             # this now shows that I can extract whatever datapoint I
@@ -698,29 +802,33 @@ class Data:
             # needs.
             
             if not show_all:
-                print "total number of segments: ", len(self.cdata[ky].segments)
+                print ("total number of segments: ", len(self.cdata[ky].segments))
             #
+            
             for seg in self.cdata[ky].segments:
                 if show_all:
-                    print "%4d  %s | %s  %s" \
+                    print ("%4d  %s | %s  %s" \
                         % (len(self.cdata[ky].segments), \
                            self.cdata[ky].disp_head(), \
-                           seg.disp(), self.cdata[ky].state)
+                           seg.disp(), self.cdata[ky].state))
                 else:
-                    print "%4d  %s | %s" \
+                    print ("%4d  %s | %s" \
                         % (len(self.cdata[ky].segments), \
                            self.cdata[ky].disp_head(), \
-                           seg.disp())
+                           seg.disp()))
                     break # just show the first segment
                 #
-            #
-        #
-        print "length of the dataset: ", len(self.cdata)
+                
+            #|endfor
+            
+        #|endfor
+        
+        print ("length of the dataset: ", len(self.cdata))
     #
     
     def ordered_keylist(self):
-        print "length of the dataset: ", len(self.cdata)
-        self.keylist = self.ins_sort_keys(self.cdata.keys())
+        print ("length of the dataset: ", len(self.cdata))
+        self.keylist = self.ins_sort_keys(list(self.cdata.keys()))
         return self.keylist
     #
     
@@ -735,73 +843,87 @@ class Data:
         chr_len = float(self.cdata[ky].end - self.cdata[ky].bgn)
         
         for seg in self.cdata[ky].segments:
-            #
+            
             if seg.state == 'open':
                 seg = self.check_range(ky, seg)
                 s_open += [seg]
                 if self.debug_Data:
-                    print "%4d  %s | %s" %(len(self.cdata[ky].segments), self.cdata[ky].disp_head(), seg.disp())
+                    print ("%4d  %s | %s" %(len(self.cdata[ky].segments), self.cdata[ky].disp_head(), seg.disp()))
                 #
+                
             #
             
+            # wonder why it is not elif, but I guess they are mutually
+            # exclusive.
             if seg.state == 'active':
                 seg = self.check_range(ky, seg)
                 s_active += [seg]
                 if self.debug_Data:
-                    print "%4d  %s | %s" %(len(self.cdata[ky].segments), self.cdata[ky].disp_head(), seg.disp())
+                    print ("%4d  %s | %s" %(len(self.cdata[ky].segments), self.cdata[ky].disp_head(), seg.disp()))
                 #
+                
             #
+
+            # ditto
             if seg.state == 'repressed':
                 seg = self.check_range(ky, seg)
                 s_repressed += [seg]
                 if self.debug_Data:
-                    print "%4d  %s | %s" %(len(self.cdata[ky].segments), self.cdata[ky].disp_head(), seg.disp())
+                    print ("%4d  %s | %s" %(len(self.cdata[ky].segments), self.cdata[ky].disp_head(), seg.disp()))
                 #
+                
             #
+            
+            # ditto
             if seg.state == 'A':
                 seg = self.check_range(ky, seg)
                 s_A += [seg]
                 if self.debug_Data:
-                    print "%4d  %s | %s" %(len(self.cdata[ky].segments), self.cdata[ky].disp_head(), seg.disp())
+                    print ("%4d  %s | %s" %(len(self.cdata[ky].segments), self.cdata[ky].disp_head(), seg.disp()))
                 #
+                
             #
+            
+            # ditto
             if seg.state == 'B':
                 seg = self.check_range(ky, seg)
                 s_B += [seg]
                 if self.debug_Data:
-                    print "%4d  %s | %s" %(len(self.cdata[ky].segments), self.cdata[ky].disp_head(), seg.disp())
+                    print ("%4d  %s | %s" %(len(self.cdata[ky].segments), self.cdata[ky].disp_head(), seg.disp()))
                 #
+                
             #
-        #
+            
+        #|endfor
         
         
         p_active    = self.process_segs(s_active, chr_len)
         if p_active > 1.0:
-            print "%s     %10d" % (self.cdata[ky].disp_head(), int(chr_len))
+            print ("%s     %10d" % (self.cdata[ky].disp_head(), int(chr_len)))
             sys.exit(1)
         #
         
         p_open      = self.process_segs(s_open, chr_len)
         if p_open > 1.0:
-            print "%s     %10d" % (self.cdata[ky].disp_head(), int(chr_len))
+            print ("%s     %10d" % (self.cdata[ky].disp_head(), int(chr_len)))
             sys.exit(1)
         #
         
         p_repressed = self.process_segs(s_repressed, chr_len)
         if p_repressed > 1.0:
-            print "%s     %10d" % (self.cdata[ky].disp_head(), int(chr_len))
+            print ("%s     %10d" % (self.cdata[ky].disp_head(), int(chr_len)))
             sys.exit(1)
         #
         
         p_A         = self.process_segs(s_A, chr_len)
         if p_A > 1.0:
-            print "%s     %10d" % (self.cdata[ky].disp_head(), int(chr_len))
+            print ("%s     %10d" % (self.cdata[ky].disp_head(), int(chr_len)))
             sys.exit(1)
         #
         
         p_B         = self.process_segs(s_B, chr_len)
         if p_B > 1.0:
-            print "%s     %10d" % (self.cdata[ky].disp_head(), int(chr_len))
+            print ("%s     %10d" % (self.cdata[ky].disp_head(), int(chr_len)))
             sys.exit(1)
         #
         
@@ -828,7 +950,7 @@ class Data:
         chrxb = self.cdata[ky].bgn
         chrxe = self.cdata[ky].end
         
-        #
+        
         sbgn = seg.bgn; sbgno = seg.bgn
         send = seg.end; sendo = seg.end
         if seg.bgn < chrxb:
@@ -845,41 +967,57 @@ class Data:
             flag_clash12 = True
             seg.end = chrxe
         #
+        
         if seg.end < chrxb:
             flag_clash22 = True
         #
         
         chr_len = self.cdata[ky].end - self.cdata[ky].bgn
         if flag_clash11 or flag_clash12:
-            print "WARNING! %s   range(%10d)  seg: %10d  %10d len(%10d)  state(%s)" \
-                % (self.cdata[ky].disp_head(), chr_len, seg.bgn, seg.end, seg.end - seg.bgn, seg.state), sbgn, send
+            print ("WARNING! %s   range(%10d)  seg: %10d  %10d len(%10d)  state(%s)" \
+                % (self.cdata[ky].disp_head(), chr_len, seg.bgn, seg.end, seg.end - seg.bgn, seg.state), sbgn, send)
             s = ''
             if flag_clash11:
-                s += "clash at beginning: " 
+                s += "clash at beginning: "
+            #
+            
             if flag_clash12:
                 s += "clash at ending:    "
+            #
+            
             files = ''
             for fk in range(0, len(self.flhd)):
                 files += "%s.%s " % (self.flhd[fk], self.ext[fk])
+            #|endfor
+            
             s += "segment(%10d to %10d) vs chr(%10d to %10d), in files [ %s]" % (sbgno, sendo, chrxb, chrxe, files)
-            print s
+            print (s)
+            
         #
+        
         if flag_clash21 or flag_clash22:
-            print "ERROR!   %s   range(%10d)  seg: %10d  %10d len(%10d)  state(%s)" \
-                % (self.cdata[ky].disp_head(), chr_len, seg.bgn, seg.end, seg.end - seg.bgn, seg.state), sbgn, send
-            print "incompatibility of data"
+            print ("ERROR!   %s   range(%10d)  seg: %10d  %10d len(%10d)  state(%s)" \
+                % (self.cdata[ky].disp_head(), chr_len, seg.bgn, seg.end, seg.end - seg.bgn, seg.state), sbgn, send)
+            print ("incompatibility of data")
             s = ''
             if flag_clash21:
                 s += "segment begins after the end:     "
+            #
+            
             if flag_clash22:
                 s += "segment ends after the beginning: "
+            #
+            
             files = ''
             for fk in range(0, len(self.flhd)):
                 files += "%s.%s " % (self.flhd[fk], self.ext[fk])
+            #
+            
             s += "segment(%10d to %10d) vs chr(%10d to %10d), in file [ %s]" % (sbgno, sendo, chrxb, chrxe, files)
-            print s
+            print (s)
             sys.exit(1)
         #
+        
         return seg
     #
     
@@ -891,7 +1029,11 @@ class Data:
             j = i                    
             while j > 0 and seg[j].bgn < seg[j-1].bgn: 
                 seg[j], seg[j-1] = seg[j-1], seg[j] 
-                j=j-1 
+                j=j-1
+            #|endwhile
+            
+        #|endfor
+        
         return seg
     #
     
@@ -900,12 +1042,20 @@ class Data:
     
     
     def ins_sort_keys(self, kky):
-        for i in range(1,len(kky)):    
+        lkky = list(kky) # kky is a dictionary 
+        
+        # 200219: It turns out that I could have been using
+        # OrderedDict, but at the time I wrote this, I didn't know
+        # about it. So, presently, this is how I am doing it.
+        for i in range(1,len(lkky)):    
             j = i                    
-            while j > 0 and kky[j] < kky[j-1]: 
-                kky[j], kky[j-1] = kky[j-1], kky[j] 
-                j=j-1 
-        return kky
+            while j > 0 and lkky[j] < lkky[j-1]: 
+                lkky[j], lkky[j-1] = lkky[j-1], lkky[j] 
+                j=j-1
+            #|endwhile
+            
+        #endfor
+        return lkky
     #
     
     
@@ -916,7 +1066,9 @@ class Data:
         segs = self.ins_sort_segs(segs)
         if self.debug_Data:
             for ss in segs:
-                print "%10d  %10d" % (ss.bgn, ss.end)
+                print ("%10d  %10d" % (ss.bgn, ss.end))
+            #|endfor
+            
             # sys.exit(0)
         #
         
@@ -925,17 +1077,20 @@ class Data:
         
         for j in range(0, len(segs)-1):
             if segs[j+1].bgn < segs[j].end:
-                print "WARNING resetting: (%10d, [%10d)|(%10d], %10d)"\
-                    % (segs[j].bgn, segs[j].end, segs[j+1].bgn, segs[j+1].end)
+                print ("WARNING resetting: (%10d, [%10d)|(%10d], %10d)"\
+                    % (segs[j].bgn, segs[j].end, segs[j+1].bgn, segs[j+1].end))
                 segs[j+1].bgn = segs[j].end + 1
                 sys.exit(0) # presently, stop if there are problems!!!
             #
-        #
+            
+        #|endfor
         
         # calculate the fractional percentage of overlap 
         n = 0
         for j in range(0, len(segs)):
             n += segs[j].end - segs[j].bgn
+        #|endfor
+        
         p = float(n)/chr_len
         
         return p 
@@ -953,17 +1108,19 @@ def main(cl):
     
     dt = Data()
     files = CL.f_activity
-    print files
+    print (files)
     
     
     for f in files:
         if os.path.exists(f):
             dt.readfile(f)
         else:
-            print "ERROR: cannot open %s; the file missing" % f
+            print ("ERROR: cannot open %s; the file missing" % f)
             sys.exit(1)
         #
-    #
+        
+    #|endfor
+    
     dt.ordered_keylist() # make an ordered list in terms of chromosome
                          # number and region
     dt.display_Data(False)

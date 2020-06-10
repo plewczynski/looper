@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -13,7 +13,7 @@ Functions:     LThread2ChPair
 
 Author:        Wayne Dawson
 creation date: parts 2016, made into a separate object 170314
-last update:   180719
+last update:   2002010 (some minor format adjustments, upgrade to python3)
 version:       0
 
 Purpose:
@@ -65,7 +65,7 @@ def LThread2ChPair(lt, title = "undefined"):
             CPData.data += [ChPair(i,j,ctp,btp,dG)]
         #
         
-    #
+    #|endfor
     
     return CPData
 #
@@ -93,9 +93,9 @@ def shuffle_ChPairData(CPData):
         flag_match = True
         ll = 0
         while flag_match:
-            if not ctp == 'W' and (used.has_key(i) or used.has_key(j)):
+            if not ctp == 'W' and ((i in used) or (j in used)):
                 if debug_shuffle_ChPairData:
-                    print "reassign: i,j: ", i, j
+                    print ("reassign: i,j: ", i, j)
                 #
                 
                 k = int(random.uniform(v_floor, v_ceil)) # (no  int(x + 0.5))
@@ -103,13 +103,14 @@ def shuffle_ChPairData(CPData):
                 
             else:
                 if debug_shuffle_ChPairData:
-                    print "W: i,j: ", i, j
+                    print ("W: i,j: ", i, j)
                 #
                 
                 flag_match = False
             #
             
-        #
+        #|endwhile
+        
         used.update({ i : True }); used.update({ j : True })
         if not ctp == 'W':
             ctp = 'B'; btp = '-'
@@ -117,7 +118,8 @@ def shuffle_ChPairData(CPData):
         
         newdata +=  [ChPair(i, j, ctp, btp, dG)]
     
-    #
+    #|endfor
+    
     nCPData.data = newdata
     return nCPData
 #
@@ -152,7 +154,7 @@ class ChPair(object):
 #
 
 
-class ChPairData:
+class ChPairData(object):
     def __init__(self):
         self.data  = []
         self.sqlen = -1
@@ -174,19 +176,19 @@ class ChPairData:
     #
     
     def put_sqlen(self, n):
-        print "got to here"
+        print ("got to here")
         if isinstance( n, int ):
             self.sqlen = n
             self.set_sqlen = True
         else:
-            print "ERROR: input sequence length type is not a POSITIVE integer"
-            print "       variable: '%s'" % n
+            print ("ERROR: input sequence length type is not a POSITIVE integer")
+            print ("       variable: '%s'" % n)
             sys.exit(1)
         #
         
         if n <= 0:
-            print "ERROR: input sequence length type is not a POSITIVE integer"
-            print "       variable: '%s'" % n
+            print ("ERROR: input sequence length type is not a POSITIVE integer")
+            print ("       variable: '%s'" % n)
             sys.exit(1)
         #
         
@@ -201,12 +203,14 @@ class ChPairData:
         debug_read_ChPairFile = False
         #self.reset_ChPairData()
         if debug_read_ChPairFile:
-            print "input filename: ", iflnm
+            print ("input filename: ", iflnm)
         #
+        
         if not os.path.isfile(iflnm):
-            print "ERROR: %s not found" % iflnm
+            print ("ERROR: %s not found" % iflnm)
             sys.exit(1)
         #
+        
         fp = open(iflnm, 'r')
         lfp = fp.readlines()
         fp.close()
@@ -218,6 +222,8 @@ class ChPairData:
             if len(s) > 0:
                 if s[0][0] == '#':
                     continue
+                #
+                
                 if len(s) == 5:
                     try:
                         i   = int(s[0])
@@ -226,25 +232,33 @@ class ChPairData:
                         btp = s[3]
                         dG  = float(s[4])
                     except ValueError:
-                        print "ERROR: read in data is not recognizable"
+                        print ("ERROR: read in data is not recognizable")
                         sys.exit(0)
                     #
+                    
                     if debug_read_ChPairFile:
-                        print s
+                        print (s)
                     #
+                    
                     self.data += [ChPair(i, j, ctp, btp, dG)]
-                    #
+                    
                     if j > jmax:
                         jmax = j
+                    #
+                    
                 else:
-                    print "ERROR: input file '%s' has too many entries. "
-                    print "       I don't understand it." % iflnm
-                    print "       line(%d): " % k, s
+                    print ("ERROR: input file '%s' has too many entries. " % iflnm)
+                    print ("       I don't understand it." )
+                    print ("       line(%d): " % k, s)
                     sys.exit(1)
                 #
+                
             #
-        #
+            
+        #|endfor
+        
         self.info_in_ChPair(lfp, jmax, iflnm)
+        
     #
     
     def info_in_ChPair(self, lfp, jmax, iflnm):
@@ -252,6 +266,7 @@ class ChPairData:
         if self.set_sqlen:
             flag_set_N = True
         #
+        
         k = 0
         ll = len(lfp)-1
         while not flag_set_N and k < ll:
@@ -262,81 +277,93 @@ class ChPairData:
                         try:
                             self.sqlen = int(ss[2])
                         except ValueError:
-                            print "ERROR: stored sequence length is not an integer"
-                            print "       N = '%s'??" % ss[2]
+                            print ("ERROR: stored sequence length is not an integer")
+                            print ("       N = '%s'??" % ss[2])
                             sys.exit(1)
                         except IndexError:
-                            print "ERROR: missing sequence length data in file %s!" % iflnm
+                            print ("ERROR: missing sequence length data in file %s!" % iflnm)
                             sys.exit(1)
                         #
+                        
                     #
+                    
                     flag_set_N = True
+                    
                 elif ss[1] == 'dG':
                     try:
                         self.dG = float(ss[2])
                     except ValueError:
-                        print "ERROR: recorded total free energy is not a float"
-                        print "       dG = '%s'??" % ss[2]
+                        print ("ERROR: recorded total free energy is not a float")
+                        print ("       dG = '%s'??" % ss[2])
                         sys.exit(1)
                     except IndexError:
-                        print "ERROR: missing free energy data in file %s!" % iflnm
+                        print ("ERROR: missing free energy data in file %s!" % iflnm)
                         sys.exit(1)
                     #
+                    
                 elif ss[1] == 'TdS':
                     try:
                         self.TdS = float(ss[2])
                     except ValueError:
-                        print "ERROR: recorded total TdS weight is not a float"
-                        print "       TdS = '%s'??" % ss[2]
+                        print ("ERROR: recorded total TdS weight is not a float")
+                        print ("       TdS = '%s'??" % ss[2])
                         sys.exit(1)
                     except IndexError:
-                        print "ERROR: missing TdS weight data in file %s!" % iflnm
+                        print ("ERROR: missing TdS weight data in file %s!" % iflnm)
                         sys.exit(1)
                     #
+                    
                 elif ss[1] == 'p':
                     try:
                         self.p = float(ss[2])
                     except ValueError:
-                        print "ERROR: recorded Boltzmann probability is not a float"
-                        print "       p = '%s'??" % ss[2]
+                        print ("ERROR: recorded Boltzmann probability is not a float")
+                        print ("       p = '%s'??" % ss[2])
                         sys.exit(1)
                     except IndexError:
-                        print "ERROR: missing Boltzmann probability in file %s!" % iflnm
+                        print ("ERROR: missing Boltzmann probability in file %s!" % iflnm)
                         sys.exit(1)
                     #
+                    
                 elif k == 0:
                     if len(ss) > 1:
                         self.cpdtitle = ss[1]
                     else:
                         self.cpdtitle = "None"
                     #
+                    
                 #
-            #        
+                
+            #
+            
             k += 1
-        #
+        #|endwhile
+        
         if not flag_set_N:
                 
-            print "cannot find the length of the sequence in %s" % iflnm
+            print ("cannot find the length of the sequence in %s" % iflnm)
             flhd, ext = getHeadExt(iflnm)
-            #
-            print "flhd = ", flhd
+            
+            print ("flhd = ", flhd)
             altflnm = flhd + ".DBN"
-            print altflnm
+            print (altflnm)
             if os.path.exists(altflnm):
                 ffp = open(altflnm, 'r')
                 lffp = ffp.readlines()
                 ffp.close()
-                print len(lffp[1])
+                print (len(lffp[1]))
                 self.sqlen = len(lffp[1])
-                print "found length: %d" % N
+                print ("found length: %d" % N)
             else:
-                print "WARNING: could not find any length information with "
-                print "         this simple algorithm. Using the maximum "
-                print "         from the list." 
+                print ("WARNING: could not find any length information with ")
+                print ("         this simple algorithm. Using the maximum ")
+                print ("         from the list." )
                 self.sqlen = jmax
             #
+            
         #
-        print "title: ", self.cpdtitle
+        
+        print ("title: ", self.cpdtitle)
         # sys.exit(0)
         return self.sqlen
     #
@@ -370,19 +397,21 @@ class ChPairData:
         s += '#  i     j    ctp   btp       dG\n'
         for dtk in self.data:
             s += dtk.disp_ChPair()
-        #
+        #|endfor
+        
         if not flnm == "Not_to_be_saved_to_a_file":
             try:
                 fp = open(flnm, 'w')
             except IOError:
-                print "ERROR: cannot open %s" % flnm
+                print ("ERROR: cannot open %s" % flnm)
                 sys.exit(1)
             fp.write(s)
             fp.close()
         else:
-            print s
+            print (s)
             
         #
+        
         return s
     #
 #
@@ -393,14 +422,14 @@ class ChPairData:
 # ###########################
 
 def main(cl):
-    print cl
+    print (cl)
     if len(cl) > 1:
         iflnm = cl[1]
         dt = ChPairData()
         dt.read_ChPairFile(iflnm)
-        print dt.disp_ChPairData(dt.data)
+        print (dt.disp_ChPairData(dt.data))
     else:
-        print "nothing to do"
+        print ("nothing to do")
     #
     
 #
@@ -408,4 +437,4 @@ def main(cl):
 # Main
 if __name__ == '__main__':
     main(sys.argv)
-
+#

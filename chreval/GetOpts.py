@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -8,7 +8,7 @@ Classes:       GetOpts
 
 Author:        Wayne Dawson
 creation date: mostly 2016, some developments in 2017.
-last update:   180709
+last update:   200311 minor adjustments for analyze_loops, etc.
 version:       0
 
 Purpose:
@@ -31,15 +31,9 @@ sys.argv within this module for argparse to function properly.
 
 """
 
-__VERSION__ = "-- version 0.1 190708"
-#__version_info__ = ('2013','03','14')
-#__version__ = '-'.join(__version_info__)        
-
 
 import sys
 from FileTools import FileTools
-
-
 import argparse
 
 # ################################################################
@@ -73,6 +67,13 @@ from ChrConstants import set_dangles     # dangle parameter (always = 2)
 # locked ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 from ChrConstants import dG_range        # FE range in suboptimal structures
 
+from CVersion import get_now
+from CVersion import get_Version
+from CVersion import get_lastUpdate
+
+# program processing routines
+from SettingsPacket import InputSettings
+
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 # ################################################################
 # ################################################################
@@ -88,7 +89,7 @@ set_ddG_range  = 2.0 # [kcal/mol] similarity in delta(dG)
 
 
 
-class GetOpts(object):
+class GetOpts(InputSettings):
     """@
     
     Reads the command line arguments for the suit of programs
@@ -100,12 +101,24 @@ class GetOpts(object):
     # whether it is a number or a string must be decided elsewhere.
     
     def __init__(self, program):
+
+        InputSettings.__init__(self, "Chromatin")   # inherit InputSettings
+        
+        self.source = "GetOpts"
+        self.program = program
+        self.system  = "Chromatin"
+        
+        # we're able to update the information to this extent at least
+        self.molsys.set_JobType("prediction")
+        
+        
         # reading command line using argparse.parser
         self.debug_GetOpts = False
         if self.debug_GetOpts:
-            print "program: ", program
+            print ("program: ", program)
         #
-        self.source = "GetOpts"
+        
+        
         self.f_heatmap   = ''
         self.f_activity  = ''
         self.f_output    = ''
@@ -156,6 +169,9 @@ class GetOpts(object):
         self.p_all_1D    = False # only print max 50 1D files
         
         
+        self.use_eheat   = False # read in *.eheat files instead of *.heat
+        
+        
         self.parser = None
         args = None
         self.parser = self.setup_parser(program)
@@ -176,12 +192,13 @@ class GetOpts(object):
                                      dest='testprog', 
                                      help='For testing %s with different programs.' % program)
             #
+            
             args = self.parser.parse_args()
             program = args.testprog
         else:
             args = self.parser.parse_args()
         #
-
+        
         # ############################################################
         # now evaluate the input data and assign appropriate variables
         # ############################################################
@@ -192,23 +209,27 @@ class GetOpts(object):
         # extensions ok?
         self.EXTS = {}
         self.EXTS.update({'chreval.py' : ["heat", "eheat"]}) # allowed for chreval.py
-        self.EXTS.update({'anal_loops.py'    : ["bed", "txt"] })
-        # both "bed" and "txt" extensions are allowed for anal_loops.py
-        self.EXTS.update({'anal_CTCFs.py'    : ["bed"] })
+        self.EXTS.update({'analyze_loops.py'    : ["bed", "txt"] })
+        # both "bed" and "txt" extensions are allowed for analyze_loops.py
+        self.EXTS.update({'assemble_heatmaps_and_CCDs.py'    : ["bed"] })
+        
         # This is still in planning. Anyway, the "txt" files lack
         # sufficient information on the orientation of the loops, so I
-        # only allow the bed files.
+        # only allow the bed files. In fact, I am not convinced that
+        # this is used with GetOpts.
+        
         self.EXTS.update({'GetOpts.py' : ["heat", "data", "bed", "txt"] }) # allowed
+        
         # all programs presently "data" is not used for chreval but
         # both "bed" (Przemek format) and "txt" (Teresa)
         
         self.check_list(program, self.EXTS)
         self.program       = program
         self.allowed_extns = self.EXTS[program]
-        #
+        
         if self.debug_GetOpts:
-            print self.allowed_extns
-            print self.EXTS
+            print (self.allowed_extns)
+            print (self.EXTS)
         #
         
         # information on input files
@@ -218,30 +239,34 @@ class GetOpts(object):
         
         
         if self.program == 'chreval.py':
+            
             self.f_heatmap = args.f_heatmap
+            #print (self.f_heatmap)
             self.check_extensions(self.f_heatmap)
-        elif self.program == 'anal_loops.py':
+            
+        elif self.program == 'analyze_loops.py':
             self.f_activity = args.f_activity
             self.check_extensions(self.f_activity)
             self.f_output   = args.f_output
-        elif self.program == 'anal_CTCFs.py':
+        elif self.program == 'assemble_heatmaps_and_CCDs.py':
             self.f_activity = args.f_activity
             self.f_output   = args.f_output
             self.check_extensions(self.f_activity)
         elif self.program == 'GetOpts.py':
             self.f_activity = args.f_activity
-            self.f_heatmap = args.f_heatmap
+            self.f_heatmap  = args.f_heatmap
             self.f_output   = args.f_output
-            print "file listings"
-            print "anal:     ", self.f_activity
-            print "chreval:  ", self.f_heatmap
-            print "out flnm: ", self.f_output
+            print ("file listings")
+            print ("anal:     ", self.f_activity)
+            print ("chreval:  ", self.f_heatmap)
+            print ("out flnm: ", self.f_output)
             self.check_extensions(self.f_activity)
             self.check_extensions(self.f_heatmap)
         else:
             emsg = "ERROR: undefined program"
             self.error(emsg)
         #
+        
         # this sets [flnm], [flhd], and [ext]
         
         # output option
@@ -331,7 +356,7 @@ class GetOpts(object):
             # used "isinstance" because PET_wt is defined as "None" in
             # option input
             
-            # print "setting add_PET_wt"
+            # print ("setting add_PET_wt")
             self.add_PET_wt = True
             self.PETwt      = args.PET_wt
         #
@@ -369,14 +394,19 @@ class GetOpts(object):
         if isinstance(args.rescale_wt, float):
             self.rescale_wt  = args.rescale_wt
         #
+        
         # Nenski data
         self.from_Nenski   = args.from_Nenski
         
         
-        if self.program == "anal_loops.py" or \
-           self.program == "anal_CTCFs.py" or \
+        if self.program == "analyze_loops.py" or \
+           self.program == "assemble_heatmaps_and_CCDs.py" or \
            self.program == "GetOpts.py":
-            # options associated with anal_loops or anal_CTCFs
+            # options associated with analyze_loops or
+            # assemble_heatmaps_and_CCDs
+            
+            self.use_eheat     = args.use_eheat # use the *.eheat file
+            
             self.basic         = args.basic 
             self.hamming       = args.hamming
             self.similarity    = args.similarity
@@ -423,6 +453,7 @@ class GetOpts(object):
                 self.TdS        = False 
                 self.ddG        = False
             #
+            
         #
         
         self.set_GetOpts   = True
@@ -444,11 +475,14 @@ class GetOpts(object):
                 flag_has_key = True
                 break
             #
-        #
+            
+        #|endfor
+        
         if not flag_has_key:
             emsg = "ERROR: no program of name '%s' on record." % program
             self.error(emsg)
         #
+        
         return flag_has_key
     #
     
@@ -470,13 +504,13 @@ class GetOpts(object):
         parser.add_argument('-xi',  action='store', default=xi,
                             dest='xi', type=float,
                             help=s_xi)
-
+        
         s_gamma = 'Self avoiding walk parameter (default value for RNA is \
         %5.2f -- sometimes it is increased to about 2.3).' % gmm
         parser.add_argument('-gamma',  action='store', default=gmm,
                             dest='gmm', type=float,
                             help=s_gamma)
-
+        
         s_delta = 'Self avoiding walk parameter (default value for RNA is \
         %5.2f -- it might vary between 1.0 and 2.5).' % delta
         parser.add_argument('-delta',  action='store', default=delta,
@@ -505,7 +539,7 @@ class GetOpts(object):
                             help='M-,I-loop  threshold free energy; the smallest \
                             free energy necessary for formation of a stable \
                             M-loop or I-loop).')
-
+        
         # ctcf parameters
         parser.add_argument('-add_PET_wt', action='store_true', default=False,
                             dest='add_PET_wt',
@@ -531,7 +565,7 @@ class GetOpts(object):
                             help='Set the assignment range for CTCF sites (default 100), \
                             where the range between 20 and 40 would represent tandem \
                             structures and more than 40 convergent CTCF sites.')
-
+        
         s_dHbase = 'Adjusts the baseline of the enthalpy \
         (default %6.3f [kcal/mol]).' % febase
         parser.add_argument('-dHbase',  action='store', default=febase,
@@ -592,13 +626,15 @@ class GetOpts(object):
                                        chromatin structure (input file \
                                        requires extension \'heat\' or \'data\').')
             #
+            
         #
         
         
-        if program == "anal_loops.py" or \
-           program == "anal_CTCFs.py" or \
+        if program == "analyze_loops.py" or \
+           program == "assemble_heatmaps_and_CCDs.py" or \
            program == "GetOpts.py":
-            # options unique to the anal_loops.py or anal_CTCFs.py program
+            # options unique to the analyze_loops.py or
+            # assemble_heatmaps_and_CCDs.py program
             
             # mutually exclusive options used in anal for weighting
             # the Boltzmann probabilities
@@ -607,49 +643,56 @@ class GetOpts(object):
             # basic
             grp_filter.add_argument('-basic', action='store_true', default=False,
                                     dest='basic',
-                                    help='(anal_loops) Only report the probability of the first \
+                                    help='(analyze_loops) Only report the probability of the first \
                                     component in the Boltzmann distribution.')
             
             # similarity
             grp_filter.add_argument('-sim', action='store_true', default=False,
                                     dest='similarity',
-                                    help='(anal_loops) Use similarity measure in weighting \
+                                    help='(analyze_loops) Use similarity measure in weighting \
                                     chromatin structures.')
             
             # hamming distance
             grp_filter.add_argument('-ham', action='store_true', default=False,
                                     dest='hamming',
-                                    help='(anal_loops) Use hamming distance in weighting \
+                                    help='(analyze_loops) Use hamming distance in weighting \
                                     chromatin structures.')
             
             # entropy weight
             grp_filter.add_argument('-TdS', action='store_true', default=False,
                                     dest='TdS',
                                     help='Use entropy difference in weighting chromatin structures.')
+            
             grp_filter.add_argument('-TdS_range',     action='store', default=set_TdS_range,
                                     dest='TdS_range', type=float,
-                                    help='(anal_loops) Set the range for dTdS (used with \
+                                    help='(analyze_loops) Set the range for dTdS (used with \
                                     option -TdS).')
             
             # free energy
             grp_filter.add_argument('-ddG',  action='store_true', default=False,
                                     dest='ddG',
-                                    help='(anal_loops) Use free energy difference in \
+                                    help='(analyze_loops) Use free energy difference in \
                                     weighting chromatin structures.')
-            parser.add_argument('-ddG_range',     action='store', default=set_ddG_range,
-                                dest='ddG_range', type=float,
-                                help='(anal_loops) Set the range for ddG (used in \
-                                conjuction with option -ddG).')
             
-            #
+            # read in *.eheat files instead of *.heat
+            grp_filter.add_argument('-eheat',  action='store_true', default=False,
+                                    dest='use_eheat',
+                                    help='read eheat files instead of heatmap.')
+            
+            grp_filter.add_argument('-ddG_range',     action='store', default=set_ddG_range,
+                                    dest='ddG_range', type=float,
+                                    help='(analyze_loops) Set the range for ddG (used in \
+                                    conjuction with option -ddG).')
+            
+            # provide all measures of difference
             grp_filter.add_argument('-all', action='store_true', default=True,
                                     dest='allwts',
-                                    help='(anal_loops, default) make a list with all \
+                                    help='(analyze_loops, default) make a list with all \
                                     possibilities included (recommended).')
             
             
             grp_files = parser.add_mutually_exclusive_group()        
-            # options unique to the anal_loops.py program
+            # options unique to the analyze_loops.py program
             if flag_checkfile:
                 # requires existence of file of given name
                 
@@ -663,17 +706,22 @@ class GetOpts(object):
                 
                 grp_files.add_argument('-ff', nargs='+', type=file, default=[],
                                        dest='f_activity',
-                                       help='(anal_X programs) Input activity data on chromatin \
-                                       structure (requires extension \'txt\' or \'bed\')')
+                                       help='(analysis programs) Input activity data on \
+                                       chromatin structure (requires extension \
+                                       \'txt\' or \'bed\')')
             else:
                 grp_files.add_argument('-ff', nargs='+', default=[],
                                        dest='f_activity',
-                                       help='(anal_X programs) Input activity data on chromatin \
-                                       structure (requires extension \'txt\' or \'bed\')')
+                                       help='(analysis programs) Input activity data on \
+                                       chromatin structure (requires extension \
+                                       \'txt\' or \'bed\')')
             #
+            
             parser.add_argument('-o', default="loops_results.dat",
                                 dest='f_output',
-                                help='(anal_X programs) Specifies the name of the output file for the analysis program.')
+                                help='(analysis programs) Specifies the name of \
+                                the output file for the analysis program.')
+            
         #
         
         
@@ -693,7 +741,8 @@ class GetOpts(object):
         """
         
         parser.add_argument('-v', '--version', action='version',
-                            version='%(prog)s {version}'.format(version=__VERSION__))
+                            version='%(prog)s {version}'.format(version=get_Version()))
+        
         
         return parser # the main part of the parser
         
@@ -706,26 +755,29 @@ class GetOpts(object):
         # and whether there are undefined terms.
         try:
             self.parser.parse_args()
-        except IOError, msg:
+        except IOError:
+            msg = 'could not parse the arguments'
             flag_pass = False # not necessary, but anyway....
             self.parser.error(str(msg))
         #
+        
         return flag_pass
     #
         
     
     def check_extensions(self, files):
         if self.debug_GetOpts:
-            print files
+            print (files)
         #
-
+        
         # check for incompatible mismatch of file types.  This is not
         # so easy to write corrections to argparse to handle.
         flag_file_mismatch = False
-        if self.program == 'anal_loops.py' and len(self.f_heatmap) > 0:
+        if self.program == 'analyze_loops.py' and len(self.f_heatmap) > 0:
             flag_file_mismatch = True
             
-        elif self.program == 'anal_CTCFs.py' and len(self.f_heatmap) > 0:
+        elif (self.program == 'assemble_heatmaps_and_CCDs.py' and 
+              len(self.f_heatmap) > 0):
             flag_file_mismatch = True
             
         elif self.program == 'chreval.py' and len(self.f_activity) > 0:
@@ -733,11 +785,13 @@ class GetOpts(object):
         #
         
         if flag_file_mismatch:
-            emsg =  "ERROR: Incompatible file type, '%s' only accepts \n" % self.program
-            emsg += "       files with option -ff and extension(s) %s\n" % self.allowed_extns
+            emsg =  "ERROR: Incompatible file type, '%s' only accepts \n" \
+                    % self.program
+            emsg += "       files with option -ff and extension(s) %s\n" \
+                    % self.allowed_extns
             self.error(emsg)
         #
-
+        
         if len(files) == 0:
             emsg = "ERROR: no input file specified." 
             self.error(emsg)
@@ -755,16 +809,19 @@ class GetOpts(object):
                 emsg = "       terminating....." 
                 self.error(emsg)
             #
+            
             self.flnm += [flnm]
             self.flhd += [ft.flhd]
             self.ext  += [ft.ext]
-        #
+        #|endfor
+        
         if self.debug_GetOpts:
-            print "input file information"
-            print self.flnm
-            print self.flhd
-            print self.ext
+            print ("input file information")
+            print (self.flnm)
+            print (self.flhd)
+            print (self.ext)
         #
+        
     #
 
                 
@@ -774,7 +831,7 @@ class GetOpts(object):
     #
                 
     def error(self, emsg):
-        print emsg
+        print (emsg)
         self.parser.print_help() # prints help
         sys.exit(1)
     #

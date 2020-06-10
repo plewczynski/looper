@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@
 
@@ -9,7 +9,7 @@ Classes:       Calculate
 
 Author:        Wayne Dawson
 creation date: mostly 2016 and up to March 2017 
-last update:   190520
+last update:   200210 (merged all current changes Kopernik and YuriV, upgraded to python3)
 version:       0
 
 Purpose:
@@ -44,8 +44,9 @@ from Motif import Motif # a core object of these building programs
 from Motif import Link
 from Motif import LGroup
 from Motif import Map # main map for all the FE and structures
-from Motif import Branch
+#from Motif import Branch
 
+from LoopRecords import Branch
 from LoopRecords import MBLptr
 from LoopRecords import MBLHandle
 from LoopRecords import show_MBLHandle
@@ -54,7 +55,7 @@ from LoopRecords import show_MBLHandle
 from FileTools   import getHeadExt
 from ChPair      import ChPairData
 from ChPair      import LThread2ChPair
-from SimRNATools import SimRNAData
+from Chromatin2SimRNA import SimRNARestraints #from SimRNATools import SimRNAData
 from BasicTools  import initialize_matrix
 
 
@@ -155,7 +156,7 @@ dconnection = { 'B' : True,
 
 
 def usage():
-    print "USAGE: %s -f file.heat " % PROGRAM
+    print ("USAGE: %s -f file.heat " % PROGRAM)
 #
 
 def kickOn(i, i_set, j, j_set):
@@ -211,7 +212,7 @@ class TestCalculate(object):
         
         self.PETwt = 100.0  # PET wt scale
         self.N = len(seqs[0])
-        # print "N = ", self.N
+        # print ("N = ", self.N)
     #
 #
 
@@ -221,18 +222,21 @@ class Calculate(object):
     def __init__(self, cl = TestCalculate()):
         flag_debug =  False
         if not cl.set_GetOpts:
-            print "ERROR: options are not properly configured"
+            print ("ERROR(Calculate): options are not properly configured")
             sys.exit(1)
         #
-        self.flnm    = cl.f_heatmap[0] # elements are a list now
+        
+        self.flnm = cl.f_heatmap[0]
+        
         if cl.source == "TestCalculate":
-            print "using test module, not the real thing!"
+            print ("using test module, not the real thing!")
             self.fe      = BranchEntropy()
         else:
             self.fe      = BranchEntropy(cl)
         #
+        
         self.T       = cl.T # temperature is undefined!
-        print "sequence length N = ", self.fe.N
+        print ("sequence length N = ", self.fe.N)
         
         # output option
         self.p_all_1D      = cl.p_all_1D
@@ -263,19 +267,15 @@ class Calculate(object):
         # set up the heat map "enthalpy"
         self.ctcf_setv = self.fe.ctcf_setv
         if cl.source == "TestCalculate":
-            print "(2) N = ", cl.N
+            print ("(2) N = ", cl.N)
             self.N  = cl.N
         else:
             self.N  = self.fe.N
         #
         
-        # initialize the free energy matrix
-        self.dG = []
-        self.dG = initialize_matrix(self.dG, self.N, 0.0)
-        
         
         if flag_debug:
-            print "finished Calculate constructor"
+            print ("finished Calculate constructor")
         #
         
     #
@@ -313,8 +313,8 @@ class Calculate(object):
     """
     def lookupBranches(self,
                        i,  j,    # boundaries of search
-       	               p,  q,    # sector of search
-       	               mblplnk): # class MBLptr
+                       p,  q,    # sector of search
+                       mblplnk): # class MBLptr
         
         global DEBUG_lookupBranches
         
@@ -336,18 +336,18 @@ class Calculate(object):
         """
         
         if DEBUG_lookupBranches:
-            print "enter lookupBranches{ij(%d,%d), pq(%d,%d)}" % (i, j, p, q)
-            print "      btype{pq(%2d,%2d)}.pair = %d" % (p, q, self.fe.btype[p][q].pair)
+            print ("enter lookupBranches{ij(%d,%d), pq(%d,%d)}" % (i, j, p, q))
+            print ("      btype{pq(%2d,%2d)}.pair = %d" % (p, q, self.fe.btype[p][q].pair))
         #endif
         
         if (q - p <= 0) or (j - i <= 0):
             # hopefully, shouldn't happen, but if it does, there is
             # something seriously wrong with the call.
-            print "ERROR lookupBranches{ij(%d,%d), pq(%d,%d)}" % (i, j, p, q)
+            print ("ERROR lookupBranches{ij(%d,%d), pq(%d,%d)}" % (i, j, p, q))
             if q - p <= 0:
-                print "p(%d) > q(%d)!!!!" % (p, q)
+                print ("p(%d) > q(%d)!!!!" % (p, q))
             if j - i <= 0:
-                print "p(%d) > q(%d)!!!!" % (i, j)
+                print ("p(%d) > q(%d)!!!!" % (i, j))
             sys.exit(0)
         #
         
@@ -414,21 +414,22 @@ class Calculate(object):
         # self.show_smap_all(N, p, q)
         
         if len(self.fe.smap.glink[p][q].lg) == 0:
-            # print "lg(%d,%d) = 0" % (p, q)
+            # print ("lg(%d,%d) = 0" % (p, q))
             mblplnk.V = self.fe.cle_HloopE(p, q, mblplnk)
             mblplnk.addBranch(p, q)
             mblplnk.nm = 'X'
             mblplnk.dr = '-'
-            # print mblplnk
+            # print (mblplnk)
             return mblplnk
         #
+        
         if self.fe.smap.glink[p][q].lg[0].motif[0].get_ctp() == 'X':       
-            # print "lg(%d,%d).motif.ctp = X" % (p, q)
+            # print ("lg(%d,%d).motif.ctp = X" % (p, q))
             mblplnk.V = self.fe.cle_HloopE(p, q, mblplnk)
             mblplnk.addBranch(p, q)
             mblplnk.nm = 'X'
             mblplnk.dr = '-'
-            # print mblplnk
+            # print (mblplnk)
             return mblplnk
         #
         
@@ -478,18 +479,19 @@ class Calculate(object):
                 sjn  = mtfk.get_branches()
                 sbs  = mtfk.get_base()
             else:
-                print "ERROR: unrecognized structure type (%s)" % mtfk.get_ctp()
+                print ("ERROR: unrecognized structure type (%s)" % mtfk.get_ctp())
                 sys.exit(1)
             # in the future, this should be continued to assign throughout
         #
+        
         if DEBUG_lookupBranches:
-            print "s/mctp[%s,%s], s/mbtp[%s,%s]: " % (sctp, mctp, sbtp, mbtp)
+            print ("s/mctp[%s,%s], s/mbtp[%s,%s]: " % (sctp, mctp, sbtp, mbtp))
         #
         
         ss = ''
         if sctp == 'S':
             if N <= 0:
-                print "lookupBranches N = %d\n" % N
+                print ("lookupBranches N = %d\n" % N)
                 sys.exit(1)
             #
             
@@ -503,12 +505,12 @@ class Calculate(object):
                 ss = 'S'
             #
             if DEBUG_lookupBranches:
-                print "pq(%d,%d), compare cc[%8.2f] <= {fML[%8.2f] - dangleFE(%8.2f) = %8.2f}" \
-                    % (p, q, sV, mV, dangleFE, mV - dangleFE);
+                print ("pq(%d,%d), compare cc[%8.2f] <= {fML[%8.2f] - dangleFE(%8.2f) = %8.2f}" \
+                    % (p, q, sV, mV, dangleFE, mV - dangleFE))
                 if sV <= (mV - dangleFE): 
-                    print "[%s](%8.2f) vs %8.2f: stem wins the day\n" % (ss, sV, mV)
+                    print ("[%s](%8.2f) vs %8.2f: stem wins the day\n" % (ss, sV, mV))
                 else:
-                    print "[%s](%8.2f) vs %8.2f: mbl is best choice\n" % (ss, mV, sV)
+                    print ("[%s](%8.2f) vs %8.2f: mbl is best choice\n" % (ss, mV, sV))
                 #
             #
             
@@ -517,18 +519,18 @@ class Calculate(object):
         if ss == 'S': #  found stem tail at (p,q) 
             # best structure at pq was found to be a stem
             if DEBUG_lookupBranches:
-                print "pq(%d,%d): ss[%s][dG(%8.2f)], mm[%s][dG(%8.2f)]" \
-                    % (p, q, sctp, sV, mctp, mV)
+                print ("pq(%d,%d): ss[%s][dG(%8.2f)], mm[%s][dG(%8.2f)]" \
+                    % (p, q, sctp, sV, mctp, mV))
             #
             best_cS = INFINITY;
             flag_pass_stem = True;
             
             if sV == INFINITY:
                 # this is just to make sure that cc has not been used somewhere!!!
-                print "ERROR: lookupBranches{ij(%d,%d), pq(%d,%d)}" % (i, j, p, q)
-                print "       (%2d,%2d): ss[%s][dG(%8.2f)], mm[%s][dG(%8.2f)]" \
-                    % (p, q, sctp, sV, mctp, mV)
-                print "has not been assigned!"
+                print ("ERROR: lookupBranches{ij(%d,%d), pq(%d,%d)}" % (i, j, p, q))
+                print ("       (%2d,%2d): ss[%s][dG(%8.2f)], mm[%s][dG(%8.2f)]" \
+                    % (p, q, sctp, sV, mctp, mV))
+                print ("has not been assigned!")
                 sys.exit(1)
             #
             
@@ -537,7 +539,7 @@ class Calculate(object):
             # has not stopped here, though I haven't pushed it so much.
             if mV > 0:
                 if DEBUG_lookupBranches:
-                    print "fML[(%d,%d)](%8.2f) > 0" % (p, q, mV)
+                    print ("fML[(%d,%d)](%8.2f) > 0" % (p, q, mV))
                 #
                 
                 if mV >= INFINITY:  # this is less likely now.
@@ -559,9 +561,9 @@ class Calculate(object):
                             % (p, q, sctp, sbtp, sV, sbs)
                         s += "slen(%d), i_xi(%d), L_stm = %d,   sjn -> %s" \
                             % (slen, i_xi, L_stm,  sjn)
-                        print s
+                        print (s)
                     #endif
-	            #print "planned exit"
+                    #print ("planned exit")
                     #sys.exit(0);
                 #
             #
@@ -591,20 +593,20 @@ class Calculate(object):
                         % (i, j, p, q, mblplnk.nm)
                     s += "best_cS = %8.2f (index = %d)\n" % (mblplnk.V, mblplnk.n) 
                     s += self.showBranches(mblplnk, "mblplnk")
-                    print s
+                    print (s)
                 #endif
             
             else:
                 if DEBUG_lookupBranches:  
                     # ss_name
-                    print "stem(%d,%d)[%s] skipped!" \
-                        % (p,   q,   self.fe.smap.glink[p  ][q  ].lg[0].motif[0].get_btp())
-                    print "stem(%d,%d)[%s]" \
-                        % (p+1, q-1, self.fe.smap.glink[p+1][q-1].lg[0].motif[0].get_btp())
+                    print ("stem(%d,%d)[%s] skipped!" \
+                        % (p,   q,   self.fe.smap.glink[p  ][q  ].lg[0].motif[0].get_btp()))
+                    print ("stem(%d,%d)[%s]" \
+                        % (p+1, q-1, self.fe.smap.glink[p+1][q-1].lg[0].motif[0].get_btp()))
                 #endif    
             #
             # sys.exit(0)
-        #
+            
         elif mctp == 'B' or mctp == 'I' or mctp == 'J':
             
             # 180425: this is essentially the same as 'M' and 'P' but
@@ -618,10 +620,10 @@ class Calculate(object):
             
             if mV < best_cQ:
                 best_cQ = mV
-            #
+            
             else:
-                print "lookupBranches: warning (%d,%d)[Q] not assigned properly" % (p, q)
-                print "                fML = %8.2f >= %8.2f" % (mV, INFINITY);
+                print ("lookupBranches: warning (%d,%d)[Q] not assigned properly" % (p, q))
+                print ("                fML = %8.2f >= %8.2f" % (mV, INFINITY));
                 sys.exit(1)
             #
             
@@ -637,11 +639,13 @@ class Calculate(object):
             if mctp == 'I':
                 mblplnk.pushBranchlist(mbs, True)  # the set of branches
                 if DEBUG_lookupBranches:
-                    print self.fe.smap.glink[p][q].lg[0].motif[0].show_Motif()
+                    print (self.fe.smap.glink[p][q].lg[0].motif[0].show_Motif())
                 #
+                
             else:
                 mblplnk.pushBranchlist(mjn, True)  # the set of branches
             #
+            
             mblplnk.n  = len(mblplnk.Q) # should be 1
             found_a_Q  = True;
             
@@ -651,10 +655,10 @@ class Calculate(object):
                      % (mctp, i, j, p, q, mblplnk.nm)
                 s += "best_cI = %8.2f (index = %d)\n" % (mblplnk.V, mblplnk.n) 
                 s += self.showBranches(mblplnk, "mblplnk")
-                print s
-                print "mbs:  ", mbs
-                print "mjn:  ", mjn
-                print "mctp: ", mctp
+                print (s)
+                print ("mbs:  ", mbs)
+                print ("mjn:  ", mjn)
+                print ("mctp: ", mctp)
                 # if p == 52 and q == 63:
                 #     sys.exit(0)
                 # #
@@ -662,7 +666,7 @@ class Calculate(object):
                 #     sys.exit(0)
                 # #
             #endif
-        #
+            
         elif mctp == 'K' or mctp == 'R' or mctp == 'W': 
             # also search for pseudoknots
             # best structure is a pseudoknot ('K' or 'R' type)
@@ -670,11 +674,12 @@ class Calculate(object):
             
             if mV < best_cX: 
                 best_cX = mV
-            #
+            
             else:
-                print "lookupBranches: warning (%d,%d)[K] not assigned properly" % (p, q)
+                print ("lookupBranches: warning (%d,%d)[K] not assigned properly" % (p, q))
                 sys.exit(1);
             #
+            
             mblplnk.nm = mctp
             mblplnk.dr = mbtp
             mblplnk.V  = best_cX
@@ -687,13 +692,13 @@ class Calculate(object):
                      % (i, j, p, q, mblplnk.nm)
                 s += "best_c%s = %8.2f (index = %d)\n" % (mctp, mblplnk.V, mblplnk.n) 
                 s += self.showBranches(mblplnk, "mblplnk")
-                print s
-                print self.fe.smap.glink[p][q].lg[0].motif[0].show_Motif()
-                print "mbs: ", mbs
-                print "mjn: ", mjn
+                print (s)
+                print (self.fe.smap.glink[p][q].lg[0].motif[0].show_Motif())
+                print ("mbs: ", mbs)
+                print ("mjn: ", mjn)
                 #sys.exit(0)
             # endif
-        #
+            
         elif mctp == 'M' or mctp == 'P': 
             
             # best structure at pq was found to be a pMBL
@@ -702,10 +707,10 @@ class Calculate(object):
                 best_cM = mV;
             #
             else: 
-                print "lookupBranches: warning iMBL at (%d,%d) not assigned properly" \
-                    % (p, q)
-                print "                fML = %8.2f >= %8.2f" \
-                    % (mV, INFINITY)
+                print ("lookupBranches: warning iMBL at (%d,%d) not assigned properly" \
+                    % (p, q))
+                print ("                fML = %8.2f >= %8.2f" \
+                    % (mV, INFINITY))
                 sys.exit(1);
             #
             
@@ -720,11 +725,13 @@ class Calculate(object):
             if mctp == 'M':
                 mblplnk.pushBranchlist(mbs, True)  # the set of branches
                 if DEBUG_lookupBranches:
-                    print self.fe.smap.glink[p][q].lg[0].motif[0].show_Motif()
+                    print (self.fe.smap.glink[p][q].lg[0].motif[0].show_Motif())
                 #
+                
             else:
                 mblplnk.pushBranchlist(mjn, True)  # the set of branches
             #
+            
             mblplnk.n  = len(mblplnk.Q) # should be 1
             found_a_Q  = True;
             
@@ -733,15 +740,16 @@ class Calculate(object):
                      % (i, j, p, q, mblplnk.nm)
                 s += "best_cM = %d (index = %8.2f)\n" % (mblplnk.V, mblplnk.n) 
                 s += self.showBranches(mblplnk, "mblplnk")
-                print s
-                print "mbs:  ", mbs
-                print "mjn:  ", mjn
-                print "mctp: ", mctp
+                print (s)
+                print ("mbs:  ", mbs)
+                print ("mjn:  ", mjn)
+                print ("mctp: ", mctp)
                 if False and mctp == 'M':
-                    print "exit if answer is M"
+                    print ("exit if answer is M")
                     sys.exit(0)
                 #
             #endif
+            
         #
         
         
@@ -765,7 +773,7 @@ class Calculate(object):
                 #
                 s += self.showBranches(mblplnk, "mblplnk")
             #
-            print s
+            print (s)
         #endif  
         return mblplnk;
     #
@@ -793,14 +801,14 @@ class Calculate(object):
     def searchForMBL(self,
                      i, j,          # search region
                      lmblh,         # list of type MBLHandle()
-       	             opt_iMBL):     # iMBL=1/pMBL=0
+                     opt_iMBL):     # iMBL=1/pMBL=0
         global DEBUG_searchForMBL
         
         # mbl pointer link
         dG_lb = lmblh[0].dG_lb
         
         if DEBUG_searchForMBL: 
-            print "\n!!!Enter searchForMBL(): from %3d to %3d" % (i, j) 
+            print ("\n!!!Enter searchForMBL(): from %3d to %3d" % (i, j))
         #endif
         
         # //int mnHairPin = 2*i_xi_min + 1; 
@@ -904,7 +912,7 @@ class Calculate(object):
         
         #
         if DEBUG_searchForMBL:
-            print "Evaluate [%d to %d]" % (i, j)
+            print ("Evaluate [%d to %d]" % (i, j))
         #
         
         
@@ -937,7 +945,7 @@ class Calculate(object):
             is (i,j), we only have to do this task once, here.
             
             %%%% 051021wd (updated 180102wkd)
-	    
+            
             The operations below attempt to distinguish between
             structures in a pMBL and structures in an iMBL.  There
             should be differences because the branches in a pMBL are
@@ -954,6 +962,7 @@ class Calculate(object):
             
             Mloop_wt = self.fe.cle_MloopEV(i, j, new_MBL, self.fe.smap, opt_iMBL)
         #
+        
         lmblh[0].Mloop_wt = Mloop_wt
         
         
@@ -969,14 +978,13 @@ class Calculate(object):
         from {V(i,i+1),V(i+2,j)} to {V(i,j-2),V(j-1,j)}. 
         
         Of course V(i,i+1) and V(j-1,j) are obviously not taken
-        seriously and are effectively thrown out. The point isthat we
+        seriously and are effectively thrown out. The point is that we
         achieve most of the coverage. The remaining missing indices
         
         {V(i,j-1),V(i+1,j-1),V(i+1,j),V(i,j)} 
         
-        are calculated in the
-        next step. Of course V(i,j) would be a stem or a PK if it is
-        the optimal object.
+        are calculated in the next step. Of course V(i,j) would be a
+        stem or a PK if it is the optimal object.
         
         """
         
@@ -1010,7 +1018,7 @@ class Calculate(object):
                 # This problem really _shouldn't_ occur as far as I can tell;
                 # however, for the moment, I think it is better to have this
                 # trap here than not.
-                print "problems: i = %d, k = %d, j = %d" % (i, k, j)
+                print ("problems: i = %d, k = %d, j = %d" % (i, k, j))
                 sys.exit(1)
             #
             # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1020,8 +1028,9 @@ class Calculate(object):
             q = i+k+1;
             mblplnk1.resetBranch()
             if DEBUG_searchForMBL:       
-                print "MBL scanning(i=%d,p=%d,q=%d,j=%d)" % (i, p, q, j)   
+                print ("MBL scanning(i=%d,p=%d,q=%d,j=%d)" % (i, p, q, j))
             #
+            
             no_V1 = False
             no_V2 = False
             if p - i > mnHairPin:
@@ -1030,6 +1039,7 @@ class Calculate(object):
                     no_V1 = True
                     mblplnk1.n = 0;
                 #
+                
             else:
                 no_V1 = True;
             #
@@ -1041,6 +1051,7 @@ class Calculate(object):
                     no_V2 = True
                     mblplnk2.n = 0;
                 #
+                
             else: 
                 no_V2 = True
             #
@@ -1055,7 +1066,7 @@ class Calculate(object):
             expensive than free strand), then it should not be
             selected in the first place, even if such a thing is
             found.
-
+            
             """
             
             E1 = mblplnk1.V
@@ -1064,7 +1075,7 @@ class Calculate(object):
             # for all __branched__ structures
             if (not no_V1) and (not no_V2):
                 if (E1 > 0) or (E2 > 0):
-
+                    
                     """180621: 
                     
                     In summing the free energies of the branches, it
@@ -1080,6 +1091,7 @@ class Calculate(object):
                     chosen.
                     
                     """
+                    
                     if (E1 <= E2):
                         no_V2 = True
                         mblplnk2.Q = []
@@ -1128,13 +1140,13 @@ class Calculate(object):
                         no_V2 = True # turn off V2
                         mblplnk2.n = 0;
                         mblplnk2.Q = []
-	            #
-	            elif (E2 < E1) and (E2 > dG_lb):
+                        
+                    elif (E2 < E1) and (E2 > dG_lb):
                         no_V1 = True  # turn off V1
                         mblplnk1.n = 0;
                         mblplnk1.Q = []
-	            #
-	            else:
+                        
+                    else:
                         no_V1 = True  # turn off V1
                         no_V2 = True  # turn off V2
                         mblplnk1.n = 0;
@@ -1143,38 +1155,43 @@ class Calculate(object):
                         mblplnk2.Q = []
                         # both might have to be turned off
                     #
+                    
                 #
                 
                 if DEBUG_searchForMBL:
-                    print "[E1(%8.2f) + E2(%8.2f) > dG_lb(%8.2f)]?  => no_V1(%d), no_V2(%d)" \
-                        % (E1, E2, dG_lb, no_V1, no_V2)
+                    print ("[E1(%8.2f) + E2(%8.2f) > dG_lb(%8.2f)]?  => no_V1(%d), no_V2(%d)" \
+                        % (E1, E2, dG_lb, no_V1, no_V2))
                 #endif
-            #
+                
             elif (not no_V1) or (not no_V2):
                 if E1 <= E2:
                     if E1 < dG_lb + 0.5:
                         no_V1 = True
                         mblplnk1.n = 0;
                         mblplnk1.Q = []
-	            #
+                    #
+                    
                     if DEBUG_searchForMBL:       
-                        print "[E1(%8.2f) > dG_lb(%8.2f)]? => no_V1(%d)" \
-                            % (E1, dG_lb, no_V1)
+                        print ("[E1(%8.2f) > dG_lb(%8.2f)]? => no_V1(%d)" \
+                            % (E1, dG_lb, no_V1))
                     #endif
-                #
-                
+                    
                 else:
                     if E2 < dG_lb + 0.5:
                         no_V2 = True
                         mblplnk2.n = 0;
                         mblplnk2.Q = []
                     #
+                    
                     if DEBUG_searchForMBL:
-	                print "[E2(%8.2f) > dG_lb(%8.2f)]? => no_V2(%d)" \
-                            % (E2, dG_lb, no_V2)
+                        print ("[E2(%8.2f) > dG_lb(%8.2f)]? => no_V2(%d)" \
+                            % (E2, dG_lb, no_V2))
                     #endif
+                    
                 #
+                
             #
+            
             # possible to turn this off. It is not used for anything
             # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
             
@@ -1185,13 +1202,13 @@ class Calculate(object):
             
             if no_V1 and no_V2:
                 if DEBUG_searchForMBL:
-                    print "no_V12: %d, %d; skip" % (no_V1, no_V2)
+                    print ("no_V12: %d, %d; skip" % (no_V1, no_V2))
                 #endif
                 continue # nothing found over (i,j)
             # vvvvvvvvvvvvvvvvvv
             else: 
                 if DEBUG_searchForMBL:
-                    print "no_V12: %d, %d; -> next stage" % (no_V1, no_V2)
+                    print ("no_V12: %d, %d; -> next stage" % (no_V1, no_V2))
                 #endif
             # ^^^^^^^^^^^^^^^^^^
             
@@ -1216,7 +1233,7 @@ class Calculate(object):
             new_MBL.resetBranch()
             if  (not no_V1) and (not no_V2):
                 if DEBUG_searchForMBL:
-                    print "both: no_V12 = %d, %d" % (no_V1, no_V2)
+                    print ("both: no_V12 = %d, %d" % (no_V1, no_V2))
                 #endif
                 
                 # branches exist for both sectors
@@ -1233,21 +1250,23 @@ class Calculate(object):
                 for l in range(0, shiftV1): # sum the first part
                     new_MBL.pushBranch(mblplnk1.getBranch(l))
                 #
+                
                 shiftV2 = mblplnk2.n
                 for l in range(0, shiftV2): # add
-	            new_MBL.pushBranch(mblplnk2.getBranch(l))
+                    new_MBL.pushBranch(mblplnk2.getBranch(l))
                 #
+                
                 new_MBL.n = len(new_MBL.Q)
                         
                 if DEBUG_searchForMBL:
-                    print "sectors 1 and 2: branches: %d, E = %8.2f" \
-                        % (new_MBL.n, new_MBL.V)
+                    print ("sectors 1 and 2: branches: %d, E = %8.2f" \
+                        % (new_MBL.n, new_MBL.V))
                 #endif
-            #
+                
             elif (not no_V1) and no_V2:
                 # sector 1 has a viable branch
                 if DEBUG_searchForMBL:
-                    print "sector 1: no_V12 = %d, %d" % (no_V1, no_V2)
+                    print ("sector 1: no_V12 = %d, %d" % (no_V1, no_V2))
                 #endif
                 
                 # construct the branching structure from the obtained data
@@ -1255,17 +1274,18 @@ class Calculate(object):
                 new_MBL.V = mblplnk1.V
                 
                 for l in range(0, mblplnk1.n):
-	            new_MBL.pushBranch(mblplnk1.getBranch(l))
+                    new_MBL.pushBranch(mblplnk1.getBranch(l))
                 #
+                
                 new_MBL.n = len(new_MBL.Q)
                 if DEBUG_searchForMBL:       
-                    print "sector 1: branches: %d, E = %8.2f" % (new_MBL.n, new_MBL.V)
+                    print ("sector 1: branches: %d, E = %8.2f" % (new_MBL.n, new_MBL.V))
                 #endif
-            #
+                
             else: # no_V1 and (not no_V2):
                 # sector 2 has a viable branch
                 if DEBUG_searchForMBL:
-                    print "sector 2: no_V12 = %d, %d" % (no_V1, no_V2)
+                    print ("sector 2: no_V12 = %d, %d" % (no_V1, no_V2))
                 #endif
                 
                 # construct the branching structure from the obtained data
@@ -1273,15 +1293,17 @@ class Calculate(object):
                 new_MBL.V = mblplnk2.V
                 for l in range(0, mblplnk2.n):
                     # for (int l = 1; l <= mblplnk2.Q[0].i; l++) {
-	            new_MBL.pushBranch(mblplnk2.getBranch(l))
+                    new_MBL.pushBranch(mblplnk2.getBranch(l))
                 #
+                
                 new_MBL.n = len(new_MBL.Q)
                 if DEBUG_searchForMBL:       
-                    print "sector 2: branches: %d, E = %8.2f" % (new_MBL.n, new_MBL.V)
+                    print ("sector 2: branches: %d, E = %8.2f" % (new_MBL.n, new_MBL.V))
                 #endif
+                
             #
             
-            #
+            
             if new_MBL.n > 0:
                 # Admittedly, it would be nice not to have to do this
                 # rigamoral all the time, but unfortunately, we have
@@ -1293,14 +1315,15 @@ class Calculate(object):
                                                new_MBL,   # mbl branch info
                                                self.fe.smap, # the general mapping
                                                opt_iMBL)  # iMBL or pMBL? B.Cs 
-            #
+                
             else:
-                print "ERROR searchForMBL(%d,%d): really shouldn't be here." % (i, j)
-                print "      This operation is after the search claimed at least"
-                print "      one branch to be present. So why would the number of"
-                print "      branches now be %d? Something is seriously wrong." % (new_MBL.n)
+                print ("ERROR searchForMBL(%d,%d): really shouldn't be here." % (i, j))
+                print ("      This operation is after the search claimed at least")
+                print ("      one branch to be present. So why would the number of")
+                print ("      branches now be %d? Something is seriously wrong." % (new_MBL.n))
                 sys.exit(1);
             #
+            
             new_MBL.V = new_cP
             # for chromatin, trim_53pStem() doesn't actually change
             # anything. However, for RNA, it could change slightly.
@@ -1327,29 +1350,30 @@ class Calculate(object):
                 E2 = mblplnk2.V
                 pv = -1; qv = -1
                 
-                print "MLclose(%8.2f) + new_cP(%8.2f) = %8.2f"  \
-                    % (Mloop_wt, new_cP, Mloop_wt+new_cP)
-                print "opt_iMBL = %d" % (opt_iMBL)
+                print ("MLclose(%8.2f) + new_cP(%8.2f) = %8.2f"  \
+                    % (Mloop_wt, new_cP, Mloop_wt+new_cP))
+                print ("opt_iMBL = %d" % (opt_iMBL))
                 if opt_iMBL:
-                    print "NOTE: iMBL weight ADDED: Mloop_wt(%d,%d) = %8.2f" \
-                        % (i, j, Mloop_wt)
-                    print "      new_cP(%8.2f) + Mloop_wt(%8.2f) = %8.2f, best_iMBL_dG = %8.2f" \
-                        % (new_cP, Mloop_wt, new_cP + Mloop_wt, best_iMBL_dG)
+                    print ("NOTE: iMBL weight ADDED: Mloop_wt(%d,%d) = %8.2f" \
+                        % (i, j, Mloop_wt))
+                    print ("      new_cP(%8.2f) + Mloop_wt(%8.2f) = %8.2f, best_iMBL_dG = %8.2f" \
+                        % (new_cP, Mloop_wt, new_cP + Mloop_wt, best_iMBL_dG))
                 #
-                print "E1(%3d,%3d) = %8.2f; E2(%3d,%3d) = %8.2f; new_iMBL_dG = %8.2f; best_iMBL_dG(%d) = %8.2f" \
-                    % (i, i+k, E1, i+k+1, j, E2, new_iMBL_dG, 0, lmblh[0].best_iMBL_dG)
-                print "                                                                        best_iMBL_dG(%d) = %8.2f" \
-                    % (1, lmblh[1].best_iMBL_dG)
-                print "                                                                        best_iMBL_dG(%d) = %8.2f" \
-                    % (2, lmblh[2].best_iMBL_dG)
+                print ("E1(%3d,%3d) = %8.2f; E2(%3d,%3d) = %8.2f; new_iMBL_dG = %8.2f; best_iMBL_dG(%d) = %8.2f" \
+                    % (i, i+k, E1, i+k+1, j, E2, new_iMBL_dG, 0, lmblh[0].best_iMBL_dG))
+                print ("                                                                        best_iMBL_dG(%d) = %8.2f" \
+                    % (1, lmblh[1].best_iMBL_dG))
+                print ("                                                                        best_iMBL_dG(%d) = %8.2f" \
+                    % (2, lmblh[2].best_iMBL_dG))
                 
-                print self.showBranches(new_MBL, "new_MBL")
+                print (self.showBranches(new_MBL, "new_MBL"))
             #endif
             
             
         # end for (int k = 1; k <= j - i - 2; k++)
+        
         if DEBUG_searchForMBL:  
-            print "finished part1 .... now part2"
+            print ("finished part1 .... now part2")
         #
         
         # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1384,15 +1408,17 @@ class Calculate(object):
             mblplnk1.resetBranch()
             new_MBL.resetBranch()
             if DEBUG_searchForMBL:
-                print "MBL scanning(pq=(%d, %d))" \
-                    % (branch[k].i, branch[k].j)  
+                print ("MBL scanning(pq=(%d, %d))" \
+                    % (branch[k].i, branch[k].j))
             # endif
+            
             no_Vf = False
             p = branch[k].i; q = branch[k].j
             # !!!VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
             if p == i and q == j:
                 on_ij = True
             #
+            
             # 190130: this should be removed, eventually
             # !!!AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
             if q - p > mnHairPin: 
@@ -1400,16 +1426,18 @@ class Calculate(object):
                                                p, q,
                                                mblplnk1)
                 if mblplnk1.nm == 'X':
-	            no_Vf = True
-	            mblplnk1.n = 0;
+                    no_Vf = True
+                    mblplnk1.n = 0;
                 #
-            #
+                
+                
             else:
                 no_Vf = True
             #
+            
             if DEBUG_searchForMBL:       
-                print "no_Vf(%d,%d) = %d, mblplnk1.nm = %s" \
-                    % (p, q, no_Vf, mblplnk1.nm)
+                print ("no_Vf(%d,%d) = %d, mblplnk1.nm = %s" \
+                    % (p, q, no_Vf, mblplnk1.nm))
             #endif
             
             if not no_Vf:
@@ -1441,8 +1469,8 @@ class Calculate(object):
                     # here. Because we are skimming the topmost
                     # optimal configurtion, This step has to come
                     # after the above operations.
-                    print self.fe.smap.glink[i][j].lg[0].motif[0].show_Motif()
-                    print "pk on_ij"
+                    print (self.fe.smap.glink[i][j].lg[0].motif[0].show_Motif())
+                    print ("pk on_ij")
                     # sys.exit(0)
                     break
                 #
@@ -1456,7 +1484,7 @@ class Calculate(object):
                               new_MBL.nm == 'S' or
                               new_MBL.nm == 'W'):
                     # shouldn't happen!!!???!!!
-                    print "found a case of BSW, nm = ", new_MBL.nm, (i, j)
+                    print ("found a case of BSW, nm = ", new_MBL.nm, (i, j))
                     sys.exit(1)
                     break
                 #
@@ -1469,8 +1497,8 @@ class Calculate(object):
                 if DEBUG_searchForMBL:
                     ct = mblplnk1.nm
                     bt = mblplnk1.dr
-                    print "p2: new_MBL(%d,%d)[%s][%5s] = %8.2f" % (p, q, ct, bt, mblplnk1.V)
-                    print self.showBranches(new_MBL, "new_MBL[pt2]")
+                    print ("p2: new_MBL(%d,%d)[%s][%5s] = %8.2f" % (p, q, ct, bt, mblplnk1.V))
+                    print (self.showBranches(new_MBL, "new_MBL[pt2]"))
                 #endif
                 
                 
@@ -1497,16 +1525,16 @@ class Calculate(object):
         
         
         has_branches = False
-        # print "1"
+        # print ("1")
         for gid in range(0, len(lmblh)):
             
             if len(lmblh[gid].mbls) > 0:
-                # print "assign gid(%d){ij(%d,%d)}" % (gid, i, j)
+                # print ("assign gid(%d){ij(%d,%d)}" % (gid, i, j))
                 for kv in range(0, len(lmblh[gid].mbls)):
                     has_branches = True
                     if DEBUG_searchForMBL:
                         p, q = lmblh[gid].mbls[kv].getBranchEnds()
-                        print "found mblh[%d]{ij(%d,%d),pq(%d,%d)}:" % (kv, i, j, p, q)
+                        print ("found mblh[%d]{ij(%d,%d),pq(%d,%d)}:" % (kv, i, j, p, q))
                     #endif
                 #
                 if DEBUG_searchForMBL:
@@ -1514,7 +1542,7 @@ class Calculate(object):
                 #endif
             else:
                 if DEBUG_searchForMBL:
-                    print "empty gid(%d){ij(%d,%d)}" % (gid, i,j)
+                    print ("empty gid(%d){ij(%d,%d)}" % (gid, i,j))
                 #endif
             #
                 
@@ -1528,7 +1556,7 @@ class Calculate(object):
         # this subprogram an essential tool for doing the speedup. The
         # other part is simplifying the I-loop technology
         if not has_branches:
-            # print "2"
+            # print ("2")
             if not self.fe.btype[i][j].pair > 0:
                 k = self.fe.dSearchK['SB']
                 lmblh[k].mbls += [MBLptr(i,j)]
@@ -1536,59 +1564,61 @@ class Calculate(object):
                 lmblh[k].mbls[0].addBranch(i, j)
                 lmblh[k].mbls[0].nm = 'X'   # fake motif
                 lmblh[k].mbls[0].dr = '-'
-                #
+                
                 if DEBUG_searchForMBL:
-                    print "final assignment ij(%d,%d) is %s" % (i, j, lmblh[k].mbls[0].nm)
+                    print ("final assignment ij(%d,%d) is %s" % (i, j, lmblh[k].mbls[0].nm))
                     #sys.exit(0)
                 #endif
+                
             else:
                 if DEBUG_searchForMBL:
-                    print "location has a pair ij(%d,%d)" % (i, j)
+                    print ("location has a pair ij(%d,%d)" % (i, j))
                 #endif
             #
         #
+        
         if DEBUG_searchForMBL:
             for gid in range(0, len(lmblh)):
                 for kv in range(0, len(lmblh[gid].mbls)):
-                    print "lmblh[%d].mbls[%d]" % (gid, kv)
-                    print lmblh[gid].mbls[kv]
+                    print ("lmblh[%d].mbls[%d]" % (gid, kv))
+                    print (lmblh[gid].mbls[kv])
                 #
             #
         #endif
         
         # chr10_3894786_4781825_res5kb.heat
-        #self.stopWhenMatchFound(i, j,   0,   5, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j,   0,   5, "end of searchForMBL()")
         # result: S, sa, -1.32 (0,5) .. (2,3)
-        #self.stopWhenMatchFound(i, j,   0,   6, "end of searchForMBL()")
-        #self.stopWhenMatchFound(i, j,   0,   7, "end of searchForMBL()")
-        #self.stopWhenMatchFound(i, j,   0,   8, "end of searchForMBL()")
-        #self.stopWhenMatchFound(i, j,   4,   9, "end of searchForMBL()")
-        #self.stopWhenMatchFound(i, j,   0,   9, "end of searchForMBL()")
-        # self.stopWhenMatchFound_sfm(i, j, 10, 99, lmblh, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j,   0,   6, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j,   0,   7, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j,   0,   8, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j,   4,   9, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j,   0,   9, "end of searchForMBL()")
+        # self.fe.stopWhenMatchFound_sfm(i, j, 10, 99, lmblh, "end of searchForMBL()")
         
-        # print self.fe.btype[i][j]
+        # print (self.fe.btype[i][j])
         # testB-1S.heat
-        #self.stopWhenMatchFound(i, j, 4, 13, "end of searchForMBL()")
-        #self.stopWhenMatchFound(i, j, 3, 14, "end of searchForMBL()")
-        #self.stopWhenMatchFound(i, j, 2, 15, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j, 4, 13, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j, 3, 14, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j, 2, 15, "end of searchForMBL()")
         
         # testI-2S.heat
-        #self.stopWhenMatchFound(i, j, 5, 24, "end of searchForMBL()")
-        #self.stopWhenMatchFound(i, j, 4, 25, "end of searchForMBL()")
-        #self.stopWhenMatchFound(i, j, 3, 26, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j, 5, 24, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j, 4, 25, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j, 3, 26, "end of searchForMBL()")
         
         # test1.heat
-        #self.stopWhenMatchFound(i, j, 3, 12, "end of searchForMBL()")
-        #self.stopWhenMatchFound(i, j, 1, 14, "end of searchForMBL()")
-        #self.stopWhenMatchFound(i, j, 1, 19, "end of searchForMBL()")
-        #self.stopWhenMatchFound(i, j, 0, 24, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j, 3, 12, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j, 1, 14, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j, 1, 19, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j, 0, 24, "end of searchForMBL()")
         
         # test4.heat
-        #self.stopWhenMatchFound(i, j, 5, 25, "end of searchForMBL()")
-        #self.stopWhenMatchFound(i, j, 3, 28, "end of searchForMBL()")
-        #self.stopWhenMatchFound(i, j, 2, 29, "end of searchForMBL()")
-        #self.stopWhenMatchFound(i, j, 1, 30, "end of searchForMBL()")
-        #self.stopWhenMatchFound(i, j, 0, 32, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j, 5, 25, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j, 3, 28, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j, 2, 29, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j, 1, 30, "end of searchForMBL()")
+        #self.fe.stopWhenMatchFound(i, j, 0, 32, "end of searchForMBL()")
         del new_MBL
         del mblplnk1
         del mblplnk2
@@ -1604,14 +1634,14 @@ class Calculate(object):
         for gid in range(0, len(lmblh)):
             
             if len(lmblh[gid].mbls) > 0:
-                # print "assign gid(%d){ij(%d,%d)}" % (gid, i, j)
+                # print ("assign gid(%d){ij(%d,%d)}" % (gid, i, j))
                 for kv in range(0, len(lmblh[gid].mbls)):
                     p, q = lmblh[gid].mbls[kv].getBranchEnds()
                     nm = lmblh[gid].mbls[kv].nm
                     dr = lmblh[gid].mbls[kv].dr
                     V  = lmblh[gid].mbls[kv].V
-                    print "found mblh[%d]{ij(%d,%d),pq(%d,%d)[%s][%5s][%8.2f]}:" \
-                        % (kv, i, j, p, q, nm, dr, V)
+                    print ("found mblh[%d]{ij(%d,%d),pq(%d,%d)[%s][%5s][%8.2f]}:" \
+                        % (kv, i, j, p, q, nm, dr, V))
                     #endif
                 #
                 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1623,7 +1653,7 @@ class Calculate(object):
                 show_MBLHandle(lmblh[gid], self.fe.smap)
             else:
                 if DEBUG_searchForMBL:
-                    print "empty gid(%d){ij(%d,%d)}" % (gid, i,j)
+                    print ("empty gid(%d){ij(%d,%d)}" % (gid, i,j))
                 #endif
             #
                 
@@ -1639,13 +1669,17 @@ class Calculate(object):
             if self.fe.btype[i][j].pair > 0:
                 lmblh[self.fe.dSearchK['SB']].update_mbl(new_MBL, p, q, debug, lbl)
             #
+            
         #
+        
         if new_MBL.n == 1 and not on_ij:
             lmblh[self.fe.dSearchK['IJ']].update_mbl(new_MBL, p, q, debug, lbl)
         #
+        
         if new_MBL.n > 1:
             lmblh[self.fe.dSearchK['MP']].update_mbl(new_MBL, p, q, debug, lbl)
         #
+        
         return lmblh
     #
     
@@ -1679,7 +1713,9 @@ class Calculate(object):
         self.fe.T = T
         for j in range(1, self.N):
             for i in range(j-1, -1, -1):
-                #DEBUG_find_best_PK   = kickOn(i, 45, j, 65)
+                #DEBUG_find_best_PK   = kickOn(i, 9, j, 14)
+                #DEBUG_find_ifStem    = kickOn(i, 9, j, 14)
+                
                 #DEBUG_searchForMBL   = kickOn(i, 45, j, 65)
                 #DEBUG_lookupBranches = kickOn(i, 45, j, 65)
                 
@@ -1688,7 +1724,7 @@ class Calculate(object):
                 ndx = 0
                 for pp in self.fe.dSearchK.keys():
                     if DEBUG_minFE:
-                        print "building assigning %d, %s" % (self.fe.dSearchK[pp], pp)
+                        print ("building assigning %d, %s" % (self.fe.dSearchK[pp], pp))
                     #
                     mblh = MBLHandle(ndx, i, j, -1.0e6) # tester
                     # 90103: Unfortunately, we have to pass this
@@ -1725,15 +1761,17 @@ class Calculate(object):
                             cp_X   = lmblh[gid].mbls[kv].getBranchlist()
                             V_X    = lmblh[gid].mbls[kv].V
                             if (ctp_X == 'I' or ctp_X == 'M') and btp_X == '-':
-                                print "1, found btp_X = %s for I-loop" % btp_X
+                                print ("1, found btp_X = %s for I-loop" % btp_X)
                                 sys.exit(0)
                             #
+                            
                             link_X = Link(i, j,
                                           V_X,
                                           ctp_X,
                                           btp_X,
                                           cp_X)
                             flag_link_initialized = True
+                            
                         else:
                             # if there are structures of a degenerate FE
                             V_X   = lmblh[gid].mbls[kv].V
@@ -1741,20 +1779,26 @@ class Calculate(object):
                             ctp_X = lmblh[gid].mbls[kv].nm
                             btp_X = lmblh[gid].mbls[kv].dr
                             if (ctp_X == 'I' or ctp_X == 'M') and btp_X == '-':
-                                print "2, found btp_X = %s for I-loop" % btp_X
+                                print ("2, found btp_X = %s for I-loop" % btp_X)
                                 sys.exit(0)
                             #
+                            
                             link_X.add_Motif(i, j, V_X, ctp_X, btp_X, cp_X)
                             self.fe.save_best_iloops(link_X)
+                            
                         #
+                        
                         if DEBUG_minFE:
-                            print "assigned %s(%s): (%2d,%2d)[%8.2f]" \
-                                % (ctp_X, btp_X, i, j, V_X), cp_X
+                            print ("assigned %s(%s): (%2d,%2d)[%8.2f]" \
+                                % (ctp_X, btp_X, i, j, V_X), cp_X)
                         #endif
-                    #
+                        
+                    #|endfor kv
+                    
                     self.fe.smap.glink[i][j].add_link(link_X)
                     
-                #
+                #|endfor gid
+                
                 self.fe.smap.mergeSortLinks(self.fe.smap.glink[i][j].lg)
                 
                 
@@ -1769,9 +1813,9 @@ class Calculate(object):
                     # self.fe.hv[i][j] -> self.fe.btype[i][j].wt
                     
                     if DEBUG_minFE:
-                        # print self.fe.btype[i][j].wt
-                        # print self.fe.hv[i][j]
-                        print "assigned B: (%2d,%2d)[%8.3f]" % (i, j, dGij), [(i,j)]
+                        # print (self.fe.btype[i][j].wt)
+                        # print (self.fe.hv[i][j])
+                        print ("assigned B: (%2d,%2d)[%8.3f]" % (i, j, dGij), [(i,j)])
                         # sys.exit(0)
                     #
                     
@@ -1783,22 +1827,28 @@ class Calculate(object):
                                 = self.fe.lookupCap(i, j, dGij, DEBUG_minFE)
                             if has_cap:
                                 if DEBUG_minFE:
-                                    print "Q: btpB = ", btpB, ", B:", has_cap
+                                    print ("Q: btpB = ", btpB, ", B:", has_cap)
                                 #
+                                
                                 link_X = Link(i, j, dGB, ctpB, btpB, jnB)
                                 self.fe.smap.glink[i][j].add_link(link_X)
                                 if len(jnB) == 1:
                                     self.fe.save_best_iloops(link_X)
                                 #
+                                
                             #
+                            
                         #
+                        
                         link_Q = Link(i, j, dGij, 'B', bondtype, [(i,j)])
                         self.fe.smap.glink[i][j].add_link(link_Q)
                         self.fe.save_best_iloops(link_Q)
                         if DEBUG_minFE:
                             self.show_smap_xy(i,j)
                         #
+                        
                         flag_link_initialized = True
+                        
                     elif (bondtype == 'c' or
                           bondtype == 't' or
                           bondtype == 'r' or
@@ -1807,46 +1857,50 @@ class Calculate(object):
                         self.fe.smap.glink[i][j].add_link(link_Q)
                         self.fe.save_best_iloops(link_Q)
                         flag_link_initialized = True
+                        
                     else:
                         link_Q = Link(i, j, dGij, 'X', '-', [(i,j)])
                         self.fe.smap.glink[i][j].add_link(link_Q)
                         self.fe.save_best_iloops(link_Q)
-                        print "called X in H loop ij=(%d,%d)" % (i,j)
+                        print ("called X in H loop ij=(%d,%d)" % (i,j))
                         sys.exit(0)
+                        
                     #
+                    
                     flag_link_initialized = True
                     
                     stem_aa, stem_pp = self.fe.find_ifStem(i, j, dGij, bondtype,
                                                            DEBUG_find_ifStem)
-                    # print stem_aa, len(stem_aa), stem_pp, len(stem_pp)
+                    # print (stem_aa, len(stem_aa), stem_pp, len(stem_pp))
                     if len(stem_aa) > 0:
                         self.fe.make_StemMotif(stem_aa, DEBUG_make_StemMotif)
                         # !!!XXX
                     #
+                    
                     if len(stem_pp) > 0:
                         self.fe.make_StemMotif(stem_pp, DEBUG_make_StemMotif)
                     #
                     
                     # /home/yuriv/cent/loops_CCDs/paper_examples_try161012/190514/test1.heat
-                    #self.stopWhenMatchFound(i, j, 3, 6, "after find_ifStem")
+                    #self.fe.stopWhenMatchFound(i, j, 3, 6, "after find_ifStem")
                     
                     # testB-1Sp.heat
-                    # self.stopWhenMatchFound(i, j, 2, 13, "after find_ifStem")
+                    # self.fe.stopWhenMatchFound(i, j, 2, 13, "after find_ifStem")
                     
                     # chr1_10751707_10970928_res5kb.heat
-                    #self.stopWhenMatchFound(i, j, 25, 41, "after find_ifStem")
-                    #self.stopWhenMatchFound(i, j, 36, 41, "after find_ifStem")
-                    #self.stopWhenMatchFound(i, j, 35, 42, "after find_ifStem")
-                    #self.stopWhenMatchFound(i, j, 0, 35, "after find_ifStem")
+                    #self.fe.stopWhenMatchFound(i, j, 25, 41, "after find_ifStem")
+                    #self.fe.stopWhenMatchFound(i, j, 36, 41, "after find_ifStem")
+                    #self.fe.stopWhenMatchFound(i, j, 35, 42, "after find_ifStem")
+                    #self.fe.stopWhenMatchFound(i, j, 0, 35, "after find_ifStem")
                     
                     
-                    if self.fe.all_ctcf.has_key((i,j)):
+                    if (i,j) in self.fe.all_ctcf:
                         dGbest = self.fe.smap.glink[i][j].lg[0].Vij
                         # if it doesn't have the key, then forget it!
                         island = self.fe.find_ctcf_islands(i, j, dGbest,
                                                            DEBUG_find_ctcf_islands)
                         
-                        # print dGbest, island
+                        # print (dGbest, island)
                         if len(island) > 0:
                             
                             # if there's nothing there, then don't bother with it!
@@ -1854,15 +1908,18 @@ class Calculate(object):
                                 wyspa = ff[0]; join = ff[1]; dGW = ff[2] 
                                 link_W = Link(i, j, dGW, 'W', 'wyspa', join, [], wyspa)
                                 self.fe.smap.glink[i][j].add_link(link_W)
-                            #
+                            #|endfor
+                            
                             # self.traceback_mFE(i,j, 0, True)
+                            
                         #
-                        #self.stopWhenMatchFound(i, j, 0, 32, "in find_ctcf_islands")
-                        #print "island: planned exit"
+                        
+                        #self.fe.stopWhenMatchFound(i, j, 0, 32, "in find_ctcf_islands")
+                        #print ("island: planned exit")
                         #sys.exit(0)
                     #
                     
-                    #self.stopWhenMatchFound(i, j, 1, 14, "after find_ctcf_islands")
+                    #self.fe.stopWhenMatchFound(i, j, 1, 14, "after find_ctcf_islands")
                 #
                 
                 # To do the pseudoknot part, we have to sort the current data
@@ -1872,7 +1929,7 @@ class Calculate(object):
                 ctp = self.fe.smap.glink[i][j].lg[0].motif[0].get_ctp()
                 
                 check_PK = False
-                if dconnection.has_key(ctp):
+                if ctp in dconnection:
                     """@
                     
                     Have to decide if we will check for PKs or not.
@@ -1889,9 +1946,9 @@ class Calculate(object):
                     check_PK = True 
                     if ctp == 'M' or ctp == 'I':
                         dGijH = self.fe.btype[i][j].dGp
-
+                        
                         """190524 was
-
+                        
                         dGijH = self.fe.calc_dG(i, j,
                                                 self.fe.btype[i][j].wt,
                                                 T) 
@@ -1903,133 +1960,142 @@ class Calculate(object):
                             # closing position to make a PK a
                             # feasible possibility
                             if DEBUG_find_best_PK:
-                                print dGijH
-                                print "check for PK: skipping (%d,%d)[%s]" % (i, j, ctp)
-                                #self.stopWhenMatchFound(i, j, i, j, "test_PK")
+                                print (dGijH)
+                                print ("check for PK: skipping (%d,%d)[%s]" % (i, j, ctp))
+                                #self.fe.stopWhenMatchFound(i, j, i, j, "test_PK")
                                 # sys.exit(0)
                             #
+                            
                             check_PK = False
                             
                         #
+                        
                     #
+                    
                     if check_PK:
-                        #print "call searchForPKs(%d,%d):" % (i, j)
+                        #print ("call searchForPKs(%d,%d):" % (i, j))
                         self.fe.searchForPKs(i, j, DEBUG_find_best_PK)
                         check_PK = False
                     #
+                    
                 #
-
+                
                 # for longer sequences, we also simply check each time
                 # we go through this cyle at i = 0.
                 if i == 0 and j-i > 15:
                     if DEBUG_find_best_PK:
-                        print "searching the full span for PK"
+                        print ("searching the full span for PK")
                     #
                     
                     self.fe.searchForPKs(i, j, DEBUG_find_best_PK)
                 #
+                
                 # /home/yuriv/cent/loops_CCDs/paper_examples_try161012/190514/test1.heat
-                # self.stopWhenMatchFound(i, j, 3, 6, "after searchForPKs")
-                # self.stopWhenMatchFound(i, j, 3, 7, "after searchForPKs")
+                # self.fe.stopWhenMatchFound(i, j, 3, 6, "after searchForPKs")
+                # self.fe.stopWhenMatchFound(i, j, 3, 7, "after searchForPKs")
                 # /home/yuriv/cent/loops_CCDs/paper_examples_try161012/190514/check3.heat
-                # self.stopWhenMatchFound(i, j, 3, 8, "after searchForPKs")
+                # self.fe.stopWhenMatchFound(i, j, 3, 8, "after searchForPKs")
                 
                 
                 
                 self.fe.smap.mergeSortLinks(self.fe.smap.glink[i][j].lg)
-                self.dG[i][j] = self.fe.smap.glink[i][j].lg[0].motif[0].Vij # !!!!!
+                self.fe.dG[i][j] = self.fe.smap.glink[i][j].lg[0].motif[0].Vij # !!!!!
                 
                 # corePKwithbranch.heat
-                #self.stopWhenMatchFound(i, j,   0,  46, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,  11,  52, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,   0,  46, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  11,  52, "finishing minFE loop at pos ij")
                 
                 # chr10_3894786_4781825_res5kb.heat
-                #self.stopWhenMatchFound(i, j,   0,   5, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,   0,   5, "finishing minFE loop at pos ij")
                 # result: S, sa, -1.32 (0,5) .. (2,3)
-                #self.stopWhenMatchFound(i, j,   0,   6, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,   0,   7, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,   0,   8, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,   4,   9, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,   0,   6, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,   0,   7, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,   0,   8, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,   4,   9, "finishing minFE loop at pos ij")
                 
-                #self.stopWhenMatchFound(i, j,   2,   7, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,   2,   8, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,   2,   9, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,   0,   9, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,   6,  16, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,   2,   7, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,   2,   8, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,   2,   9, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,   0,   9, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,   6,  16, "finishing minFE loop at pos ij")
                 
-                #self.stopWhenMatchFound(i, j,  30,  36, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  30,  36, "finishing minFE loop at pos ij")
                 #self.show_smap_xy(38,41)
-                #self.stopWhenMatchFound(i, j,  37,  42, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,  38,  41, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,  37,  43, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  37,  42, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  38,  41, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  37,  43, "finishing minFE loop at pos ij")
                 # result: S, sa, -2.11 (6,16) ... (10,12)
                 
-                #self.stopWhenMatchFound(i, j,  52,  59, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,  51,  59, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,  50,  59, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,  46,  60, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,  51,  61, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,  48,  62, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,  47,  62, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,  52,  63, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,  45,  64, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  52,  59, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  51,  59, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  50,  59, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  46,  60, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  51,  61, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  48,  62, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  47,  62, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  52,  63, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  45,  64, "finishing minFE loop at pos ij")
                 
-                #self.stopWhenMatchFound(i, j,  45,  65, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,  10,  99, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  45,  65, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  10,  99, "finishing minFE loop at pos ij")
                 
-                #self.stopWhenMatchFound(i, j, 125, 132, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j, 125, 134, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 125, 132, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 125, 134, "finishing minFE loop at pos ij")
                 
                 
                 # chr1_10751707_10970928_res5kb.heat
-                #self.stopWhenMatchFound(i, j, 0, 8, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j,  0, 42, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j, 27, 42, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 0, 8, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j,  0, 42, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 27, 42, "finishing minFE loop at pos ij")
                 
                 # chr10_106061350_106114340_res5kb.heat
-                #self.stopWhenMatchFound(i, j, 2,  8, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j, 1,  9, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j, 0, 10, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 2,  8, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 1,  9, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 0, 10, "finishing minFE loop at pos ij")
                 
                 
                 # testP-3B.heat
-                #self.stopWhenMatchFound(i, j, 2, 35, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 2, 35, "finishing minFE loop at pos ij")
                 
                 
                 # testB-1S.heat
-                #self.stopWhenMatchFound(i, j, 4, 13, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j, 3, 14, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j, 2, 15, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 4, 13, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 3, 14, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 2, 15, "finishing minFE loop at pos ij")
                 
                 # testI-2S.heat
-                #self.stopWhenMatchFound(i, j, 5, 24, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j, 4, 25, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j, 3, 26, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 5, 24, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 4, 25, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 3, 26, "finishing minFE loop at pos ij")
                 
                 # test1.heat
-                #self.stopWhenMatchFound(i, j, 3, 11, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j, 1, 14, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j, 1, 19, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j, 0, 24, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 3, 11, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 1, 14, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 1, 19, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 0, 24, "finishing minFE loop at pos ij")
                 # test4.heat
-                #self.stopWhenMatchFound(i, j, 5, 25, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j, 3, 28, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j, 2, 29, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j, 1, 30, "finishing minFE loop at pos ij")
-                #self.stopWhenMatchFound(i, j, 0, 32, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 5, 25, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 3, 28, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 2, 29, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 1, 30, "finishing minFE loop at pos ij")
+                #self.fe.stopWhenMatchFound(i, j, 0, 32, "finishing minFE loop at pos ij")
+
+                # chr10_1462921_1758490_res5kb.heat
+                #self.fe.stopWhenMatchFound(i, j, 9, 15, "finishing minFE loop at pos ij")
                 
-                #
-            #
-        #
+                
+            #|endfor i in range(j-1, -1, -1):
+            
+        #|endfor j in range(1, self.N):
         
         if DEBUG_minFE:
-            print "finished minFE"
+            print ("finished minFE")
             # sys.exit(0)
         #endif
-        return self.dG, self.fe.smap
+        
+        return self.fe.dG, self.fe.smap
     #
     
-        
 #
 
 
@@ -2052,20 +2118,20 @@ def test0():
     be.add_hv(vs)
     be.add_btype(vs)
     
-    # print "planned exit after running convert_CTCFstruct"; sys.exit(0);
+    # print ("planned exit after running convert_CTCFstruct"); sys.exit(0);
     v2t = Vienna2TreeNode(vs)
     v2t.vienna2tree()
-    print "main:"
+    print ("main:")
     tf = LThreadBuilder(v2t)
     tf.visit(v2t.genTree)
-    print "LThread notation: "
+    print ("LThread notation: ")
     tf.disp_lt()
     
     
-    # print "planned exit after running vienna2thread"; sys.exit(0);
+    # print ("planned exit after running vienna2thread"); sys.exit(0);
     l2m = LThread2Motif(v2t.lt.sqlen)
     l2m.thread2motif(v2t.lt)
-    print len(l2m.smap.glink)
+    print (len(l2m.smap.glink))
     
     
     mbl_M = MBLptr(0,33)
@@ -2073,7 +2139,7 @@ def test0():
     mbl_M.addBranch(19,31)
     mbl_M.n = len(mbl_M.Q)
     mbl_M.V = be.cle_MloopEV(0,33, mbl_M, l2m.smap, True)
-    print mbl_M.V
+    print (mbl_M.V)
     
     #i = 2; j = 17
     i = 0; j = 33
@@ -2081,7 +2147,7 @@ def test0():
     mbl_H.addBranch(i,j)
     mbl_H.n = len(mbl_H.Q)
     mbl_H.V = be.cle_HloopE(i, j, mbl_H)
-    print mbl_H.V
+    print (mbl_H.V)
     
     i = 0; j = 33
     p = 2; q = 17
@@ -2089,7 +2155,7 @@ def test0():
     mbl_I.addBranch(p,q)
     mbl_I.n = len(mbl_H.Q)
     mbl_I.V = be.cle_IloopE(i, j, p, q, mbl_I, l2m.smap, True)
-    print mbl_I.V
+    print (mbl_I.V)
 #   
 
 
@@ -2115,21 +2181,21 @@ def test1():
     clclt.fe.add_hv(vs)
     clclt.fe.add_btype(vs)
     
-    # print "planned exit after running convert_CTCFstruct"; sys.exit(0);
+    # print ("planned exit after running convert_CTCFstruct"); sys.exit(0);
     v2t = Vienna2TreeNode(vs)
     v2t.vienna2tree()
-    print "main:"
+    print ("main:")
     tf = LThreadBuilder(v2t)
     tf.visit(v2t.genTree)
-    print "LThread notation: "
+    print ("LThread notation: ")
     tf.disp_lt()
 
     t2m = TreeNode2Motif(v2t)
     t2m.visit(v2t.genTree)
-    print v2t.MPlist
+    print (v2t.MPlist)
     t2m.post_graftMP()
     
-    print len(t2m.smap.glink)
+    print (len(t2m.smap.glink))
     
     
     mbl_M = MBLptr(0,33)
@@ -2137,7 +2203,7 @@ def test1():
     mbl_M.addBranch(19,31)
     mbl_M.n = len(mbl_M.Q)
     mbl_M.V = clclt.fe.cle_MloopEV(0,33, mbl_M, t2m.smap, True)
-    print mbl_M.V
+    print (mbl_M.V)
     
     #i = 2; j = 17
     i = 0; j = 33
@@ -2145,7 +2211,7 @@ def test1():
     mbl_H.addBranch(i,j)
     mbl_H.n = len(mbl_H.Q)
     mbl_H.V = clclt.fe.cle_HloopE(i, j, mbl_H)
-    print mbl_H.V
+    print (mbl_H.V)
     
     i = 0; j = 33
     p = 2; q = 17
@@ -2153,7 +2219,7 @@ def test1():
     mbl_I.addBranch(p,q)
     mbl_I.n = len(mbl_H.Q)
     mbl_I.V = clclt.fe.cle_IloopE(i, j, p, q, mbl_I, t2m.smap, True)
-    print mbl_I.V
+    print (mbl_I.V)
     
     i = 2; j = 31
     
@@ -2162,7 +2228,7 @@ def test1():
     ndx = 0
     lmblh = [] # build objects of class MBLHandle() for processing
     for pp in clclt.fe.dSearchK.keys():
-        print "building assigning %d, %s" % (clclt.fe.dSearchK[pp], pp)
+        print ("building assigning %d, %s" % (clclt.fe.dSearchK[pp], pp))
         
         # build search weighting handle
         mblh = MBLHandle(ndx, i, j, -1.0e6) # main tester
@@ -2172,25 +2238,28 @@ def test1():
         # smap) for various reasons that are unavoidable. The object
         # smap probably can be defind as None if no debugging is
         # required.
-    # 
+    #|endfor
+    
     lmblh = clclt.searchForMBL(i, j,     # search region
                               lmblh,    # list of type MBLHandle()
                               False)    # iMBL=1/pMBL=0
     for pp in clclt.fe.dSearchK.keys():
-        print "results %d, %s" % (clclt.fe.dSearchK[pp], pp)
+        print ("results %d, %s" % (clclt.fe.dSearchK[pp], pp))
         if len(lmblh[clclt.fe.dSearchK[pp]].mbls) > 0:
             show_MBLHandle(lmblh[clclt.fe.dSearchK[pp]], clclt.smap)
         else:
-            print "nothing found"
+            print ("nothing found")
         #
-    #
+        
+    #|endfor
+    
 #   
 
 
 
 def main(cl):
     # presently doesn't do anything
-    print cl
+    print (cl)
 #
 
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -6,7 +6,7 @@ Main Module:   chreval.py (CHRomatin EVALuation program for heatmaps)
 Classes:       Manager
 Author:        Wayne Dawson
 creation date: mostly 2016 a little bit in 2017 up to March
-last update:   190111
+last update:   200211 (upgraded to python3), 190111
 version:       0
 
 chreval.py (CHRomatin EVALuation program for heatmaps)
@@ -76,7 +76,7 @@ from Vienna2TreeNode import LThread2DotBracket
 from FileTools   import getHeadExt
 from ChPair      import ChPairData
 from ChPair      import LThread2ChPair
-from SimRNATools import SimRNAData
+from Chromatin2SimRNA import SimRNARestraints #from SimRNATools import SimRNAData
 
 # ################################################################
 # ######################  Global constants  ######################
@@ -110,13 +110,15 @@ TEST1        = False  # for testing of objects
 TEST2        = False  # for testing of objects
 
 # debugging options 
-SHOWMAIN     = False # Debugging in main()
-DEBUG_Trace  = False # Generally for checking Trace()
+SHOWMAIN     = False # True # 
+# Debugging in main()
+DEBUG_Trace  = False # True # 
+# Generally for checking Trace()
 
 # 2. special local global function
 
 def usage():
-    print "USAGE: %s -f file.heat " % PROGRAM
+    print ("USAGE: %s -f file.heat " % PROGRAM)
 #
 # The function usage() is not used so much now that I have introduced
 # GetOpts.py, but it may still be useful at the very beginning of the
@@ -163,62 +165,77 @@ class Manager:
     #
     
     def runCalculations(self, CL):
+        
         self.calc = Calculate(CL)
+        
         self.T    = self.calc.T
-        self.flnm = self.calc.flnm
+        self.flnm = self.calc.fe.flnm
         self.N    = self.calc.N
         self.dG, self.smap = self.calc.minFE(self.T)
         if self.debug_Manager:
-            print "number of iloop entries: ", len(self.calc.iloop.lg)
+            print ("number of iloop entries: ", len(self.calc.iloop.lg))
             for lgk in self.calc.iloop.lg:
-                print lgk.motif[0].base, lgk.motif[0].ctp, lgk.Vij, lgk.motif[0].join
+                print (lgk.motif[0].base, lgk.motif[0].ctp, lgk.Vij, lgk.motif[0].join)
             #
-            #print "stop at 0 in runCalculations"; sys.exit(0)
+            #print ("stop at 0 in runCalculations"); sys.exit(0)
         #
         
         if self.debug_Manager:
-            print "disp_fmatrix:"
+            print ("disp_fmatrix:")
             # show the input matrix
-            print self.calc.fe.disp_fmatrix(self.calc.fe.hv, "enthalpy")
+            print (self.calc.fe.disp_fmatrix(self.calc.fe.hv, "enthalpy"))
+            # HeatMapTools.disp_fmatrix is inherited by BranchEntropy
         #
         
         self.trace = Trace(self.calc)
         
         if DEBUG_Trace:
-            print "display of all FE values"
+            print ("display of all FE values")
             self.trace.disp_allFE(self.smap)
-            #print "stop at 1 in runCalculations"; sys.exit(0)
+            #print ("stop at 1 in runCalculations"); sys.exit(0)
         #
         
-        if self.debug_Manager:
-            print "\n\n\n"
-            print "Results:"
-            print "total free energy"
-            print "dG(0,%d)[%s] = %10.3f [kcal/mol]" \
+        if DEBUG_Trace: # self.debug_Manager:
+            print ("\n\n\n")
+            print ("Results:")
+            print ("total free energy")
+            print ("dG(0,%d)[%s] = %10.3f [kcal/mol]" \
                 % (self.calc.N-1,
                    self.smap.glink[0][self.calc.N-1].lg[0].motif[0].ctp,
-                   self.smap.glink[0][self.calc.N-1].lg[0].Vij)
-            print "\n"
-            #print "stop at 2 in runCalculations"; sys.exit(0)
+                   self.smap.glink[0][self.calc.N-1].lg[0].Vij))
+            print (self.smap.glink[0][self.calc.N-1].lg[0].motif[0].get_branches())
+            print ("\n")
+            #print ("stop at 2 in runCalculations"); sys.exit(0)
+            
         #
         
         dGmin = INFINITY
         
-        if self.debug_Manager:
-            print "traceback mFE:"
-            dGmin = self.calc.fe.traceback_mFE(0, self.calc.N-1, 0, self.debug_Manager)
-            print "B: bound; I: I-loop, M: M-loop"
-            print "min FE: %8.2f [kcal/mol]" % dGmin
-            print string.join(self.calc.opt_ss_seq, '')
-            #print "stop at 3 in runCalculations"; sys.exit(0)
+        if DEBUG_Trace: # self.debug_Manager:
+            print ("traceback mFE:")
+            debug = DEBUG_Trace
+            debug = True
+            dGmin = self.calc.fe.traceback_mFE(0, self.calc.N-1, 0, debug)
+            print ("B: bound; I: I-loop, M: M-loop")
+            print ("min FE: %8.2f [kcal/mol]" % dGmin)
+            print (''.join(self.calc.fe.opt_ss_seq))
+            #print ("stop at 3 in runCalculations"); sys.exit(0)
         else:
             dGmin = self.calc.fe.traceback_mFE(0, self.calc.N-1, 0, False)
         #
         
-        print "dGmin = %8.2f" % dGmin
-        print string.join(self.calc.fe.opt_ss_seq, '')
+        print ("dGmin = %8.2f" % dGmin)
+        print (''.join(self.calc.fe.opt_ss_seq))
         
-        #print "stop at 4 in runCalculations"; sys.exit(0)
+        """@
+        
+        previously, I used
+        
+            string.join(list("this string"), '').
+        
+        Apparently, this has been decommissioned in python3.
+        """
+        #print ("stop at 4 in runCalculations"); sys.exit(0)
         
         flag_filter = True
         self.trace.setup_HotSpot(dGmin, 0.65)
@@ -227,33 +244,37 @@ class Manager:
                self.smap.glink[0][self.calc.N-1].lg[0].motif[0].Vij)]
         #
         
-        # print hs
+        if DEBUG_Trace:
+            print (hs)
+            #print ("stop at 5b in runCalculations");  sys.exit(0)
+        #
+        
         self.trace.get_traces_top(hs, 0, 0, flag_filter)
         
-        if self.debug_Manager:
+        if DEBUG_Trace: # self.debug_Manager:
             #self.calc.show_smap_xy(0,self.calc.N-1)
-            #print "stop at 4 in runCalculations";  sys.exit(0)
+            #print ("stop at 5b in runCalculations");  sys.exit(0)
             
-            print "chreval: vvvvvvv after get_traces_top"
+            print ("chreval: vvvvvvv after get_traces_top")
             a = DispLThread(self.calc.N)
             a.disp_LThread(self.trace.lt)
-            self.calc.show_smap_xy(0,32)
-            #print "stop at 5 in runCalculations, after get_traces_top()"; sys.exit(0)
+            #self.calc.show_smap_xy(0,32)
+            #print ("stop at 5c in runCalculations, after get_traces_top()"); sys.exit(0)
         #endif
         
         
         self.dt = DispLThread(self.calc.N)
         if self.debug_Manager:
-            print "DispLThread"
+            print ("DispLThread")
             self.dt.disp_LThread(self.trace.lt)
         #
         
-        print "size of matrix: %d" % self.N
-        print "found %d structures:" % len(self.trace.lt)
+        print ("size of matrix: %d" % self.N)
+        print ("found %d structures:" % len(self.trace.lt))
         
         # new corrections
         self.lt2db = LThread2DotBracket(self.calc.N, self.calc.fe)
-
+        
         
         self.btz = Boltzmann(self.calc)
         self.btz.calc_Z(self.trace.lt, self.T)
@@ -269,8 +290,8 @@ class Manager:
     
     def printResults(self):
         """main tool to print out the results of the calculation"""
-
         
+        debug_printResults = False # True # 
         # make directory and display and store files
         
         flhd, ext = getHeadExt(self.flnm)
@@ -280,10 +301,10 @@ class Manager:
             if not os.path.isdir(flhd):
                 os.mkdir(flhd) # build a subdirectory to store figures in
             else:
-                print "WARNING: the directory '%s'" % flhd
-                print "         already exists, overwriting files\n" 
+                print ("WARNING: the directory '%s'" % flhd)
+                print ("         already exists, overwriting files\n" )
         except OSError:
-            print "ERROR: problems making %s" % flhd
+            print ("ERROR: problems making %s" % flhd)
             sys.exit(1)
         #
         os.chdir(flhd) # move to that directory
@@ -328,7 +349,7 @@ class Manager:
             fp.write(header)
             fp.close()
         except OSError:
-            print "ERROR: problems opening %s" % (ssflnm)
+            print ("ERROR: problems opening %s" % (ssflnm))
             sys.exit(1)
         #
         
@@ -339,92 +360,145 @@ class Manager:
         save_simRNA   = True
         file_results = ''
         prnt_results = ''
-        print "output structures:"
-        print "number of threads obtained: %d" % len(self.trace.lt)
+        print ("output structures:")
+        print ("number of threads obtained: %d" % len(self.trace.lt))
         for thrds in self.trace.lt:
             
             file_results = "> %s    dG = %8.3f   p = %12.8f\n" \
-                           % (string.zfill(k, 5), thrds.dG, thrds.p)
-
-            if 0:
-                file_results += self.dt.makeLThreadDotBracket_1b(thrds, 2, is_chromatin)
-            else:
-                file_results += self.lt2db.getLThread2DotBracket(thrds, 1, is_chromatin)
-                # originally self.dt.getLThread2DotBracket(thrds, 1, True)
+                           % (str(k).zfill(5), thrds.dG, thrds.p)
+            
+            # python2: string.zfill(k, 5)
+            # python3: str(k).zfill(5)
+            # https://www.tutorialspoint.com/python3/string_zfill.htm
+            
+            if debug_printResults:
+                # check that everything is properly defined
+                print ("vvvv")
+                print ("thrds %3d:, dG = %8.2f" % (k, thrds.dG))
+                print (thrds)
+                print (thrds.molsys)
+            #
+            
+            self.lt2db.set_mseq(thrds.molsys.mseq)
+            
+            if debug_printResults:
+                print ("\n#######  Structure %d  #######\n" % k)
+            #
+            str_result = self.lt2db.getLThread2DotBracket(thrds, 1, is_chromatin)
+            file_results += str_result
+            
+            if debug_printResults:
+                set_value = -1
+                # #########################################################
+                # "set_value = -1" when you don't want this to be triggered
+                # #########################################################
+                print (str_result)
+                
+                
+                if k == set_value:
+                    print ("chreval: forced stop at str %d" % set_value);
+                    print ("Stop after getLThread2DotBracket, k = %d" % k); sys.exit(0)
+                    sys.exit(0)
+                #
+                
+                
             #
             
             if k < 5:
                 prnt_results += file_results
             #
+            
             if self.calc.p_all_1D:
-                outfile = flhd + '_%s.DBN' % string.zfill(k, 5)
-                self.dt.printLThreadDotBracket_VARNA(outfile, thrds, is_chromatin)
-                hmapflnm = flhd + '_%s.heat' % string.zfill(k, 5)
+                outfile = flhd + '_%s.DBN' % str(k).zfill(5)
+                # python2: string.zfill(k, 5)
+                self.lt2db.saveDotBracketString(outfile, thrds, str_result)
+                #self.dt.printLThreadDotBracket_VARNA(outfile, thrds, is_chromatin)
+                hmapflnm = flhd + '_%s.heat' % str(k).zfill(5)
+                # python2: string.zfill(k, 5)
                 self.dt.printLThreadHeatMap(hmapflnm, thrds, flag_no_header)
                 
-                chpair_flnm     = flhd + '_%s.chpair' % string.zfill(k, 5)
-                chsimres_flnm   = flhd + '_%s.simres' % string.zfill(k, 5)
+                chpair_flnm     = flhd + '_%s.chpair' % str(k).zfill(5)
+                # python2: string.zfill(k, 5)
+                chsimres_flnm   = flhd + '_%s.simres' % str(k).zfill(5)
+                # python2: string.zfill(k, 5)
                 chdt = LThread2ChPair(thrds, flhd)
                 chdt.print_ChPairData(chpair_flnm)
-                srdt = SimRNAData()
+                srdt = SimRNARestraints() # SimRNAData()
                 srdt.ChPair2SimRes(chdt, ['N~N'])
                 srdt.print_SimRNArestraints(chsimres_flnm, "slope", save_simRNA)
-                #
+                
+                
             else:
                 if k < 50:
-                    outfile = flhd + '_%s.DBN' % string.zfill(k, 5)
-                    self.dt.printLThreadDotBracket_VARNA(outfile, thrds)
-                    hmapflnm = flhd + '_%s.heat' % string.zfill(k, 5)
+                    outfile = flhd + '_%s.DBN' % str(k).zfill(5)
+                    # python2: string.zfill(k, 5)
+                    # python3: str(k).zfill(5)
+                    # https://www.tutorialspoint.com/python3/string_zfill.htm
+                    
+                    
+                    self.lt2db.saveDotBracketString(outfile, thrds, str_result)
+                    #self.dt.printLThreadDotBracket_VARNA(outfile, thrds)
+                    hmapflnm = flhd + '_%s.heat' % str(k).zfill(5)
+                    # python2: string.zfill(k, 5)
+                    # python3; str(k).zfill(5)
+                    
                     self.dt.printLThreadHeatMap(hmapflnm, thrds, is_chromatin)
-                    #
-                    chpair_flnm     = flhd + '_%s.chpair' % string.zfill(k, 5)
-                    chsimres_flnm   = flhd + '_%s.simres' % string.zfill(k, 5)
+                    
+                    chpair_flnm     = flhd + '_%s.chpair' % str(k).zfill(5) 
+                    # python2: string.zfill(k, 5)
+                    chsimres_flnm   = flhd + '_%s.simres' % str(k).zfill(5)
+                    # python2: string.zfill(k, 5)
                     chdt = LThread2ChPair(thrds, flhd)
                     chdt.print_ChPairData(chpair_flnm)
-                    #print "-------"
-                    srdt = SimRNAData()
+                    #print ("-------")
+                    srdt = SimRNARestraints() # SimRNAData()
                     srdt.ChPair2SimRes(chdt, ['N~N'])
-                    #print "print_SimRNArestraints"
+                    #print ("print_SimRNArestraints")
                     srdt.print_SimRNArestraints(chsimres_flnm, "slope", save_simRNA)
-                    #print "next"
-                    #
+                    #print ("next")
+                    
                 #
+                
             #
             
-            # 161025wkd: try moving this step to here. I know this
-            # means that the program must open this file each time and
-            # deposit the conttents. The reason I do it this way is
-            # because a single string of 100k structures could be many
-            # million bytes. This may have been the cause of the
-            # program crashing with a "killed" statement somewhere
-            # between printing out the structures here, and printing
-            # out the matrix and the summary file.
+            """@
             
-            # It was a strange bug because I had just successfully
-            # calculated a heatmap of almost twice the size of this
-            # one. Therefore, it must be the particular quantity of
-            # output perhaps.
+            161025wkd: try moving this step to here. I know this means
+            that the program must open this file each time and deposit
+            the conttents. The reason I do it this way is because a
+            single string of 100k structures could be many million
+            bytes. This may have been the cause of the program
+            crashing with a "killed" statement somewhere between
+            printing out the structures here, and printing out the
+            matrix and the summary file.
             
-            # If this work around is successful but having to wait is
-            # just too annoying, perhaps we can make this transaction
-            # once every 10 times around (or something like that). We
-            # must first wait and see if this fixes the issue
+            It was a strange bug because I had just successfully
+            calculated a heatmap of almost twice the size of this
+            one. Therefore, it must be the particular quantity of
+            output perhaps.
+            
+            If this work around is successful but having to wait is
+            just too annoying, perhaps we can make this transaction
+            once every 10 times around (or something like that). We
+            must first wait and see if this fixes the issue """
             try:
                 fp = open(ssflnm, 'a')
                 fp.write(file_results)
                 fp.close()
             except OSError:
-                print "ERROR: problems opening %s" % (ssflnm)
+                print ("ERROR: problems opening %s" % (ssflnm))
                 sys.exit(1)
             #
+            
             k += 1
         #
-
+        
         if len(self.calc.fe.pssbl_ctcf) > 0:
             
             file_results = "strong binding sites: %d\n" % (len(self.calc.fe.all_ctcf))
             for rh in self.calc.fe.all_ctcf.keys():
-                file_results += "(%4d, %4d), %10.0f\n" % (rh[0], rh[1], self.calc.fe.all_ctcf[rh])
+                file_results += "(%4d, %4d), %10.0f\n" \
+                                % (rh[0], rh[1], self.calc.fe.all_ctcf[rh])
             prnt_results += file_results
         #
         
@@ -434,12 +508,12 @@ class Manager:
             fp.write(file_results)
             fp.close()
         except OSError:
-            print "ERROR: problems opening %s" % (ssflnm)
+            print ("ERROR: problems opening %s" % (ssflnm))
             sys.exit(1)
         #
         
         # print the results to the terminal
-        print prnt_results
+        print (prnt_results)
         
         
         try:
@@ -448,19 +522,22 @@ class Manager:
             fp.write(pclusters)
             fp.close()
         except OSError:
-            print "ERROR: problems opening %s" % (flhd + "_BDwt.clust")
+            print ("ERROR: problems opening %s" % (flhd + "_BDwt.clust"))
             sys.exit(1)
         #
+        
         try:
             pcpif = self.calc.fe.disp_fmatrix(self.clust.cpif, "cpif", False)
             fp = open(flhd + "_BDwt.cpif", 'w') # Boltzmann distribution weighted
             fp.write(pcpif)
             fp.close()
         except OSError:
-            print "ERROR: problems opening %s" % (flhd + "_BDwt.cpif")
+            print ("ERROR: problems opening %s" % (flhd + "_BDwt.cpif"))
             sys.exit(1)
         #
-    #    
+        
+    #
+    
 #
 
 
@@ -487,12 +564,12 @@ def test0():
     # Test an algorithm for finding unique elements in a simple list
     
     t = [1, 2, 3, 1, 2, 5, 6, 7, 8]
-    print "orig: ", t
-    print "rev:  ", reduce_list(t)
+    print ("orig: ", t)
+    print ("rev:  ", reduce_list(t))
 #
 
 def test1():
-
+    
     # Test for verifying and demonstrating the syntax for the
     # sorting algorithm for handling groups of links
     smap = Map(30)
@@ -512,38 +589,41 @@ def test1():
     smap.glink[i][j].add_link(link)
     
     
-    print len(smap.glink[i][j].lg)
+    print (len(smap.glink[i][j].lg))
     for lgk in smap.glink[i][j].lg:
-        print "next structure"
+        print ("next structure")
         for lpk in range(0, len(lgk.motif)):
-            print lgk.motif[lpk].ctp, lgk.motif[lpk].get_base(), lgk.motif[lpk].get_branches()
-        #
+            print (lgk.motif[lpk].ctp,
+                   lgk.motif[lpk].get_base(),
+                   lgk.motif[lpk].get_branches())
+        #|endfor
+        
     #
     
-    print "number of elements: ", len(smap.glink[i][j].lg)
-    print "before sorting:"
+    print ("number of elements: ", len(smap.glink[i][j].lg))
+    print ("before sorting:")
     for lgk in smap.glink[i][j].lg:
         join = lgk.motif[0].get_branches()
         ctp  = lgk.motif[0].ctp
         Vij  = lgk.Vij
-        print "%s    %8.2f: " % (ctp, Vij), join
-    #
+        print ("%s    %8.2f: " % (ctp, Vij), join)
+    #|endfor
+    
     smap.mergeSortLinks(smap.glink[i][j].lg)
-    print "after sorting:"
+    print ("after sorting:")
     for lgk in smap.glink[i][j].lg:
         join = lgk.motif[0].get_branches()
         ctp  = lgk.motif[0].ctp
         Vij  = lgk.Vij
-        print "%s    %8.2f: " % (ctp, Vij), join
-    #
-    
+        print ("%s    %8.2f: " % (ctp, Vij), join)
+    #|endfor
     
 #    
 
 def test2():
     debug_test2 = True
     sys.argv = ["chreval.py", "-f", "test_degeneracy2.heat"]
-    print sys.argv
+    print (sys.argv)
     CL = GetOpts(PROGRAM)
     
     calc = Calculate(CL)
@@ -552,34 +632,38 @@ def test2():
     N    = calc.N
     dG, smap = calc.minFE(T)
     if debug_test2:
-        print "number of iloop entries: ", len(calc.iloop.lg)
+        print ("number of iloop entries: ", len(calc.iloop.lg))
         for lgk in calc.iloop.lg:
             base = lgk.motif[0].get_base()
             ctp  = lgk.motif[0].ctp
             Vij  = lgk.Vij
             join = lgk.motif[0].get_branches()
-            print base, ctp, Vij, join
-
+            print (base, ctp, Vij, join)
+        #|endfor
+        
         #sys.exit(0)
     #
+    
     # Test for verifying and demonstrating the syntax for the
     # sorting algorithm for handling groups of links
     trace = Trace(calc)
-    print "traceback mFE:"
+    print ("traceback mFE:")
     dGmin = trace.traceback_mFE(0, calc.N-1, 0, True)
-    print "B: bound; I: I-loop, M: M-loop"
+    print ("B: bound; I: I-loop, M: M-loop")
 #    
 
     
 
 
 def main(cl):
+    #print ("calling  GetOpts()")
     CL = GetOpts(PROGRAM)
+    #print ("finished GetOpts()")
     
     #
     if SHOWMAIN:
-        print cl
-        print "number of args: %d" % (len(cl))
+        print (cl)
+        print ("number of args: %d" % (len(cl)))
     #
     
     if len(cl) < 2:

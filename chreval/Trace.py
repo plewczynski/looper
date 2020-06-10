@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -8,7 +8,7 @@ Classes:       Trace
 
 Author:        Wayne Dawson
 creation date: mostly 2016 a little bit in 2017 up to March
-last update:   190402
+last update:   200311 fixed a rare condition where list_M -> 'B' only
 version:       0
 
 Purpose:
@@ -46,6 +46,7 @@ from Motif import PseudoKnot
 # LThread object representation
 from LThread import DispLThread
 from LThread import LThread
+from LThread import base_labels
 
 # Other objects and tools
 from FileTools   import getHeadExt
@@ -92,7 +93,7 @@ STOP_AT_FIND = False  # stops program when encouters condition
 # 2. special local global function
 
 def usage():
-    print "USAGE: %s" % PROGRAM
+    print ("USAGE: %s" % PROGRAM)
 #
 # At present, there is not much reason to use this at all. I presently
 # don't even have a simple test to run it with. Nevertheless, maybe it
@@ -110,6 +111,7 @@ class Trace:
         self.T        = calc.T
         self.hv       = calc.fe.hv
         self.smap     = calc.fe.smap
+        self.molsys   = calc.fe.molsys
         self.calc     = calc
         self.dGmin    = INFINITY
         
@@ -150,12 +152,15 @@ class Trace:
                         bdt  = smap.glink[i][j].lg[k].motif[0].get_btp() # bond type
                         Vij  = smap.glink[i][j].lg[k].Vij
                         branching = smap.glink[i][j].lg[k].motif[0].get_base()
-                        print "(%2d, %2d)[%2d][%s_%s][%8.2f]: " % (i,j, k, ctp, bdt, Vij), branching
+                        print ("(%2d, %2d)[%2d][%s_%s][%8.2f]: " % (i,j, k, ctp, bdt, Vij), branching)
                 else:
-                    print "(%2d, %2d): " % (i,j), "empty"
+                    print ("(%2d, %2d): " % (i,j), "empty")
                 #
-            #
-        #
+                
+            #|endfor
+            
+        #|endfor
+        
     #
     
     
@@ -167,16 +172,17 @@ class Trace:
         dGmax_diff  = self.dGmin + self.calc.dGrange
         if dGmax_ratio > dGmax_diff:
             dGratio = dGmax_diff/dGmin
-            print "selecting max FE from the difference result +/- %8.2f (ratio: %8.4f)" \
-                % (self.calc.dGrange, dGratio)
+            print ("selecting max FE from the difference result +/- %8.2f (ratio: %8.4f)" \
+                % (self.calc.dGrange, dGratio))
             self.V_HS = dGmax_diff
             self.wt_HS = dGratio
         else:
             dGrange = dGmax_ratio - dGmin 
-            print "selecting max FE from the ratio result %8.4f (+/- %8.2f)" \
-                % (self.wt_HS, dGrange)
+            print ("selecting max FE from the ratio result %8.4f (+/- %8.2f)" \
+                % (self.wt_HS, dGrange))
             self.V_HS = dGmax_ratio
         #
+        
     #
     
     
@@ -187,8 +193,10 @@ class Trace:
             while j > 0 and s[j][3] < s[j-1][3]: 
                 s[j], s[j-1] = s[j-1], s[j] # syntactic sugar: swap the items
                 j=j-1 
-            #
-        #
+            #|endwhile
+            
+        #|endfor
+        
         return s
     #
     
@@ -205,55 +213,65 @@ class Trace:
     
     """
     def get_kref(self, k, l, V, ctp):
-        #
+        
         flag_debug = False # True # 
         
         kref = 0
         if flag_debug:
-            print "get_kref", k, l, V, ctp
+            print ("get_kref", k, l, V, ctp)
+        #
+        
         for m in range(0, len(self.smap.glink[k][l].lg)):
             ctpx = self.smap.glink[k][l].lg[m].motif[0].get_ctp()
             btpx = self.smap.glink[k][l].lg[m].motif[0].get_btp()
             Vx = self.smap.glink[k][l].lg[m].Vij
             if flag_debug:
-                print "(%2d,%2d)[%d]: %8.3f [%s][%s]" % (k,l, m, Vx, ctpx, btpx)
+                print ("(%2d,%2d)[%d]: %8.3f [%s][%s]" % (k,l, m, Vx, ctpx, btpx))
+            #
+            
             if ctpx == ctp and Vx >= V:
                 kref = m
                 break
-                #
+            #
+            
+        #|endfor
+            
         if flag_debug:
-            print "kref = ", kref
+            print ("kref = ", kref)
         #
+        
         return kref
     #
     
     
     def localscan_getBranches(self, p, q, ctp, branching):
-        flag_debug = False
+        flag_debug = False # True # 
         
         if ctp == 'S' or ctp == 'K' or ctp == 'R' or ctp == 'W' or ctp == 'B':
             branching += self.smap.glink[p][q].lg[0].motif[0].get_base()
-        #
+        
         elif ctp == 'J' or ctp == 'I':
             for jk in self.smap.glink[p][q].lg[0].motif[0].get_branches():
                 branching += [jk]
             #
-        #
+        
         elif ctp == 'P' or ctp == 'M':    
             for jk in self.smap.glink[p][q].lg[0].motif[0].get_branches():
                 branching += [jk]
             #
-        #
+        
         else:
-            print "ERROR: encountered an unrecognized symbol (%s)" % (ctp)
-            print "in localscan_for_M(%d,%d)" % (p,q)
+            print ("ERROR: encountered an unrecognized symbol (%s)" % (ctp))
+            print ("in localscan_for_M(%d,%d)" % (p,q))
             sys.exit(1)
             
         #
+        
         if flag_debug:
-            print "ctp = %s" % ctp
-            print "branching: ", branching
+            print ("ctp = %s" % ctp)
+            print ("branching: ", branching)
         #
+        
         return branching
     #
     
@@ -287,11 +305,13 @@ class Trace:
         if debug_localscan_for_M1:
             location = "Trace: enter localscan_for_M(%2d,%2d)" % (i, j)
             self.show_list_M(list_M, location)
+            #print (self.calc.fe.dG[i][j])
+            #sys.exit(0)
         #endif
         
         for k in range(1, j-i-1):
             branching = []
-            E1 = self.calc.dG[i][i+k]; E2 = self.calc.dG[i+k+1][j]
+            E1 = self.calc.fe.dG[i][i+k]; E2 = self.calc.fe.dG[i+k+1][j]
             V = E1 + E2
             
             ctp1 = 'X'; ctp2 = 'X'
@@ -300,12 +320,17 @@ class Trace:
             if not n1 == 0:
                 ctp1 = self.smap.glink[i  ][i+k].lg[0].motif[0].get_ctp()
             #
+            
             if not n2 == 0:
                 ctp2 = self.smap.glink[i+k+1][j].lg[0].motif[0].get_ctp()
             #
+            
             if debug_localscan_for_M2:
-                print "localscan_for_M: k(%2d), (%2d,%2d)[%8.2f][%s]|(%2d,%2d)[%8.2f][%s] V_HS(%8.2f)" \
-                    % (k, i, i+k, E1, ctp1, i+k+1, j, E2, ctp2, self.V_HS)
+                s  = "localscan_for_M: k(%2d), " % k
+                s += "(%2d,%2d)[%8.2f][%s]|(%2d,%2d)[%8.2f][%s] "  % (i,   i+k, E1, ctp1,
+                                                                      i+k+1, j, E2, ctp2)
+                s += " V_HS(%8.2f)" % self.V_HS
+                print (s)
             #
             
             # The variable "V_HS" is used to select only free energy
@@ -315,12 +340,14 @@ class Trace:
             if V < self.V_HS or E1 < self.V_HS or E2 < self.V_HS:
                 
                 if debug_localscan_for_M2:
-                    print "n12: ", n1, n2, (i, j), k
+                    print ("n12: ", n1, n2, (i, j), k)
                 #
+                
                 if not (ctp1 == 'X' or ctp2 == 'X'): # was n1 > 0 and n2 > 0:
                     if not V >= minFE:
                         continue
                     #
+                    
                     flag_M = True
                     # found some real M-loop
                     branching = []
@@ -332,25 +359,29 @@ class Trace:
                     if V < best_dGMk: 
                         best_Mk = (i,j, [motif_P], V, k)
                         best_dGMk = V
-                        #
+                        
                         if debug_localscan_for_M2:
                             n1v = [n1, self.smap.glink[i    ][i+k].lg[0].motif[0].get_base()]
                             n2v = [n2, self.smap.glink[i+k+1][j  ].lg[0].motif[0].get_base()]
-                            print "i(%2d), p(%2d), q(%2d), j(%2d), k(%2d), n12(%2d,%2d) E12(%8.2f, %8.2f), " \
-                                % (i, i+k, i+k+1, j, k, n1, n2, E1, E2), branching
+                            print ("i(%2d), p(%2d), q(%2d), j(%2d), k(%2d), n12(%2d,%2d) E12(%8.2f, %8.2f), " \
+                                % (i, i+k, i+k+1, j, k, n1, n2, E1, E2), branching)
                         #
+                        
                     #
+                    
                 elif not ctp1 == 'X': # was n1 > 0:
                     if not E1 >= minFE:
                         continue
                     #
+                    
                     ctp  = self.smap.glink[i][i+k].lg[0].motif[0].get_ctp()
                     btp  = self.smap.glink[i][i+k].lg[0].motif[0].get_btp()
                     base = self.smap.glink[i][i+k].lg[0].motif[0].get_base()
                     mjn  = self.smap.glink[i][i+k].lg[0].motif[0].get_branches()
                     if debug_localscan_for_M2:
-                        print "base: ", base
+                        print ("base: ", base)
                     #
+                    
                     branching = []
                     branching = self.localscan_getBranches(i, i+k, ctp1, branching)
                     # self.get_kref(i, i+k, E1, ctp)
@@ -366,12 +397,14 @@ class Trace:
                     motif_J = Motif(i, j, E1, ctpx, btpx, branching)
                     if debug_localscan_for_M2:
                         if ctp == 'S':
-                            print "n1: "
-                            print "boundaries: ", i, (i + k)
-                            print motif_J.show_Motif()
-                            #print "stop at 0 in localscan_for_M"; sys.exit(0)
+                            print ("n1: ")
+                            print ("boundaries: ", i, (i + k))
+                            print (motif_J.show_Motif())
+                            #print ("stop at 0 in localscan_for_M"); sys.exit(0)
                         #
+                        
                     #
+                    
                     list_M += [(i,j, [motif_J], E1)]
                     if len(branching) == 1:
                         if E1 < best_dGIk:
@@ -379,33 +412,39 @@ class Trace:
                             best_dGIk = E1
                             if debug_localscan_for_M2:
                                 n1x = [n1, ctp, motif_J.get_branches()]
-                                print "1: i(%2d), p(%2d), q(%2d), j(%2d), k(%2d), n1(%2d) E1(%8.2f), " \
-                                    % (i, i+k, i+k+1, j, k, n1, E1), branching
+                                print ("1: i(%2d), p(%2d), q(%2d), j(%2d), k(%2d), n1(%2d) E1(%8.2f), " \
+                                    % (i, i+k, i+k+1, j, k, n1, E1), branching)
                             #
+                            
                         #
+                        
                     else:
                         if E1 < best_dGMk:
                             best_Mk = (i,j, [motif_J], E1, k)
                             best_dGMk = E1
                             if debug_localscan_for_M2:
                                 n1x = [n1, ctp, motif_J.get_branches()]
-                                print "1: i(%2d), p(%2d), q(%2d), j(%2d), k(%2d), n1(%2d) E1(%8.2f), " \
-                                    % (i, i+k, i+k+1, j, k, n1, E1), branching
+                                print ("1: i(%2d), p(%2d), q(%2d), j(%2d), k(%2d), n1(%2d) E1(%8.2f), " \
+                                    % (i, i+k, i+k+1, j, k, n1, E1), branching)
                             #
+                            
                         #
+                        
                     #
                     
                 elif not ctp2 == 'X': # was n2 > 0:
                     if not E2 >= minFE:
                         continue
                     #
+                    
                     ctp  = self.smap.glink[i+k+1][j].lg[0].motif[0].get_ctp()
                     btp  = self.smap.glink[i+k+1][j].lg[0].motif[0].get_btp()
                     mjn  = self.smap.glink[i+k+1][j].lg[0].motif[0].get_branches()
                     base = self.smap.glink[i+k+1][j].lg[0].motif[0].get_base()
                     if debug_localscan_for_M2:
-                        print "base: ", base
+                        print ("base: ", base)
                     #
+                    
                     branching = []
                     branching = self.localscan_getBranches(i+k+1, j,   ctp2, branching)
                     # self.get_kref(i+k+1, j, E2, ctp)
@@ -421,12 +460,14 @@ class Trace:
                     motif_J = Motif(i, j, E2, ctpx, btpx, branching)
                     if debug_localscan_for_M2:
                         if ctp == 'S':
-                            print "n2: "
-                            print "boundaries: ", (i+k+1), j
-                            print motif_J.show_Motif()
-                            #print "stop at 1 in localscan_for_M"; sys.exit(0)
+                            print ("n2: ")
+                            print ("boundaries: ", (i+k+1), j)
+                            print (motif_J.show_Motif())
+                            #print ("stop at 1 in localscan_for_M"); sys.exit(0)
                         #
+                        
                     #
+                    
                     list_M += [(i,j, [motif_J], E2)]
                     if len(branching) == 1:
                         if E2 < best_dGIk:
@@ -434,52 +475,68 @@ class Trace:
                             best_dGIk = E2
                             if debug_localscan_for_M2:
                                 n2x = [n2, ctp, motif_J.get_branches()]
-                                print "2: i(%2d), p(%2d), q(%2d), j(%2d), k(%2d), n2(%2d) E2(%8.2f), " \
-                                    % (i, i+k, i+k+1, j, k, n2, E2), branching
+                                print ("2: i(%2d), p(%2d), q(%2d), j(%2d), k(%2d), n2(%2d) E2(%8.2f), " \
+                                    % (i, i+k, i+k+1, j, k, n2, E2), branching)
                             #
+                            
                         #
+                        
                     else:
                         if E2 < best_dGMk:
                             best_Mk = (i,j, [motif_J], E2, k)
                             best_dGMk = E2
                             if debug_localscan_for_M2:
                                 n2x = [n2, ctp, motif_J.get_branches()]
-                                print "2: i(%2d), p(%2d), q(%2d), j(%2d), k(%2d), n2(%2d) E2(%8.2f), " \
-                                    % (i, i+k, i+k+1, j, k, n2, E2), branching
+                                print ("2: i(%2d), p(%2d), q(%2d), j(%2d), k(%2d), n2(%2d) E2(%8.2f), " \
+                                    % (i, i+k, i+k+1, j, k, n2, E2), branching)
                             #
+                            
                         #
+                        
                     #
+                    
                 else:
-                    print "i(%2d), p(%2d), q(%2d), j(%2d), k(%2d), n12(%2d,%2d) E12(%8.2f, %8.2f) empty" \
-                        % (i, i+k, i+k+1, j, k, n1, n2, E1, E2)
-                    print "Something is wrong, either sector 1 or sector 2 should have a value"
+                    print ("i(%2d), p(%2d), q(%2d), j(%2d), k(%2d), n12(%2d,%2d) E12(%8.2f, %8.2f) empty" \
+                        % (i, i+k, i+k+1, j, k, n1, n2, E1, E2))
+                    print ("Something is wrong, either sector 1 or sector 2 should have a value")
                     sys.exit(1)
                 #
+                
             else:
                 continue
             #
             
-        #    
+        #|endfor k in range(1, j-i-1):
+        
         lst = [(i + 1, j), (i+1,j-1), (i, j-1), (i,j)]
         for lstk in lst:
             p = lstk[0]; q = lstk[1]
-            E3 = self.calc.dG[p][q]
+            E3 = self.calc.fe.dG[p][q]
+            
             
             ctp3 = 'X'
             n3 = len(self.smap.glink[p][q].lg) # n3 > 0 if Lgroup has data
             if not n3 == 0:
                 ctp3 = self.smap.glink[p][q].lg[0].motif[0].get_ctp()
             #
+            
             if debug_localscan_for_M2:
-                print "localscan_for_M: ij(%2d,%2d)[%8.2f][%s] V_HS(%8.2f)" \
-                    % (p, q, E3, ctp3, self.V_HS)
+                if p == i and q == j:
+                    print ("calculate ends pq = ij = (%2d,%2d)" % (i, j))
+                #
+                
+                print ("localscan_for_M: ij(%2d,%2d)[%8.2f][%s] V_HS(%8.2f)" \
+                    % (p, q, E3, ctp3, self.V_HS))
+                
             #
+            
             if E3 < self.V_HS:
                 if not E3 >= minFE:
                     continue
                 #
+                
                 if debug_localscan_for_M2:
-                    print "n3: ", n3, (p, q), ctp3
+                    print ("n3: ", n3, (p, q), ctp3)
                 #
                 
                 if not ctp3 == 'X': # was n3 > 0:
@@ -488,13 +545,16 @@ class Trace:
                     mjn  = self.smap.glink[p][q].lg[0].motif[0].get_branches()
                     base = self.smap.glink[p][q].lg[0].motif[0].get_base()
                     if debug_localscan_for_M2:
-                        print "base: ", base
+                        print ("base: ", base)
                     #
+                    
                     branching = []
                     branching = self.localscan_getBranches(p, q,   ctp3, branching)
                     # self.get_kref(i+k+1, j, E3, ctp)
+                    
                     ctpx = 'J'
                     btpx = '-'
+                    
                     if len(branching) > 1:
                         flag_M = True
                         ctpx = 'P'
@@ -505,15 +565,29 @@ class Trace:
                     else:
                         flag_I = True
                     #
+                    
+                    
+                    if p == i and q == j:
+                        #print ("calculate ends pq = ij = (%2d,%2d)" % (i, j))
+                        if ctp in base_labels:
+                            ctpx = ctp
+                            btpx = btp
+                            branching = base
+                        #
+                    #
+                    
+                    
                     motif_J = Motif(i, j, E3, ctpx, btpx, branching)
                     if debug_localscan_for_M2:
                         if ctp == 'S':
-                            print "n3: "
-                            print "boundaries: ", p, q
-                            print motif_J.show_Motif()
-                            print "stop at 2 in localscan_for_M"; sys.exit(0)
+                            print ("n3: ")
+                            print ("boundaries: ", p, q)
+                            print (motif_J.show_Motif())
+                            print ("stop at 2 in localscan_for_M"); sys.exit(0)
                         #
+                        
                     #
+                    
                     list_M += [(i,j, [motif_J], E3)]
                     if len(branching) == 1:
                         if E3 < best_dGIk:
@@ -521,26 +595,33 @@ class Trace:
                             best_Ik = (i,j, [motif_J], E3, k)
                             best_dGIk = E3
                             if debug_localscan_for_M2:
-                                print "3: p(%2d), q(%2d), n3(%2d) E3(%8.2f), " \
-                                    % (p, q, n3, E3), branching
+                                print ("3: p(%2d), q(%2d), n3(%2d) E3(%8.2f), " \
+                                    % (p, q, n3, E3), branching)
                             #
+                            
                         #
+                        
                     else:
                         if E3 < best_dGMk:
                             k = fpp[(p,q)]
                             best_Mk = (i,j, [motif_J], E3, k)
                             best_dGMk = E3
                             if debug_localscan_for_M2:
-                                print "3: p(%2d), q(%2d), n3(%2d) E3(%8.2f), " \
-                                    % (p, q, n3, E3), branching
+                                print ("3: p(%2d), q(%2d), n3(%2d) E3(%8.2f), " \
+                                    % (p, q, n3, E3), branching)
                             #
+                            
                         #
+                        
                     #
+                    
                 else:
                     continue
                 #
+                
             #
-        #
+            
+        #|endfor lstk in lst
         
         
         if debug_localscan_for_M1:
@@ -548,24 +629,50 @@ class Trace:
             self.show_list_M(list_M, location)
             
             if flag_M:
-                print best_dGMk, best_Mk[3]
+                print (best_dGMk, best_Mk[3])
                 k = best_Mk[4]
-                branching = best_Mk[2][0].get_branches()
-                best_dGMk = best_Mk[3]
-                tp1 = self.smap.glink[i    ][i+k].lg[0].motif[0].get_ctp()
-                tp2 = self.smap.glink[i+k+1][j  ].lg[0].motif[0].get_ctp()
-                print "best_dGMk->: ij(%2d,%2d)(%2d), (%2d,%2d){%s}|(%2d,%2d){%s}[%8.3f] " \
-                    % (i, j, k, i, i+k, tp1, i+k+1, j, tp2, best_dGMk), branching
+                if k <= 0:
+                    branching = best_Mk[2][0].get_branches()
+                    best_dGMk = best_Mk[3]
+                    p = ipp[k][0]; q = ipp[k][1]
+                    
+                    tp3 = self.smap.glink[p][q].lg[0].motif[0].get_ctp()
+                    print ("best_dGMk->: pq(%2d,%2d)(%2d){%s}[%8.3f] " \
+                           % (p, q, k, tp3, best_dGMk), branching)
+                    
+                    print (" 9,14  %8.2f" % self.smap.glink[ 9][14].lg[0].motif[0].Vij)
+                    print ("10,13  %8.2f" % self.smap.glink[10][13].lg[0].motif[0].Vij)
+                    print ("12,15  %8.2f" % self.smap.glink[12][15].lg[0].motif[0].Vij)
+                    sys.exit(0)
+                    
+                else:
+                    branching = best_Mk[2][0].get_branches()
+                    best_dGMk = best_Mk[3]
+                    tp1 = self.smap.glink[i    ][i+k].lg[0].motif[0].get_ctp()
+                    tp2 = self.smap.glink[i+k+1][j  ].lg[0].motif[0].get_ctp()
+                    s  = "best_dGMk->: ij(%2d,%2d)(%2d), " % (i, j, k)
+                    s += "(%2d,%2d){%s}|(%2d,%2d){%s}[%8.3f]" % (i,   i+k, tp1,
+                                                                 i+k+1, j, tp2,
+                                                                 best_dGMk)
+                    s += "%s" % branching
+                    print (s)
                 #
-                #if i == 0 and j == 14:
-                #    sys.exit(0)
-                #print "stop at 3 in localscan_for_M"; sys.exit(0)
+                """
+                if i == 0 and j == 14:
+                    print ("stop at 3 in localscan_for_M for ij = (0,14)"); sys.exit(0)
+                #
+                
+                print ("stop at 3 in localscan_for_M"); sys.exit(0)
+                """
             else:
-                print "no hits for M/P in localscan_for_M"
+                print ("no hits for M/P in localscan_for_M")
+                
+            #
+            
             if len(best_Ik) > 0:
-                print "best_Ik: ", len(best_Ik), best_Ik
-                print "best_dGIk: ", best_dGIk
-                print "best_dGIk, best_Ik[3]: ", best_dGIk, best_Ik[3]
+                print ("best_Ik: ", len(best_Ik), best_Ik)
+                print ("best_dGIk: ", best_dGIk)
+                print ("best_dGIk, best_Ik[3]: ", best_dGIk, best_Ik[3])
                 k = best_Ik[4]
                 branching = best_Ik[2][0].get_branches()
                 best_dGIk = best_Ik[3]
@@ -574,28 +681,31 @@ class Trace:
                     if len(self.smap.glink[i    ][i+k].lg) > 0:
                         tp1 = self.smap.glink[i    ][i+k].lg[0].motif[0].get_ctp()
                     #
+                    
                     if len(self.smap.glink[i+k+1][j  ].lg) > 0:
                         tp2 = self.smap.glink[i+k+1][j  ].lg[0].motif[0].get_ctp()
                     #
-                    print "best_dGIk->: ij(%2d,%2d)(%2d), (%2d,%2d){%s}|(%2d,%2d){%s}[%8.3f] " \
-                        % (i, j, k, i, i+k, tp1, i+k+1, j, tp2, best_dGIk), branching
-                    #
+                    
+                    print ("best_dGIk->: ij(%2d,%2d)(%2d), (%2d,%2d){%s}|(%2d,%2d){%s}[%8.3f] " \
+                        % (i, j, k, i, i+k, tp1, i+k+1, j, tp2, best_dGIk), branching)
+                    
                 else:
                     tp = best_Ik[2][0].ctp
                     p = ipp[k][0]; q = ipp[k][1]
-                    print "best_dGIk->: ij(%2d,%2d), (%2d,%2d){%s}[%8.3f] " \
-                        % (i, j, p, q, tp, best_dGIk), branching
-                    #
-                    
+                    print ("best_dGIk->: ij(%2d,%2d), (%2d,%2d){%s}[%8.3f] " \
+                        % (i, j, p, q, tp, best_dGIk), branching)
+                #
+                
                 #if i == 0 and j == 14: sys.exit(0)
-                #print "stop at 4 in localscan_for_M"; sys.exit(0)
+                #print ("stop at 4 in localscan_for_M"); sys.exit(0)
             else:
-                print "no hits for I/J in localscan_for_M"
+                print ("no hits for I/J in localscan_for_M")
             #
-            print "Threads(end localscan_for_M)-----------------"
+            
+            print ("Threads(end localscan_for_M)-----------------")
             self.show_list_M(list_M, "add_localscan_for_M:")
-            print "-----------------Threads(end localscan_for_M)"
-            #print "stop at 5 in localscan_for_M"; sys.exit(0)
+            print ("-----------------Threads(end localscan_for_M)")
+            print ("stop at 5 in localscan_for_M"); sys.exit(0)
         #endif
         return list_M
     #                
@@ -603,12 +713,13 @@ class Trace:
     
     def show_list_M(self, list_M, location):
         # list_M -> [(i,j, [motif], V)]
-        print location 
-        print "list_M: --------"
+        print (location)
+        print ("list_M: --------")
         for lMv in list_M:
-            print "(%2d,%2d) -> " % (lMv[0], lMv[1]), lMv[2][0].show_Motif(), lMv[3]
-        #
-        print "-------- :list_M"
+            print ("(%2d,%2d) -> " % (lMv[0], lMv[1]), lMv[2][0].show_Motif(), lMv[3])
+        #|endfor
+        
+        print ("-------- :list_M")
     #
     
     
@@ -621,7 +732,7 @@ class Trace:
     def prune_list_M(self, list_M):
         debug_prune_list_M = False # True # 
         if debug_prune_list_M:
-            print "prune_list_M():"
+            print ("prune_list_M():")
         #
         
         uniq_list_M = []
@@ -641,24 +752,31 @@ class Trace:
                     if len(lMl_base) == len(lMk_base):
                         if lMl_base == lMk_base:
                             if debug_prune_list_M:
-                                print "match lM[2]: ", k, lMk_dG, lMk_base, lMl_base
+                                print ("match lM[2]: ", k, lMk_dG, lMk_base, lMl_base)
                             #
+                            
                             flag_match = True
                             break
                         #
+                        
                     #
+                    
                 #
-            #
+                
+            #|endfor
+            
             if not flag_match:
                 uniq_list_M += [lMl]
             #
-        #
-
+            
+        #|endfor
+        
         
         if debug_prune_list_M:
-            print "finished prune_list_M"
+            print ("finished prune_list_M")
         #
-        #print "stop at 0 in prune_list_M"; sys.exit(0)
+        
+        #print ("stop at 0 in prune_list_M"); sys.exit(0)
         return uniq_list_M
     #
     
@@ -669,34 +787,36 @@ class Trace:
         self.V_HS = self.wt_HS * self.dGmin
         self.warning_boundary = 10000 + self.warning_boundary
         
-        print "reset: upper limit to number of structures: %d" \
-            % self.warning_boundary 
-        print "reset: acceptance maximum free energy :     %12.3f / %12.3f" \
-            % (self.V_HS, self.dGmin)
+        print ("reset: upper limit to number of structures: %d" \
+            % self.warning_boundary)
+        print ("reset: acceptance maximum free energy :     %12.3f / %12.3f" \
+            % (self.V_HS, self.dGmin))
     #
     
     
     # find the minimum free energy
     def get_traces_top(self, hs, ndx, layer, flag_filter):
-        #
+        
         i_top = hs[0][0]; j_top = hs[0][1]
         ctp_top = hs[0][2]
         V_top   = hs[0][3]
-        # print "V_top: %8.2f" % V_top
+        # print ("V_top: %8.2f" % V_top)
         
         if self.debug_traces_top:
-            print "Enter get_traces_top(%d,%d)[%s] layer = %d" \
-                % (i_top, j_top, self.smap.glink[i_top][j_top].lg[0].motif[0].get_ctp(), layer)
-            #print "Stop at 0 in get_traces_top"; sys.exit(0)
+            print ("Enter get_traces_top(%d,%d)[%s] layer = %d" \
+                % (i_top, j_top,
+                   self.smap.glink[i_top][j_top].lg[0].motif[0].get_ctp(),
+                   layer))
+            #print ("Stop at 0 in get_traces_top"); sys.exit(0)
         #endif
         
         if not (self.hv[i_top][j_top] > 0.0):
-            print "get_traces_top(): enthalpy function hv is zero"
-            print "                  at end point (%d,%d)!" % (i_top,j_top)
+            print ("get_traces_top(): enthalpy function hv is zero")
+            print ("                  at end point (%d,%d)!" % (i_top,j_top))
         #
         
         if self.debug_traces_top:
-            print "making reference threads"
+            print ("making reference threads")
         #
         
             
@@ -706,34 +826,38 @@ class Trace:
         list_M = self.localscan_for_M(i_top, j_top, list_M, V_top)
         if self.debug_traces_top:
             self.show_list_M(list_M, "get_traces_top: after localscan_for_M:")
-            print "list_M length: ", len(list_M)
-            #print "Stop at 1 in get_traces_top"; sys.exit(0)
+            print ("list_M length: ", len(list_M))
+            #print ("Stop at 1 in get_traces_top"); sys.exit(0)
         #endif
-
+        
         # 2) now sort list_M so that the FE is ordered and organized 
         list_M = self.ins_SortHotSpot(list_M)
         if self.debug_traces_top:
             self.show_list_M(list_M, "get_traces_top: after ins_SortHotSpot:")
-            print "list_M length: ", len(list_M)
-            #print "Stop at 2 in get_traces_top"; sys.exit(0)
+            print ("list_M length: ", len(list_M))
+            #print ("Stop at 2 in get_traces_top"); sys.exit(0)
         #
+        
         if len(list_M) > 1:
             list_M = self.prune_list_M(list_M)
             if self.debug_traces_top:
                 self.show_list_M(list_M, "get_traces_top: after prune_list_M:")
-                print "Stop at 3 in get_traces_top"; sys.exit(0)
+                #print ("Stop at 3 in get_traces_top"); sys.exit(0)
             #
+            
         #
+        
         if self.debug_traces_top:
-            print "add_localscan_for_M: enter"
+            print ("add_localscan_for_M: enter")
         #
+        
         self.add_localscan_for_M(i_top, j_top, list_M)
         if self.debug_traces_top:
-            print "get_traces_top -> add_localscan_for_M"
+            print ("get_traces_top -> add_localscan_for_M")
             a = DispLThread(self.calc.N)
             a.disp_LThread(self.lt)
-            print "finished add_localscan_for_M"
-            print "Stop at 4 in get_traces_top"; sys.exit(0)
+            print ("finished add_localscan_for_M")
+            #print ("Stop at 4 in get_traces_top"); sys.exit(0)
         #endif
         
         # VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
@@ -746,20 +870,23 @@ class Trace:
         use_prune_lt = False
         if use_prune_lt:
             if self.debug_traces_top:
-                print "get_traces_top -> prune_lt"
+                print ("get_traces_top -> prune_lt")
             #
+            
             self.lt = self.prune_lt(self.lt)
             if self.debug_traces_top:
-                print "finished get_traces_top -> prune_lt: -----------"
+                print ("finished get_traces_top -> prune_lt: -----------")
                 a = DispLThread(self.calc.N)
                 a.disp_LThread(self.lt)
-                print "----------- :finished get_traces_top -> prune_lt"
-                #print "Stop at 5 in get_traces_top"; sys.exit(0)
+                print ("----------- :finished get_traces_top -> prune_lt")
+                #print ("Stop at 5 in get_traces_top"); sys.exit(0)
             #
+            
             if self.debug_traces_top:
-                print "add_localscan_for_M: exit"
-                #print "Stop at 6 in get_traces_top"; sys.exit(0)
+                print ("add_localscan_for_M: exit")
+                #print ("Stop at 6 in get_traces_top"); sys.exit(0)
             #
+            
         #
         
         # AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
@@ -778,32 +905,108 @@ class Trace:
         last_dG = 1000
         last_n  = -1
         for ltk in lt:
-            #
+            
             V = float( int(1000*ltk.dG))/1000.0
             if debug_prune_lt:
-                print V, len(ltk.thread)
+                print (V, len(ltk.thread))
+            #
+            
             if not (last_dG == V and last_n == len(ltk.thread)):
                 last_dG = V; last_n = len(ltk.thread)
                 uniq_lt += [ltk]
             #
-        #
+            
+        #|endfor
+        
         if debug_prune_lt:
-            print "finished prune_lt()"
-            print "Stop at 0 in prune_lt"; sys.exit(0)
+            print ("finished prune_lt()")
+            print ("Stop at 0 in prune_lt"); sys.exit(0)
         #
+        
         return uniq_lt
     #
     
     def add_localscan_for_M(self, i_top, j_top, list_M):
+        """@
+        
+        200311: I'm a little confused why now, but it seems that i_top
+        and j_top are not actually used in this part of the program
+        for anything significant. The more important parameter is
+        list_M, which contains all the important elements that need to
+        be calculated.
+        
+        I think originally, this was supposed to call itself in order
+        to assemble a variety of fragments, but I found that some of
+        the fragments were actually redundant examples of the same
+        structure. I then was trying to filter those out, but there
+        was some problem with the filtering step, perhaps because free
+        energy and counting of contacts was not a stiff enough
+        criteria. At any rate, presently, this does work with
+        hotspots, but it builds the structures (traces) directly from
+        list_M and does not add anything more.
+        
+        As a result, it seems that i_top, j_top is mostly a needed
+        parameter in debugging, but of little other significance.
+        
+        This time, I found one rather surprising bug that I had not
+        recognized before. Apparently, when the only element in list_M
+        is 'B', this program was crashing when it looked up the new
+        definition of branches for 'B'; i.e., Empty. I have remedied this by adding 
+        """
+        
         # debug_add_localscan_for_M = self.debug_get_traces
         debug_add_localscan_for_M = False # True # 
         layer = 0
         k_ref = 0
         if debug_add_localscan_for_M:
-            print "Enter: add_localscan_for_M(ij_top = (%d,%d))" % (i_top, j_top)
+            print ("Enter: add_localscan_for_M(ij_top = (%d,%d))" % (i_top, j_top))
             self.show_list_M(list_M, "add_localscan_for_M:")
-            #print "Stop at 0 in add_localscan_for_M"; sys.exit(0)
+            #print ("Stop at 0 in add_localscan_for_M"); sys.exit(0)
         #
+        
+        
+        # ###############################################################
+        # ######################  debugging tools  ######################
+        # VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+        
+        """@
+        
+        190804: I know this looks a bit confusing, but it basically is
+        correct if you search through and see what it is doing. It
+        seems that it is very difficult to come up with a name that is
+        absolutely clear. The one "stop_in_route" doesn't seem to
+        require much explanation, but "use_set_stop_point" is
+        confusing, particularly when used with this
+        "stop_in_route". Just note that priority goes to
+        "stop_in_route" to avoid short-circuiting.
+        
+        """
+        
+        # first approach: just shut down at structure N
+        stop_in_route      = False # True # 
+        stop_in_route_ndx  = 3 # which structure index should stop occur
+        
+        # second approach: stop where a particular part of the program was crossed
+        use_set_stop_point = False # True # 
+        if stop_in_route:
+            use_set_stop_point = False # priority goes to stop in route
+        #
+        
+        if use_set_stop_point:
+            stop_in_route_ndx  = -1 # set when the condition is met
+        #
+        
+        # AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+        # ######################  debugging tools  ######################
+        # ###############################################################
+        
+                
+        ijo = ()
+        ijf = ()
+        ib = i_top
+        jb = j_top
+        
+        ms = self.molsys
         
         count = 0
         for lM in list_M:
@@ -823,23 +1026,57 @@ class Trace:
             wyspa    = lM[2][0].get_wyspa()
             V = lM[3]
             n = len(branches)
+            if debug_add_localscan_for_M:
+                print ("len(self.lt)", len(self.lt))
+                print ("branches: ", branches)
+                print ("ctp", ctp)
+                print ("btp", btp)
+                print ("base", base)
+            #
             
             # find the boundaries between the branches.
-            ijo = branches[0]
-            ijf = branches[n-1]
-            ib = ijo[0]
-            jb = ijf[1]
+            if len(branches) > 0:
+                ijo = branches[0]
+                ijf = branches[n-1]
+                ib = ijo[0]
+                jb = ijf[1]
+            else:
+                
+                """@
+                
+                When "if len(branches) == 0", then this means that we
+                have an isolated 'B' or a completely isolated 'W' with
+                no relevant multipair interactions. This serves as a
+                kind of "patch" for such a rare instance where link_M
+                has only 'B' in the list. When that happens, branches
+                = (), which makes the above call "ijo = branches[0]"
+                fail. I am not always sure what this thing will call
+                up next, so I have inserted this as (i,j) in this
+                place just in case any one of the elements in list_M
+                might just so happens to satisfy the condition that it
+                is of type 'B' or an empty 'W'.
+                
+                """
+                
+                ijo = (i, j)
+                ijf = ijo   # -> (i,j)
+                ib = ijo[0] # -> i
+                jb = ijf[1] # -> j
+            #
             
             
             if debug_add_localscan_for_M:
-                print "lM: ", i, j, lM[2][0].show_Motif()
-                print "new lM: n(%2d), ijt(%2d,%2d), ijr(%2d,%2d)[%s][%8.2f]" \
-                    % (n, i_top, j_top, i,j, ctp, V), base, branches, pk, wyspa
-                print "n(%2d), ijo = %s -> ib(%2d), ijf = %s -> jb(%2d)" % (n, ijo, ib, ijf, jb)
+                print ("lM: ", i, j, lM[2][0].show_Motif())
+                print ("new lM: n(%2d), ijt(%2d,%2d), ijr(%2d,%2d)[%s][%8.2f]" \
+                    % (n, i_top, j_top, i,j, ctp, V), base, branches, pk, wyspa)
+                print ("n(%2d), ijo = %s -> ib(%2d), ijf = %s -> jb(%2d)" \
+                       % (n, ijo, ib, ijf, jb))
                 
                 for m in range(0,len(self.smap.glink[i][j].lg)):
-                    print self.smap.glink[i][j].lg[m].motif[0].show_Motif()
-                #
+                    print (self.smap.glink[i][j].lg[m].motif[0].show_Motif())
+                #|endfor
+                
+                #self.fe.stopWhenMatchFound(i, j, 0, 11, "add_localscan_for_M 1")
             #
             
             k_ref = 0
@@ -850,47 +1087,69 @@ class Trace:
                     k_ref = m
                     break
                 #
-            #
-            if debug_add_localscan_for_M:
-                print "----------"
-                print self.smap.glink[i][j].lg[k_ref].motif[0].show_Motif()
                 
+            #|endfor
+            
+            if debug_add_localscan_for_M:
+                print ("----------")
+                print (self.smap.glink[i][j].lg[k_ref].motif[0].show_Motif())
+                
+                """
                 if STOP_AT_FIND and ctp == 'S':
-                    print "add_localscan_for_M(): planned exit when ctp = 'S'"
-                    print "Stop at 1 in add_localscan_for_M"; sys.exit(0)
+                    print ("add_localscan_for_M(): planned exit when ctp = 'S'")
+                    print ("Stop at 1 in add_localscan_for_M"); sys.exit(0)
                 #
                 
                 if ctp == 'P':
-                    print "add_localscan_for_M(): planned exit when ctp = 'P'"
-                    # print "Stop at 2 in add_localscan_for_M"; sys.exit(0)
+                    print ("add_localscan_for_M(): planned exit when ctp = 'P'")
+                    # print ("Stop at 2a in add_localscan_for_M"); sys.exit(0)
                 #
+                
+                if ctp == 'B':
+                    print ("add_localscan_for_M(): planned exit when ctp = 'B'")
+                    # print ("Stop at 2b in add_localscan_for_M"); sys.exit(0)
+                #
+                """
+                
             #
             
             # now build a P-loop between [i_top, j_top] (inclusive)
             # based on search result obtained at bondaries [ib,jb]
             if debug_add_localscan_for_M:
-                print "searching P: "
+                print ("searching P: ")
                 if debug_add_localscan_for_M:
-                    print "so-called searching P start: -----------------"
+                    print ("so-called searching P start: -----------------")
                     a = DispLThread(self.calc.N)
                     a.disp_LThread(self.lt)
-                    print "----------------- :so-called searching P start"
-                    #print "Stop at 3 in add_localscan_for_M"; sys.exit(0)
+                    print ("----------------- :so-called searching P start")
+                    #print ("Stop at 3 in add_localscan_for_M"); sys.exit(0)
                     # xxx!!!
                 #endif
+                
             #
-            self.lt += [LThread(self.N)] # create a new thread
+            
+            self.lt += [LThread(self.N, ms)] # create a new thread
             ndx = len(self.lt) - 1 # assign the particular LThread()
             if ctp == 'B':
+                # this is a special case where we don't have a linkage
+                # other than itself, so it has to be treated a little
+                # bit differently.
+                
                 ctpB = self.smap.glink[i][j].lg[0].motif[0].get_ctp()
                 btpB = self.smap.glink[i][j].lg[0].motif[0].get_btp()
                 VpB = self.smap.glink[i][j].lg[0].Vij
                 if debug_add_localscan_for_M:
-                    print "B:              ij_B(%3d,%3d)[%s][%5s][%8.2f]" % (i, j, ctpB, btpB, VpB)  
+                    print ("B:              ij_B(%3d,%3d)[%s][%5s][%8.2f]" % (i, j, ctpB, btpB, VpB))
                 #
-                self.get_traces(i, j, ctpB, VpB, ndx, layer+1)
                 
-            if ctp == 'S':
+                self.get_traces(i, j, ctpB, VpB, ndx, layer+1)
+                """
+                if debug_add_localscan_for_M:
+                    print ("stopping because found B")
+                    sys.exit(0)
+                #
+                """
+            elif ctp == 'S':
                 # case for a stem (antiparallel or parallel)
                 self.make_Stemtrace(i, j, ndx, k_ref, layer + 1, ctp, btp, "add_localscan_for_M")
             elif ctp == 'K':
@@ -908,26 +1167,45 @@ class Trace:
                     btpP = self.smap.glink[i_P][j_P].lg[0].motif[0].get_btp()
                     VpP = self.smap.glink[i_P][j_P].lg[0].Vij
                     if debug_add_localscan_for_M:
-                        print "lk: %10s, ij_P(%3d,%3d)[%s][%5s][%8.2f]" \
-                            % (lk, i_P, j_P, ctpP, btpP, VpP)  
+                        if use_set_stop_point:
+                            if i_v == 0 and j_v == 5:
+                                stop_in_route      = True
+                                stop_in_route_ndx  = count
+                            #
+                            
+                        #
+                                
+                        print ("lk: %10s, ij_P(%3d,%3d)[%s][%5s][%8.2f]" \
+                            % (lk, i_P, j_P, ctpP, btpP, VpP))
                     #
+                    
                     self.get_traces(i_P, j_P, ctpP, VpP, ndx, layer+1)
-                #
+                #|endfor
+                
             #
+            
             if debug_add_localscan_for_M:
-                print "add_localscan_for_M (after computing structure %d): -----------------" \
-                    % count
+                print ("add_localscan_for_M (after computing structure %d): -----------------" \
+                    % count)
                 a = DispLThread(self.calc.N)
-                a.disp_LThread(self.lt)
-                print "----------------- :add_localscan_for_M (after computing structure %d)" \
-                    % count
-                if count == 2:
-                    print "Stop at 4 in add_localscan_for_M"; sys.exit(0)
+                a.disp_this_LThread(self.lt, ndx)
+                #a.disp_LThread(self.lt)
+                print ("----------------- :add_localscan_for_M (after computing structure %d)" \
+                    % count)
+                
+                if stop_in_route:
+                    if count == stop_in_route_ndx:
+                        print ("Stop at 4 in add_localscan_for_M"); sys.exit(0)
+                    #
                 #
+                
                 # xxx!!!190126
             #endif
+            
             count += 1
+            #print ("stop at end of cycle in add_localscan_for_M:"); sys.exit(0)
         #
+        
         self.lt = self.mergeSortTraces(self.lt)
         
     #
@@ -959,25 +1237,30 @@ class Trace:
                     alist[k]=righthalf[j]
                     j=j+1
                 k=k+1
-            #
+            #|endwhile
+            
             while i < len(lefthalf):
                 alist[k]=lefthalf[i]
                 i=i+1
                 k=k+1
-            #
+            #|endwhile
+            
             while j < len(righthalf):
                 alist[k]=righthalf[j]
                 j=j+1
                 k=k+1
+            #|endwhile
+            
             # print("Merging ",alist)
         #
+        
         return alist
     #    
     
     def make_Islandtrace(self, i, j, ndx, k_ref, layer, ctp, btp, iprog = "get_trace"):
         flag_debug = False # True # 
         if flag_debug:
-            print "make_Islandtrace"
+            print ("make_Islandtrace")
         #
         
         self.lt[ndx].add_lnode((i,j), 0.0, 'W', 'bgn')
@@ -986,8 +1269,9 @@ class Trace:
         # the specific islands
         wyspa = self.smap.glink[i][j].lg[0].motif[0].get_wyspa()
         if flag_debug:
-            print "wyspa: ", wyspa
+            print ("wyspa: ", wyspa)
         #
+        
         for wk in wyspa:
             # some repetition, but who cares!
             i_W = wk[0]; j_W = wk[1]
@@ -998,13 +1282,13 @@ class Trace:
             # The function is not so accurate and doesn't zero!
             dGijW = self.calc.fe.calc_dG(i_W, j_W, self.hv[i_W][j_W], self.T, "make_Islandtrace")
             self.lt[ndx].add_lnode((i_W,j_W), dGijW, 'W', 'wyspa')
-        #
+        #|endfor
         
         # the junctions between the islands
         jn_w = self.smap.glink[i][j].lg[0].motif[0].get_branches()
         
         if flag_debug:
-            print "jn_w: ", jn_w
+            print ("jn_w: ", jn_w)
         #
         
         for lk in jn_w:
@@ -1014,30 +1298,39 @@ class Trace:
                 ctpW = self.smap.glink[i_W][j_W].lg[0].motif[0].get_ctp()
                 VpW  = self.smap.glink[i_W][j_W].lg[0].Vij
                 if flag_debug:
-                    print "ij_W = (%d,%d)[%s], ndx(%d), layer(%d)" % (i_W, j_W, ctpW, ndx, layer)
+                    print ("ij_W = (%d,%d)[%s], ndx(%d), layer(%d)" % (i_W, j_W, ctpW, ndx, layer))
                 #
+                
                 if not (i == i_W and j == j_W):
                     # sometimes, there is nothing inside
                     self.get_traces(i_W, j_W, ctpW, VpW, ndx, layer+1)
                 #
+                
             #
+            
             # if smap is empty, then this is all there is.
-        #
+        #|endfor
+        
         self.lt[ndx].add_lnode((i,j), 0.0, 'W', 'end')
 
         if flag_debug:
             n_wyspa = 5
             if len(wyspa) > n_wyspa:
-                print "make_Islandtrace: found islands > %d" % n_wyspa
-                print "Island results: from %s" % iprog
+                print ("make_Islandtrace: found islands > %d" % n_wyspa)
+                print ("Island results: from %s" % iprog)
                 for thr in self.lt[ndx].thread:
-                    print thr.disp_lnode()
+                    print (thr.disp_lnode())
+                #|endfor
+                
                 if STOP_AT_FIND:
-                    print "stop at end of make_Islandtrace"
+                    print ("stop at end of make_Islandtrace")
                     sys.exit(0)
                 #
+                
             #
+            
         #
+        
         # #####12345
     #
     
@@ -1046,7 +1339,7 @@ class Trace:
     def make_PKtrace(self, i, j, ndx, k_ref, layer, ctp, btp, iprog = "get_trace"):
         flag_debug = False # True # 
         if flag_debug:
-            print "make_PKtrace"
+            print ("make_PKtrace")
         #
         
         # root stem
@@ -1064,7 +1357,9 @@ class Trace:
         
         branching = self.smap.glink[i_R][j_R].lg[k_ref].motif[0].get_branches()
         if flag_debug:
-            print "branching = ", branching
+            print ("branching = ", branching)
+        #
+        
         for lk in branching:
             # whether 1 or 100 elements, they can be processed this way.
             i_M = lk[0]; j_M = lk[1]     # new ij of this subdomain
@@ -1072,36 +1367,44 @@ class Trace:
                 ctpM = self.smap.glink[i_M][j_M].lg[0].motif[0].get_ctp()
                 VpM  = self.smap.glink[i_M][j_M].lg[0].Vij
                 if flag_debug:
-                    print "ij_M = (%d,%d)[%s], ndx(%d), layer(%d)" % (i_M, j_M, ctpM, ndx, layer)
+                    print ("ij_M = (%d,%d)[%s], ndx(%d), layer(%d)" % (i_M, j_M, ctpM, ndx, layer))
                 #
+                
                 self.get_traces(i_M, j_M, ctpM, VpM, ndx, layer+1)
+                
             else:
                 if flag_debug:
-                    print "ij_M = (%d,%d)[%s], ndx(%d), layer(%d): skipped!" % (i_M, j_M, ctpM, ndx, layer)
+                    print ("ij_M = (%d,%d)[%s], ndx(%d), layer(%d): skipped!" % (i_M, j_M, ctpM, ndx, layer))
                 #
+                
             #
-        #
+            
+        #|endfor
             
         pks  = self.smap.glink[i][j].lg[k_ref].motif[0].get_pks()
         if flag_debug:
-            print "pks: ", pks
+            print ("pks: ", pks)
         #
         
         btpx = ''
         for x in pks:
             btpx = x[2]
             self.lt[ndx].add_lnode((x[0][0],x[0][1]), x[1], 'l', x[2])
-        #
+        #|endfor
+        
         self.lt[ndx].add_lnode((i,j), 0.0, 'K', 'end')
         
         if flag_debug:
-            print "pk results: from %s" % iprog
+            print ("pk results: from %s" % iprog)
             for thr in self.lt[ndx].thread:
-                print thr.disp_lnode()
+                print (thr.disp_lnode())
+            #|endfor
+            
             if btpx == 'sp':
-                print "parallel"
-                #print "stop at 0 in make_PKtrace"; sys.exit(0)
+                print ("parallel")
+                #print ("stop at 0 in make_PKtrace"); sys.exit(0)
             #
+            
         # #####12345pk
     #
     
@@ -1117,7 +1420,7 @@ class Trace:
         
         flag_debug = False # True # 
         if flag_debug:
-            print "make_Stemtrace(called from %s)" % iprog
+            print ("make_Stemtrace(called from %s)" % iprog)
         #
         
         # root stem
@@ -1135,20 +1438,21 @@ class Trace:
         ihh = i_h + 1;    jhh = j_h - 1 # for parallel stems
         
         if flag_debug:
-            print "antiparallel"
-            print "ij_t: ", i_t, j_t
-            print "ij_h: ", i_h, j_h
-            print "motif(ij_t): ", self.smap.glink[i_t][j_t].lg[kref_t].motif[0].show_Motif()
+            print ("antiparallel")
+            print ("ij_t: ", i_t, j_t)
+            print ("ij_h: ", i_h, j_h)
+            print ("motif(ij_t): ", self.smap.glink[i_t][j_t].lg[kref_t].motif[0].show_Motif())
         #
         
         # is it an antiparallel stem or a parallel stem?
         if not (btpS == 'sa' or btpS == 'c'):
             flag_pp = True
+        #
         
         kref_h = 0
         if not flag_pp:
             if flag_debug:
-                print "antiparallel"
+                print ("antiparallel")
             #
             
             # scan up the antiparallel stem from the tail up to just
@@ -1158,7 +1462,7 @@ class Trace:
             for k in range(0, len(branching)-1):
                 # whether 1 or 100 elements, they can be processed this way.
                 i_S = branching[k][0]; j_S = branching[k][1]     # new ij of this subdomain
-                # print "stem ij_S: ", i_S, j_S
+                # print ("stem ij_S: ", i_S, j_S)
                 ctpS = 'S'
                 bondtype = self.calc.fe.btype[i_S][j_S].btp
                 # 190524 was self.calc.get_bondtype(self.hv[i_S][j_S])
@@ -1169,29 +1473,33 @@ class Trace:
                         # this decision must be enforced in the case of a stem!
                         bondtype = 'c'
                 #
+                
                 dGij = self.calc.fe.calc_dG(i_S, j_S, self.hv[i_S][j_S], self.T, "make_Stemtrace 1")
                 self.lt[ndx].add_lnode((i_S,j_S), dGij, 'S', bondtype)
-            #
+            #|endfor
             
             # now add the head
             for m in range(0, len(self.smap.glink[i_h][j_h].lg)):
-                # print "motif(ij_h): ", self.smap.glink[i_h][j_h].lg[m].motif[0].show_Motif()
+                # print ("motif(ij_h): ", self.smap.glink[i_h][j_h].lg[m].motif[0].show_Motif())
                 ctp = self.smap.glink[i_h][j_h].lg[m].motif[0].get_ctp()
                 if ctp == 'W':
                     # chr11_111099793_111320552_res5kb.heat satisfied this condition
-                    print "aa ij_t (tail): ", i_t, j_t
-                    print "aa ij_h (head): ", i_h, j_h
-                    print "found an island at the head of antiparallel stem."
+                    print ("aa ij_t (tail): ", i_t, j_t)
+                    print ("aa ij_h (head): ", i_h, j_h)
+                    print ("found an island at the head of antiparallel stem.")
                     if STOP_AT_FIND:
-                        print "xx"
-                        print "stop at 0 in make_Stemtrace"; sys.exit(0)
+                        print ("xx")
+                        print ("stop at 0 in make_Stemtrace"); sys.exit(0)
                     #
                 #
+                
                 if ctp == 'B' or ctp == 'I' or ctp == 'M' or ctp == 'S' or ctp == 'W':
                     kref_h = m
                     break
                 #
-            #
+                
+            #|endfor
+            
             # now add the terminus (the head of the stem)
             ctpS = self.smap.glink[i_h][j_h].lg[kref_h].motif[0].get_ctp()
             btpS = self.smap.glink[i_h][j_h].lg[kref_h].motif[0].get_btp()
@@ -1201,16 +1509,16 @@ class Trace:
             # do is just jump to the next motif like in the old days
             # when this program started out.
             if flag_debug:
-                print ctpS, btpS, VpS
-                print "motif(ij_h): ", self.smap.glink[i_h][j_h].lg[kref_h].motif[0].show_Motif()
-                print "aa: ij_h = (%d,%d)[%s], ndx(%d), layer(%d)" % (i_h, j_h, ctpS, ndx, layer)
+                print (ctpS, btpS, VpS)
+                print ("motif(ij_h): ", self.smap.glink[i_h][j_h].lg[kref_h].motif[0].show_Motif())
+                print ("aa: ij_h = (%d,%d)[%s], ndx(%d), layer(%d)" % (i_h, j_h, ctpS, ndx, layer))
             #
             
             self.get_traces(i_h, j_h, ctpS, VpS, ndx, layer+1)
-            # print "xxx"; print "stop at 1 in make_Stemtrace"; sys.exit(0)
+            # print ("xxx"; print "stop at 1 in make_Stemtrace"); sys.exit(0)
         else:
             if flag_debug:
-                print "parallel"
+                print ("parallel")
             #
             
             # scan up the antiparallel stem from the tail up the head
@@ -1219,8 +1527,9 @@ class Trace:
                 # whether 1 or 100 elements, they can be processed this way.
                 i_S = branching[k][0]; j_S = branching[k][1]     # new ij of this subdomain
                 if flag_debug:
-                    print "stem ij_S: ", i_S, j_S
+                    print ("stem ij_S: ", i_S, j_S)
                 #
+                
                 ctpS = 'S'
                 bondtype = self.calc.fe.btype[i_S][j_S].btp
                 # 190524 was self.calc.get_bondtype(self.hv[i_S][j_S])
@@ -1231,27 +1540,33 @@ class Trace:
                         # this decision must be enforced in the case of a stem!
                         bondtype = 't'
                 #
+                
                 dGij = self.calc.fe.calc_dG(i_S, j_S, self.hv[i_S][j_S], self.T, "make_Stemtrace 2")
                 self.lt[ndx].add_lnode((i_S,j_S), dGij, 'S', bondtype)
-            #
+            #|endfor
             
             # now add the head at (i_h + 1, j_h - 1)
             if len(self.smap.glink[ihh][jhh].lg) > 0:
                 for m in range(0, len(self.smap.glink[ihh][jhh].lg)):
                     if flag_debug:
-                        print "motif(ij_h): ", self.smap.glink[ihh][jhh].lg[m].motif[0].show_Motif()
+                        print ("motif(ij_h): ", self.smap.glink[ihh][jhh].lg[m].motif[0].show_Motif())
                     #
+                    
                     ctp = self.smap.glink[ihh][jhh].lg[m].motif[0].get_ctp()
                     if ctp == 'J' or ctp == 'P' or ctp == 'K':
                         kref_h = m
                         break
                     #
+
+                #|endfor
+                
             else:
                 kref_h = -1
             #
+            
             if flag_debug:
                 if kref_h >= 0:
-                    print "motif(ij_h): ", self.smap.glink[ihh][jhh].lg[kref_h].motif[0].show_Motif()
+                    print ("motif(ij_h): ", self.smap.glink[ihh][jhh].lg[kref_h].motif[0].show_Motif())
                     # technically, should verify that these exist, but
                     # presumably, we have already taken care of that
                     # in make_StemMotif().
@@ -1259,32 +1574,44 @@ class Trace:
                     btph = self.smap.glink[ihh][jhh].lg[kref_h].motif[0].get_btp()
                     Vph  = self.smap.glink[ihh][jhh].lg[kref_h].Vij
                     if flag_debug:
-                        print "pp: ij_t = (%d,%d)" % (i_t, j_t)
-                        print "pp: ij_h = (%d,%d)" % (i_h, j_h)
-                        print "pp: ijhh = (%d,%d)[%s], ndx(%d), layer(%d)" % (ihh, jhh, ctph, ndx, layer)
+                        print ("pp: ij_t = (%d,%d)" % (i_t, j_t))
+                        print ("pp: ij_h = (%d,%d)" % (i_h, j_h))
+                        print ("pp: ijhh = (%d,%d)[%s], ndx(%d), layer(%d)" % (ihh, jhh, ctph, ndx, layer))
                         if  i_t == 0 and j_t == 14:
-                            print "planned exit when evaluating a parallel stem"
-                            print "stop at 2 in make_Stemtrace"; sys.exit(0)
+                            print ("planned exit when evaluating a parallel stem")
+                            print ("stop at 2 in make_Stemtrace"); sys.exit(0)
                         #
+                        
                     self.get_traces(ihh, jhh, ctph, Vph, ndx, layer+1)
                 else:
                     if flag_debug:
-                        print "motif(ij_h):  empty" 
-        #    
-        #print "stop at 3 in make_Stemtrace"; sys.exit(0)
+                        print ("motif(ij_h):  empty")
+                    #
+
+                #
+
+            #
+            
+        #
+        
+        #print ("stop at 3 in make_Stemtrace"); sys.exit(0)
         
         self.lt[ndx].add_lnode((i,j), 0.0, 'S', 'end')
         
         if flag_debug:
-            print "stem results: from %s" % iprog
+            print ("stem results: from %s" % iprog)
             for thr in self.lt[ndx].thread:
-                print thr.disp_lnode()
-            #
+                print (thr.disp_lnode())
+            #|endfor
             
-            #if flag_pp:
-            #    print "stop when pp"
-            #    print "stop at 3 in make_Stemtrace"; sys.exit(0)
+            """
+            if flag_pp:
+                print ("stop when pp")
+                print ("stop at 3 in make_Stemtrace"); sys.exit(0)
+            #
+            """
         # #####12345stem
+        
     #
     
     
@@ -1296,13 +1623,14 @@ class Trace:
         
         debug_get_traces = self.debug_get_traces
         if debug_get_traces and layer == 0:
-            print "Enter: get_traces{ij(%d,%d), ctp(%s), V(%8.2f), ndx(%d), layer(%d)" \
-                % (i, j, ctp, V, ndx, layer)
+            print ("Enter: get_traces{ij(%d,%d), ctp(%s), V(%8.2f), ndx(%d), layer(%d)" \
+                % (i, j, ctp, V, ndx, layer))
         #
+        
         if layer > self.maxlayers:
-            print "layer(%d) > maxlayer(%d)" % (layer, self.maxlayers)
-            print "ERROR: something wrong in the recursion of get_traces!"
-            print "stop at 0 in get_traces"; sys.exit(1)
+            print ("layer(%d) > maxlayer(%d)" % (layer, self.maxlayers))
+            print ("ERROR: something wrong in the recursion of get_traces!")
+            print ("stop at 0 in get_traces"); sys.exit(1)
         #
         
         
@@ -1316,10 +1644,11 @@ class Trace:
                 basex = self.smap.glink[i][j].lg[m].motif[0].get_base()
                 branchingx = self.smap.glink[i][j].lg[m].motif[0].get_branches()
                 pkx   = self.smap.glink[i][j].lg[m].motif[0].get_pks()
-                print "layer = %3d: %2d '%s' == ref(%s)?,  %8.3f <= ref(%8.3f)?" \
-                    % (layer, m, ctpx, ctp, Vx, V),  basex, branchingx, pkx
-                print "ctpx = ctp? ",(ctpx == ctp), ", Vx >= V? ", (Vx >= V)
+                print ("layer = %3d: %2d '%s' == ref(%s)?,  %8.3f <= ref(%8.3f)?" \
+                    % (layer, m, ctpx, ctp, Vx, V),  basex, branchingx, pkx)
+                print ("ctpx = ctp? ",(ctpx == ctp), ", Vx >= V? ", (Vx >= V))
             #
+            
             if ctpx == ctp and Vx >= V:
                 kref_t = m
                 flag_found = True
@@ -1331,9 +1660,12 @@ class Trace:
                 # satisfied.
                 break
             #####
+            
+        #|endfor
+        
         if not flag_found:
-            print "ERROR(Trace.get_traces()): didn't find a match for ", ctp
-            print "stop at 1 in get_traces"; sys.exit(1)
+            print ("ERROR(Trace.get_traces()): didn't find a match for ", ctp)
+            print ("stop at 1 in get_traces"); sys.exit(1)
         #
         
         
@@ -1345,33 +1677,36 @@ class Trace:
             btp  = self.smap.glink[i][j].lg[kref_t].motif[0].get_btp()
             self.lt[ndx].add_lnode((i,j), dGij, ctp, btp)
             if debug_get_traces:
-                print "get_traces(): (%2d,%2d)[%8.3f]" \
-                    % (i, j, V), [(i,j)]
+                print ("get_traces(): (%2d,%2d)[%8.3f]" \
+                    % (i, j, V), [(i,j)])
                 
-                print "bim-----------------"
+                print ("bim-----------------")
                 a = DispLThread(self.calc.N)
                 a.disp_LThread(self.lt)
                 # xxx!!!
-                print "-----------------bim"
+                print ("-----------------bim")
                 #if not ctp == 'B': sys.exit(0)
-                #print "stop at 2 in get_traces"; sys.exit(0)
+                #print ("stop at 2 in get_traces"); sys.exit(0)
                 # xxx!!!
             #endif
-            #
+            
             # pseudoknot connections have to be handled in the
             # processing.
         #
+        
         s = self.calc.fe.space(3*layer)
         if debug_get_traces:
             branching = self.smap.glink[i][j].lg[kref_t].motif[0].get_branches()
-            print "%s[%s](%3d, %3d)[%8.3f][ndx = %d, layer = %d]: " \
-                % (s, ctp, i,j, V, ndx, layer), branching
+            print ("%s[%s](%3d, %3d)[%8.3f][ndx = %d, layer = %d]: " \
+                % (s, ctp, i,j, V, ndx, layer), branching)
         #
+        
         if ctp == 'M':
             if debug_get_traces:
-                print "found a case of %s" % ctp
-                print "%s------------------" % s
+                print ("found a case of %s" % ctp)
+                print ("%s------------------" % s)
             #
+            
             branching = self.smap.glink[i][j].lg[kref_t].motif[0].get_branches()
             for lk in branching:
                 # new ij
@@ -1379,25 +1714,27 @@ class Trace:
                 ctpM = self.smap.glink[i_M][j_M].lg[0].motif[0].get_ctp()
                 VpM = self.smap.glink[i_M][j_M].lg[0].Vij
                 self.get_traces(i_M, j_M, ctpM, VpM, ndx, layer+1)
-            #
-            #
+            #|endfor
+            
         elif ctp == 'P':
             if debug_get_traces:
-                print "found a case of %s" % ctp
-                print "%s------------------" % s
+                print ("found a case of %s" % ctp)
+                print ("%s------------------" % s)
             #
+            
             branching = self.smap.glink[i][j].lg[kref_t].motif[0].get_branches()
             for lk in branching:
                 i_P = lk[0]; j_P = lk[1]
                 ctpP = self.smap.glink[i_P][j_P].lg[0].motif[0].get_ctp()
                 VpP = self.smap.glink[i_P][j_P].lg[0].Vij
                 self.get_traces(i_P, j_P, ctpP, VpP, ndx, layer+1)
-            #
-            #
+            #|endfor
+            
         elif ctp == 'I':
             if debug_get_traces:
-                print "found a case of %s" % ctp
+                print ("found a case of %s" % ctp)
             #
+            
             jn  = self.smap.glink[i][j].lg[kref_t].motif[0].get_branches()
             # new ij!!!
             i_I = jn[0][0]; j_I = jn[0][1]
@@ -1405,89 +1742,92 @@ class Trace:
             self.get_traces(i_I, j_I, ctpI, VpI, ndx, layer+1)
             
             if debug_get_traces:
-                self.calc.show_smap_xy(i,j)
-                print "Stop at ctp == I"
-                print "q1-----------------"
+                self.calc.fe.show_smap_xy(i,j)
+                print ("Stop at ctp == I")
+                print ("q1-----------------")
                 a = DispLThread(self.calc.N)
                 a.disp_LThread(self.lt)
                 # xxx!!!
-                print "-----------------q1"
+                print ("-----------------q1")
                 # if i == 0 and j == 32: sys.exit(0)
-                #print "stop at 3 in get_traces"; sys.exit(0) 
+                #print ("stop at 3 in get_traces"); sys.exit(0)
                 # xxx!!!
             #endif
             
-            #
+            
         elif  ctp == 'J':
             if debug_get_traces:
-                print "found a case of J"
+                print ("found a case of J")
             #
+            
             jn  = self.smap.glink[i][j].lg[kref_t].motif[0].get_branches()
             # new ij!!!
             i_J = jn[0][0]; j_J = jn[0][1]
             # (i,j) -> (i_J, j_J)
-            VpJ, cpJ, ctpJ, pks, wyspa = self.calc.filter_BIKMSW_from_glink(i_J,j_J)
+            VpJ, cpJ, ctpJ, pks, wyspa = self.calc.fe.filter_BIKMSW_from_glink(i_J,j_J)
             
             if VpJ == 1000.0:
-                print "ERROR(get_traces): could not find a linkage at (%d,%d)" % (i_J, j_J)
+                print ("ERROR(get_traces): could not find a linkage at (%d,%d)" % (i_J, j_J))
                 sys.exit(1)
             #
+            
             self.get_traces(i_J, j_J, ctpJ, VpJ, ndx, layer+1)
-            #
+            
             
         elif ctp == 'S':
             
             if debug_get_traces:
-                print "get_traces: S:"
+                print ("get_traces: S:")
             #
             
             btp  = self.smap.glink[i][j].lg[kref_t].motif[0].get_btp()
             self.make_Stemtrace(i, j, ndx, kref_t, layer+1, ctp, btp, "get_trace")
             
-            #
+            
         elif ctp == 'K':
             
             if debug_get_traces:
-                print "get_traces: K:"
+                print ("get_traces: K:")
             #
             
             btp  = self.smap.glink[i][j].lg[kref_t].motif[0].get_btp()
-            # print kref_t
-            # print self.smap.glink[i][j].lg[kref_t].motif[0].show_Motif()
+            # print (kref_t)
+            # print (self.smap.glink[i][j].lg[kref_t].motif[0].show_Motif())
             
-            #print "stop at 4 in get_traces"; sys.exit(0)
+            #print ("stop at 4 in get_traces"); sys.exit(0)
             self.make_PKtrace(i, j, ndx, kref_t, layer+1, ctp, btp, "get_trace")
             
-            #
+            
         elif ctp == 'W':
             
             if debug_get_traces:
-                print "get_traces: W:"
+                print ("get_traces: W:")
             #
             btp  = self.smap.glink[i][j].lg[kref_t].motif[0].get_btp()
             self.make_Islandtrace(i, j, ndx, kref_t, layer+1, ctp, btp, "get_trace")
             if debug_get_traces:
             
                 self.calc.show_smap_xy(i,j)
-                print "Stop at ctp == W"
-                print "v1-----------------"
+                print ("Stop at ctp == W")
+                print ("v1-----------------")
                 a = DispLThread(self.calc.N)
                 a.disp_LThread(self.lt)
                 # xxx!!!
-                print "-----------------v1"
+                print ("-----------------v1")
                 # if i == 0 and j == 32: sys.exit(0)
                 # xxx!!!
-                #print "stop at 5 in get_traces"; sys.exit(0)
+                #print ("stop at 5 in get_traces"); sys.exit(0)
             #
             
-            #
+            
         else:
             if debug_get_traces:
-                print "%s---" % s
+                print ("%s---" % s)
             #
+            
         #
+        
     #
-    
     
 #
 
@@ -1495,8 +1835,8 @@ class Trace:
 
 
 def main(cl):
-    print "presently, this call doesn't really do anything..."
-    print cl
+    print ("presently, this call doesn't really do anything...")
+    print (cl)
     # presently doesn't have any tests
 #
 
@@ -1506,4 +1846,4 @@ def main(cl):
 if __name__ == '__main__':
     # running the program
     main(sys.argv)
-
+#

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -9,7 +9,7 @@ Classes:       SetUpBranchEntropy
 
 Author:        Wayne Dawson
 creation date: mostly 2016 and up to March 2017 (separated from chreval 180709)
-last update:   190119
+last update:   200210 (meshed YuriV and Kopernik so they matched, upgraded to python3)
 version:       0
 
 
@@ -44,8 +44,9 @@ import string
 from GetOpts import GetOpts
 
 # Free energy parameters
-from FreeEnergy   import FreeEnergy
-from HeatMapTools import HeatMapTools
+from EffectiveStem import EffectiveStem
+from FreeEnergy    import FreeEnergy
+from HeatMapTools  import HeatMapTools
 
 # Motif object representation
 from Motif import Motif # a core object of these building programs
@@ -56,11 +57,12 @@ from Motif import Map # main map for all the FE and structures
 from LoopRecords import Branch
 from LoopRecords import MBLptr
 
+from Seq import Seq
 # Other objects and tools
 from FileTools   import getHeadExt
 from ChPair      import ChPairData
 from ChPair      import LThread2ChPair
-from SimRNATools import SimRNAData
+from Chromatin2SimRNA import SimRNARestraints #from SimRNATools import SimRNAData
 
 # for Vienna object representation
 from Vienna      import Vstruct
@@ -73,7 +75,12 @@ from Vienna      import Vstruct
 # A hardwired infinity. Somewhat hate this, but it seems there is no
 # way around this darn thing.
 from Constants import INFINITY
+
+# system independent constants
 from Constants import kB # [kcal/molK] (Boltzmann constant)
+
+from MolSystem import sysDefLabels
+from MolSystem import genChrSeq
 
 # coarse-grained resolution factor
 from ChrConstants import seg_len
@@ -88,7 +95,8 @@ from ChrConstants import feshift # (dimensionless, usually = 1)
 
 # stem parameters
 from ChrConstants import minStemLen      # [bp], minimum stem length (default is 1)
-from ChrConstants import max_bp_gap
+from ChrConstants import max_aa_gap     # max gap between beads antiparallel
+from ChrConstants import max_pp_gap     # max gap between beads parallel
 # loop parameters 
 from ChrConstants import minLoopLen      # [nt], minimum loop length (default is 1)
 from ChrConstants import dGMI_threshold  # [kcal/mol] threshold FE for M-/I-loops
@@ -98,6 +106,10 @@ from ChrConstants import dGpk_threshold  # [kcal/mol] threshold FE for pks
 
 from ChrConstants import set_dangles
 from ChrConstants import dG_range 
+
+from BasicTools import initialize_matrix
+
+from SettingsPacket import InputSettings
 
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 # ################################################################
@@ -158,8 +170,8 @@ STOP_AT_FIND = False # True #
 # possibly in other parts.
 
 def usage():
-    print "USAGE: %s {test0,test1}" % PROGRAM
-    print "       default test0"
+    print ("USAGE: %s {test0,test1}" % PROGRAM)
+    print ("       default test0")
 #
 
 # 3. Other categories
@@ -170,14 +182,30 @@ def usage():
 # ################################################################
 
 
-class SetUpBranchEntropy(object):
-    def __init__(self, cseq = "cccccccccccccc"):
+class old_SetUpBranchEntropy(object):
+    """@ 
+    
+    This is used to set up BranchEntropy() when we don't have the
+    specific parameters.  
+    
+    """
+    def __init__(self, chrseq = "cccccccccccccc"):
+        
         self.source = "SetUpBranchEntropy"
-        # This is a combination of SetUpFreeEnergy and
-        # GenerateHeatMapTools
+        self.program = "None"
+        self.system  = "Chromatin"
         
         self.f_heatmap = ["/home/dawson/python/chromatin/tests/test4.heat"]
-        self.cseq      = cseq
+        self.chrseq    = chrseq
+        self.cSeq      = Seq(chrseq, "Chromatin")
+        
+        self.N         = len(chrseq)
+        self.chrstr    = '.'*self.N
+        
+        if self.show_info:
+            print ("dinged here SetUpBranchEntropy")
+        #
+        
         
         # input variables
         self.T        =  310.0
@@ -195,8 +223,9 @@ class SetUpBranchEntropy(object):
         
         # secondary structure stem parameters
         self.minStemLen     = minStemLen
-        self.max_bp_gap     = max_bp_gap 
-                
+        self.max_aa_gap     = max_aa_gap 
+        self.max_pp_gap     = max_pp_gap 
+        
         
         # secondary structure loop parameters
         self.minLoopLen     = minLoopLen
@@ -245,19 +274,104 @@ class SetUpBranchEntropy(object):
         self.set_GetOpts = True
     #
 #
-        
 
-class BranchEntropy(FreeEnergy, HeatMapTools):
-    def __init__(self, cl = SetUpBranchEntropy()):
+
+class SetUpBranchEntropy(InputSettings):
+    """@ 
+    
+    This is used to set up BranchEntropy() when we don't have the
+    specific parameters.  
+    
+    """
+    def __init__(self, chrseq = "xccccccccccccy"):
+        InputSettings.__init__(self, "Chromatin")   # inherit InputSettings
+        
+        self.set_ChrParams("testing") # class str
+        self.molsys.set_JobType("testing")
+        
+        self.source = "SetUpBranchEntropy"
+        self.program = "heartofthesunrise"
+        self.system  = "Chromatin"
+        
+        self.f_heatmap = ["/home/dawson/python/chromatin/tests/test4.heat"]
+        self.chrseq    = chrseq
+        self.cSeq      = Seq(chrseq, "Chromatin")
+        
+        self.N         = len(chrseq)
+        cx = list('.'*self.N)
+        cx[0]  = '('; cx[len(cx)-1] = ')'
+        self.chrstr    = ''.join(cx)
+        
+        if self.show_info:
+            print ("dinged here SetUpBranchEntropy")
+        #
+        
+        print ("chrseq: ", chrseq)
+        self.set_GetOpts = False
+    #
+#
+
+
+class BranchEntropy(FreeEnergy, HeatMapTools, EffectiveStem):
+    
+    def __init__(self, cl, vs = None):
         FreeEnergy.__init__(self, cl)   # inherit FreeEnergy
         HeatMapTools.__init__(self, cl) # inherit HeatMapTools
         
-        if not cl.set_GetOpts:
-            print "ERROR: options are not properly configured"
-            sys.exit(1)
-        #
+        EffectiveStem.__init__(self, cl.max_aa_gap, cl.max_pp_gap)
         
         self.debug_BranchEntropy =  False
+        self.old_approach = False
+        # covers for some difference between the new methods in Vienna
+        # and Vienna2TreeNode.
+        
+        if self.debug_BranchEntropy:
+            print ("source:          ", cl.source)
+            print ("program:         ", cl.program)
+            print ("jobtype(molsys): ", cl.molsys.jobtype)
+            print ("program(molsys): ", cl.molsys.program) # should be same as cl.program
+            
+            #print ("set_GetOpts: ", cl.set_GetOpts)
+        #
+        
+        
+        if not cl.set_GetOpts:
+            
+            # GetOpts is called for a standard prediction request from
+            # chreval or analyze_loops. All other operations involve
+            # inputing some sort of structre sequence or a
+            # pseudo-Vienna construction to address some specific test
+            # of the code. As a result, the other options are
+            # "evaluation" or "testing", respectively.
+            
+            #print (cl.molsys.jobtype)
+            if (cl.molsys.jobtype  == "evaluation" or
+                cl.molsys.jobtype  == "testing"):
+                if self.debug_BranchEntropy:
+                    print ("task requires constructing matrix based on input sequence")
+                    #sys.exit(0)
+                #
+                
+            else:
+                print ("ERROR(BranchEntropy): unrecognized jobtype request (%s)." \
+                       % cl.molsys.jobtype)
+                print ("                      should seek \"evaluation\" or \"testing\".")
+                sys.exit(1)
+            #
+            
+        else:
+            if cl.molsys.jobtype == "prediction":
+                if self.debug_BranchEntropy:
+                    print ("task requires structure prediction using input heatmap")
+                #
+            else:
+                print ("ERROR(BranchEntropy): unrecognized jobtype request (%s)." \
+                       % cl.molsys.jobtype)
+                print ("                      should seek \"prediction\".")
+                sys.exit(1)
+            #
+            
+        #
         """@
         
         181224: I think there is only one allowed file here, in the
@@ -269,6 +383,9 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         """
         self.flnm = ''
         
+        
+        # initialize the free energy matrix
+        self.dG = []
         
         if cl.source == "GetOpts":
             """@
@@ -284,20 +401,88 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             """
             
             # assign the above variables: hv, ctcf_setv, N, btype,
-            # all_ctcf. 
-            self.flnm = cl.f_heatmap[0]
-            self.N = self.assign_btypes(self.flnm)
+            # all_ctcf.
+            
+            """@ 
+            
+            MolSystem
+            
+            presently, this is the only cases for Chromatin are
+            chreval and analyze_loops (which both call f_heatmap), so
+            presently, the strategy below will work just fine. The
+            my_generation is working from a different angle, and when
+            I build something like cantata for this system, it will
+            also call up some other program that will be sorted in the
+            "else" part.  """
+            
+            self.flnm = cl.f_heatmap[0] # elements are a list now
+            
+            
+            self.read_heatmap_from_file(self.flnm)
+            self.N = self.assign_btypes()
+            
+            self.molsys.set_ParamType("setheat", self.flnm)
+            # add a kind of fake sequence
+            self.molsys.set_mseq('c'*self.N)
+            self.molsys.set_mstr('.'*self.N)
+            
+            self.dG = initialize_matrix(self.dG, self.N, 0.0)
+            
+        elif cl.source == "SetUpBranchEntropy":
+            print ("source:  ", cl.source)
+            print ("jobtype: ", cl.program)
+            self.molsys.set_ParamType("genheat")
+
+            self.flnm = cl.f_heatmap[0] # elements are a list now
+            
+            
+            self.read_heatmap_from_file(self.flnm)
+            self.N = self.assign_btypes()
+            
+            self.molsys.set_ParamType("setheat", self.flnm)
+            # add a kind of fake sequence
+            self.molsys.set_mseq('c'*self.N)
+            self.molsys.set_mstr('.'*self.N)
+            
+            self.dG = initialize_matrix(self.dG, self.N, 0.0)
+            #print ("xxxx200208"); sys.exit(0)
             
         else:
+            if self.debug_BranchEntropy:
+                print ("source:  ", cl.source)
+                print ("jobtype: ", cl.program)
+            #
+            
             self.flnm = cl.f_heatmap[0]
-            self.N = self.assign_btypes(self.flnm)
+            self.molsys.set_ParamType("genheat")
+            
+            if not vs == None:
+                if self.debug_BranchEntropy:
+                    print ("build heatmap from sequence or structure data")
+                #
+                
+                self.build_heatmap_from_vseq(vs)
+                if self.debug_BranchEntropy:
+                    print ("built heatmap")
+                #
+                
+            else:
+                print ("ERROR(ChromatinModule): undefined pairing")
+                print ("                        ... don't know why and")
+                print ("                        ... don't know what to do.")
+                sys.exit(1)
+            #
+            
+            self.N = self.assign_btypes()
+            self.dG = initialize_matrix(self.dG, self.N, 0.0)
+            #print ("xxxx200208"); sys.exit(0)
             
         #
         
         # build map layout
         self.smap       = Map(self.N)
         # build map layout
-        # print "(3) N = ", self.N
+        # print ("(3) N = ", self.N)
         
         
         # allowed searches for ChromatinModules
@@ -323,7 +508,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         
         # Trace back variables
         self.opt_ss_seq = []
-        self.maxlayers = self.N/2 + 10
+        self.maxlayers = self.N//2 + 10
         
         """@ 
         
@@ -370,7 +555,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         and most thorough search is generally derived from using
         searchForMBL, which retains both multiple branches and single
         branch results.
-
+        
         """
         # -----------------------------------------------------
         # AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
@@ -401,28 +586,34 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         n = len(self.iloop.lg)
         if flag_debug:
             loop = link.motif[0]
-            print "save_best_iloops: dG(%2d,%2d)[%s] = %8.3f >= %8.3f, %d" \
-                % (loop.i, loop.j, loop.get_ctp(), loop.Vij, self.V_iloop_mx, n)
+            print ("save_best_iloops: dG(%2d,%2d)[%s] = %8.3f >= %8.3f, %d" \
+                % (loop.i, loop.j, loop.get_ctp(), loop.Vij, self.V_iloop_mx, n))
         #
+        
         if link.Vij < self.V_iloop_mx or n < self.n_iloop_mx:
             if flag_debug:
-                print "saving"
+                print ("saving")
             #
+            
             self.iloop.add_link(link)
             self.smap.mergeSortLinks(self.iloop.lg) # sort the stack
             self.V_iloop_mx = self.wt_iloop * self.iloop.lg[0].Vij
             dv = LGroup()
             for k in range(min(n, self.n_iloop_mx-1), -1, -1):
                 dv.add_link(self.iloop.lg[k])
-            #
+            #|endfor
+                
             self.iloop = dv
             if flag_debug:
                 for dvk in self.iloop.lg:
-                    print "(%2d,%2d) %8.3f" \
-                        % (dvk.motif[0].base[0], dvk.motif[0].base[1], dvk.Vij)
-                #
+                    print ("(%2d,%2d) %8.3f" \
+                        % (dvk.motif[0].base[0], dvk.motif[0].base[1], dvk.Vij))
+                #|endfor
+                
             #
-        #        
+            
+        #
+        
     #
     
     
@@ -437,27 +628,27 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
     # this is mostly for viewing glink at a particular position (i,j)
     # when debugging the program.
     def show_smap_xy(self, i,j):
-        print "ij(%d,%d):    " % (i, j)
+        print ("ij(%d,%d):    " % (i, j))
         n = len(self.smap.glink[i][j].lg)
-        print "lg:    ", n
+        print ("lg:    ", n)
         if n > 0:
-            print "motif: ", len(self.smap.glink[i][j].lg[0].motif)
+            print ("motif: ", len(self.smap.glink[i][j].lg[0].motif))
             for kx in range(0, len(self.smap.glink[i][j].lg)):
-                print self.smap.glink[i][j].lg[kx].motif[0].show_Motif()
+                print (self.smap.glink[i][j].lg[kx].motif[0].show_Motif())
             #
         else:
-            print "motif: not assigned"
+            print ("motif: not assigned")
         #
     #
     
     def show_smap_all(self, N, p, q):
-        print "N from smap: %d, current pq = (%d,%d)" % (N, p, q)
+        print ("N from smap: %d, current pq = (%d,%d)" % (N, p, q))
         for q in range(0,N):
             for p in range(0, q-1):
                 if len(self.smap.glink[p][q].lg) > 0:
                     n = len(self.smap.glink[p][q].lg)
                     nn = len(self.smap.glink[p][q].lg[0].motif)
-                    print "smap.glink(%2d,%2d): " % (p, q), n, nn
+                    print ("smap.glink(%2d,%2d): " % (p, q), n, nn)
                 #
             #
         #
@@ -466,7 +657,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
     
     def stopWhenMatchFound(self, i, j, i_set, j_set, callpt = "not specified"):
         if i == i_set and j == j_set:
-            print "planned stop when ij = (%d,%d):, called at [%s]" % (i, j, callpt)
+            print ("planned stop when ij = (%d,%d):, called at [%s]" % (i, j, callpt))
             self.show_smap_xy(i,j)
             sys.exit(0)
         #
@@ -474,10 +665,10 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
     #
     def stopWhenMatchFound_sfm(self, i, j, i_set, j_set, lmblh, callpt = "not specified"):
         if i == i_set and j == j_set:
-            print "planned stop when ij = (%d,%d):, called at [%s]" % (i, j, callpt)
-            print "smap:"
+            print ("planned stop when ij = (%d,%d):, called at [%s]" % (i, j, callpt))
+            print ("smap:")
             self.show_smap_xy(i,j)
-            print "lmblh:"
+            print ("lmblh:")
             self.show_lmblh(i, j, lmblh, callpt)
             sys.exit(0)
         #
@@ -487,9 +678,9 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
     def check_smap(self, i, j, i_set, j_set, flag_stop):
         if i == i_set and j == j_set:
             if not len(self.smap.glink[i][j].lg) > 0:
-                print "ERROR: no values assigned for smap at (%2d,%2d)" % (i, j)
+                print ("ERROR: no values assigned for smap at (%2d,%2d)" % (i, j))
                 sys.exit(1)
-            print "smap: "
+            print ("smap: ")
             s = ''
             for k in range(0, len(self.smap.glink[i][j].lg)):
                 V  = self.smap.glink[i][j].lg[k].Vij
@@ -501,11 +692,11 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                     s += "[ij = (%2d, %2d)[%s_%s](%d): dG = %8.3f], %s -> %s\n" \
                          % (i, j, tp, bt, k, V, bb, jn)
             #
-            print s
+            print (s)
             
             show_iloop_data = False
             if len(self.iloop.lg) > 0 and show_iloop_data:
-                print "iloop: "
+                print ("iloop: ")
                 s = ''
                 for ij_jn in self.iloop.lg:
                     V    = ij_jn.Vij
@@ -516,15 +707,15 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                         base = ij_jnk.get_base()
                         s += "[ij = (%2d, %2d)[%s_%s]: dG = %8.3f], %s -> %s\n" \
                              % (base[0][0], base[0][1], tp, bt, V, base, jn)
-                print s
+                print (s)
             #
             if flag_stop:
                 sys.exit(0)
         #
         
     #
-
-
+    
+    
     # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     # #######################################################
@@ -577,8 +768,8 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         
         if len(branchV) == 0:
             ctp  = self.smap.glink[phv][qhv].lg[0].motif[0].get_ctp()
-            print "ERROR(get_MBLptr()): called branching routines with "
-            print "                     no branches! pqh = (%d,%d)[%s]"  % (ph, qh, ctp)
+            print ("ERROR(get_MBLptr()): called branching routines with ")
+            print ("                     no branches! pqh = (%d,%d)[%s]"  % (ph, qh, ctp))
             sys.exit(1)
         #
         if opt_iMBL:
@@ -603,21 +794,22 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         new_MBL.V = dG_pqhv
         
         if debug:
-            print "get_MBLptr(%2d,%2d):" % (ph, qh)
+            print ("get_MBLptr(%2d,%2d):" % (ph, qh))
             if opt_iMBL:
-                print "stored dG(%2d,%2d): %8.2f   %s" \
-                    % (ph+1, qh-1,
-                       self.smap.glink[ph+1][qh-1].lg[0].motif[0].get_Vij(),
-                       self.smap.glink[ph+1][qh-1].lg[0].motif[0].get_branches())
+                print ("stored dG(%2d,%2d): %8.2f   %s" \
+                       % (ph+1, qh-1,
+                          self.smap.glink[ph+1][qh-1].lg[0].motif[0].get_Vij(),
+                          self.smap.glink[ph+1][qh-1].lg[0].motif[0].get_branches()))
             else:
-                print "stored dG(%2d,%2d): %8.2f   %s" \
-                    % (ph,   qh,
-                       self.smap.glink[ph][qh].lg[0].motif[0].get_Vij(),
-                       self.smap.glink[ph][qh].lg[0].motif[0].get_branches())
+                print ("stored dG(%2d,%2d): %8.2f   %s" \
+                       % (ph,   qh,
+                          self.smap.glink[ph][qh].lg[0].motif[0].get_Vij(),
+                          self.smap.glink[ph][qh].lg[0].motif[0].get_branches()))
             #
-            print "constructed MBLptr:"
-            print new_MBL
-            print "Exit get_MBLptr"
+            
+            print ("constructed MBLptr:")
+            print (new_MBL)
+            print ("Exit get_MBLptr")
         #
         return new_MBL
     #
@@ -672,36 +864,36 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         
         if display: # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
             if opt_iMBL:
-                print "roughScan_MBL(%2d,%2d) iMBL" % (mbl.i, mbl.j)
+                print ("roughScan_MBL(%2d,%2d) iMBL" % (mbl.i, mbl.j))
             else:
-                print "roughScan_MBL(%2d,%2d) pMBL" % (mbl.i, mbl.j)
+                print ("roughScan_MBL(%2d,%2d) pMBL" % (mbl.i, mbl.j))
             #
-            print "index      branch     tag       free energy"
+            print ("index      branch     tag       free energy")
             for kv in range(0, len(mbl.Q)):
                 pv = mbl.Q[kv].i; qv = mbl.Q[kv].j
                 ctpv = self.smap.glink[pv][qv].lg[0].motif[0].get_ctp()
                 Vijv = self.smap.glink[pv][qv].lg[0].motif[0].get_Vij()
-                print " %3d     (%3d,%3d)    %c       %8.2f" % (kv, pv, qv, ctpv, Vijv)
+                print (" %3d     (%3d,%3d)    %c       %8.2f" % (kv, pv, qv, ctpv, Vijv))
             #
             pv = mbl.i; qv = mbl.j
             if opt_iMBL:
                 pv += 1; qv -= 1
             #
-            print "-----      ------     ---       -----------"
+            print ("-----      ------     ---       -----------")
             if len(self.smap.glink[pv][qv].lg) > 0:
                 ctpv = self.smap.glink[pv][qv].lg[0].motif[0].get_ctp()
                 Vijv = self.smap.glink[pv][qv].lg[0].motif[0].get_Vij()
                 # may be useful for comparison, though they _should_ be
                 # the same value. Maybe if they are not, something is
                 # wrong.
-                print "root     (%3d,%3d)    %c       %8.2f" % (mbl.i, mbl.j, ctpv, Vijv)
+                print ("root     (%3d,%3d)    %c       %8.2f" % (mbl.i, mbl.j, ctpv, Vijv))
             else:
-                print "root*    (%3d,%3d)    X         *empty*" % (mbl.i, mbl.j)
+                print ("root*    (%3d,%3d)    X         *empty*" % (mbl.i, mbl.j))
             #
-            print "result                        %8.2f" % (VpMBL)
-            print "opt_iMBL(%s), pqv(%2d,%2d), ij(%2d,%2d)" \
-                % (opt_iMBL, pv, qv, mbl.i, mbl.j)
-            print "Exiting roughScan_MBL()"
+            print ("result                        %8.2f" % (VpMBL))
+            print ("opt_iMBL(%s), pqv(%2d,%2d), ij(%2d,%2d)" \
+                % (opt_iMBL, pv, qv, mbl.i, mbl.j))
+            print ("Exiting roughScan_MBL()")
             #self.stopWhenMatchFound(mbl.i, mbl.j, 0, 6, "roughScan_MBL")
         # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         return VpMBL
@@ -794,7 +986,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         Vij = 0.0
         for brk in mbl.Q:
             pv = brk.i; qv = brk.j
-            # print "pqv: ", pv, qv
+            # print ("pqv: ", pv, qv)
             ctp = smap.glink[pv][qv].lg[0].motif[0].ctp
             if ctp == 'B' or ctp == 'S' or ctp == 'R' or ctp == 'K' or ctp == 'W':
                 Vij += smap.glink[pv][qv].lg[0].motif[0].Vij
@@ -802,19 +994,23 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                     ctpv = smap.glink[pv][qv].lg[0].motif[0].ctp
                     btpv = smap.glink[pv][qv].lg[0].motif[0].btp
                     Vijv = smap.glink[pv][qv].lg[0].motif[0].Vij
-                    print "ij{(%2d,%2d), pqv(%2d,%2d)}[%s][%5s][%8.2f]  Vtotal = %8.2f" \
-                        % (i, j, pv, qv, ctpv, btpv, Vijv, Vij)
+                    print ("ij{(%2d,%2d), pqv(%2d,%2d)}[%s][%5s][%8.2f]  Vtotal = %8.2f" \
+                        % (i, j, pv, qv, ctpv, btpv, Vijv, Vij))
                     #
                 #endif
+                
             #
-        #
-        # print Vij
+            
+        #|endfor
+        
+        # print (Vij)
         dG += Vij
         dG  = self.trim_53pStems(i, j, mbl, smap, opt_iMBL)
         dG += self.cle_loopInt(i, j, j-i+1)
         if self.debug_BranchEntropy:
-            print "cle_MloopEV(result): dG = %8.2f" % dG
+            print ("cle_MloopEV(result): dG = %8.2f" % dG)
         #
+        
         return dG
     #
     
@@ -877,19 +1073,22 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                 ctpv = smap.glink[p][q].lg[0].motif[0].ctp
                 btpv = smap.glink[p][q].lg[0].motif[0].btp
                 Vijv = smap.glink[p][q].lg[0].motif[0].Vij
-                print "ij{(%2d,%2d), pqv(%2d,%2d)}[%s][%5s][%8.2f]  Vtotal = %8.2f" \
-                    % (i, j, pv, qv, ctpv, btpv, Vijv, Vij)
-                #
+                print ("ij{(%2d,%2d), pqv(%2d,%2d)}[%s][%5s][%8.2f]  Vtotal = %8.2f" \
+                    % (i, j, pv, qv, ctpv, btpv, Vijv, Vij))
+                
             #endif
+            
         else:
-            print "ERROR: I-loop should link to a object of type B,S,R,K or W"
-            print "       position(i(%d) <= p(%d) < q(%d) <= j(%d)" % (i, p, q, j)
+            print ("ERROR: I-loop should link to a object of type B,S,R,K or W")
+            print ("       position(i(%d) <= p(%d) < q(%d) <= j(%d)" % (i, p, q, j))
             sys.exit(1)
         #
+        
         dG += Vij
         if self.debug_BranchEntropy:
-            print "cle_IloopE(result): dG = %8.2f" % dG
+            print ("cle_IloopE(result): dG = %8.2f" % dG)
         #
+        
         return dG
     #
     
@@ -919,7 +1118,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         ptype -> btype[i][j].btp (Perhaps it would consider whether it
         is a parallel-strand interaction or a antiparallel-strand
         interaction.)
-
+        
         """
         
         # get_RNA_seq() -> seq
@@ -967,12 +1166,12 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         pks = []
         wps = []
         if DEBUG_filter_glink:
-            print "filter_BIKMSW_from_glink -------------"
+            print ("filter_BIKMSW_from_glink -------------")
         for m in range(0, len(self.smap.glink[k][l].lg)):
             ctpx = self.smap.glink[k][l].lg[m].motif[0].get_ctp()
             if DEBUG_filter_glink:
-                print "(%2d,%2d)[%d]: %8.3f [%s]" \
-                    % (k,l, m, self.smap.glink[k][l].lg[m].Vij, ctpx)
+                print ("(%2d,%2d)[%d]: %8.3f [%s]" \
+                    % (k,l, m, self.smap.glink[k][l].lg[m].Vij, ctpx))
             if ctpx == 'B' or ctpx == 'I' or ctpx == 'M':
                 # 160601wkd: M and K are also closed at the ends!!!!
                 if self.smap.glink[k][l].lg[m].Vij < V:
@@ -1012,12 +1211,12 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                 #
                 #
         if DEBUG_filter_glink:
-            print ".", cp
+            print (".", cp)
         #
         return V, cp, ctp, pks, wps 
     #
-
-    # (from RNAModules)
+    
+    
     def filter_KSW_from_glink(self, k, l):
         """@ 
         
@@ -1030,21 +1229,22 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         (k,l) that is not a pMBL or a J-loop or a single base pair.
         
         This tool is used by find_best_PK().
-
+        
         """
         DEBUG_filter_glink = False # True # 
-        #
+        
         
         V   = INFINITY
         Ob  = None
         if DEBUG_filter_glink:
-            print "filter_KSW_from_glink -------------"
+            print ("filter_KSW_from_glink -------------")
         #endif
+        
         for m in range(0, len(self.smap.glink[k][l].lg)):
             ctpx = self.smap.glink[k][l].lg[m].motif[0].get_ctp()
             if DEBUG_filter_glink:
-                print "(%2d,%2d)[%d]: %8.3f [%s]" \
-                    % (k,l, m, self.smap.glink[k][l].lg[m].Vij, ctpx)
+                print ("(%2d,%2d)[%d]: %8.3f [%s]" \
+                    % (k,l, m, self.smap.glink[k][l].lg[m].Vij, ctpx))
             elif ctpx == 'S':
                 # this could be mixed together with the first group
                 if self.smap.glink[k][l].lg[m].Vij < V:
@@ -1067,7 +1267,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             #
         #
         if DEBUG_filter_glink:
-            print ".", Ob
+            print (".", Ob)
         #
         return Ob
     #
@@ -1080,9 +1280,9 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
     # #######################################################
     
     
-
-
-
+    
+    
+    
     # ######################################################
     # ###############   stem building tools  ###############
     # ######################################################
@@ -1176,8 +1376,8 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         # build the current antiparallel stem at (i_t,j_t) = (i,j) -> (i_h,j_h)
         stmlen_full = len(stem)  # integer
         if stmlen_full == 0:
-            print "ERROR: stems absolutely must contain at least one base pair"
-            print "       this stem is empty!"
+            print ("ERROR: stems absolutely must contain at least one base pair")
+            print ("       this stem is empty!")
             sys.exit(1)
         #
         
@@ -1209,18 +1409,18 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                                              xi_stm)         # [nt] Kuhn length
                 
                 if flag_debug:
-                    print "iloop(k=%2d): ijaa(%2d,%2d)::ijaa_pm1(%2d,%2d)[%s]" \
-                        % (k, iaa, jaa, iaa_p1, jaa_m1, self.btype[iaa][jaa].f2nt)
-                    print "dGijpmk_aa: %8.2f" % (dGijpmk_aa)
+                    print ("iloop(k=%2d): ijaa(%2d,%2d)::ijaa_pm1(%2d,%2d)[%s]" \
+                        % (k, iaa, jaa, iaa_p1, jaa_m1, self.btype[iaa][jaa].f2nt))
+                    print ("dGijpmk_aa: %8.2f" % (dGijpmk_aa))
                     #sys.exit(0)
                 #
                 
             else:
                 dGijpmk_aa  = self.calc_pair_dG(iaa, jaa, xi_stm)
                 if flag_debug:
-                    print "stem (k=%2d): ijaa(%2d,%2d)::ijaa_pm1(%2d,%2d)[%s]" \
-                        % (k, iaa, jaa, iaa_p1, jaa_m1, self.btype[iaa][jaa].f2nt)
-                    print "dGijpmk_aa: %8.2f" % (dGijpmk_aa)
+                    print ("stem (k=%2d): ijaa(%2d,%2d)::ijaa_pm1(%2d,%2d)[%s]" \
+                        % (k, iaa, jaa, iaa_p1, jaa_m1, self.btype[iaa][jaa].f2nt))
+                    print ("dGijpmk_aa: %8.2f" % (dGijpmk_aa))
                     #sys.exit(0)
                 #
                 
@@ -1230,8 +1430,8 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             
             
             if flag_monitor and dGijpmk_aa >= 0.0:
-                print "Note!!! (%d,%d): fe.dGp = %8.2f, ==>> dGijpmk_aa = %8.2f <<==" \
-                    % (iaa, jaa, self.btype[iaa][jaa].dGp, dGijpmk_aa)
+                print ("Note!!! (%d,%d): fe.dGp = %8.2f, ==>> dGijpmk_aa = %8.2f <<==" \
+                    % (iaa, jaa, self.btype[iaa][jaa].dGp, dGijpmk_aa))
             #
             
             pairs_aa += [((iaa, jaa), dGijpmk_aa, "sa")]
@@ -1297,8 +1497,8 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         
         
         if flag_debug:
-            print "pairs_aa: ", tpairs_aa
-            print self.rnaseq
+            print ("pairs_aa: ", tpairs_aa)
+            print (self.rnaseq)
         #
         
         dGaa_full = dGaa_stem + dGpqh_cap + ddG_l
@@ -1320,35 +1520,35 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             for k in range(0, len(pairs_aa)):
                 V += pairs_aa[k][1]
                 ik = pairs_aa[k][0][0]; jk = pairs_aa[k][0][1]
-                print "(%2d,%2d)[%8.2f]" % (ik, jk, pairs_aa[k][1]) 
+                print ("(%2d,%2d)[%8.2f]" % (ik, jk, pairs_aa[k][1]))
             #
             
             i_t = i;   j_t = j
             i_h = ph;  j_h = qh
             
-            print "dGstem = %8.2f" % V
+            print ("dGstem = %8.2f" % V)
             dGpqh_TdS = self.TdS(ph, qh, xi_stm) # used for reference
-            print "aa pq_h(%2d,%2d)[dGpqh_V]:         %8.2f" % (i_h, j_h, dGpqh_V)
-            print "aa pq_h(%2d,%2d)[MLclose]:         %8.2f" % (i_h, j_h, MLclose)
-            print "--------------------------------    -------"
-            print "aa pq_h(%2d,%2d)[dGpqh_cap]:       %8.2f" % (i_h, j_h, dGpqh_cap)
-            print "********************************    *******"
-            print "aa ij_t(%2d,%2d)[dGaa_stem]:       %8.2f" % (i_t, j_t, dGaa_stem)
-            print "aa ij_t(%2d,%2d)[dGloc_stm]:       %8.2f" % (i_t, j_t, dGloc_stm)
-            print "aa pq_h(%2d,%2d)[dGloc_fs]:        %8.2f" % (i_t, j_t, -dGloc_fs)
-            print "aa pq_h(%2d,%2d)[dGpqh_cap]:       %8.2f" % (i_h, j_h, dGpqh_cap)
+            print ("aa pq_h(%2d,%2d)[dGpqh_V]:         %8.2f" % (i_h, j_h, dGpqh_V))
+            print ("aa pq_h(%2d,%2d)[MLclose]:         %8.2f" % (i_h, j_h, MLclose))
+            print ("--------------------------------    -------")
+            print ("aa pq_h(%2d,%2d)[dGpqh_cap]:       %8.2f" % (i_h, j_h, dGpqh_cap))
+            print ("********************************    *******")
+            print ("aa ij_t(%2d,%2d)[dGaa_stem]:       %8.2f" % (i_t, j_t, dGaa_stem))
+            print ("aa ij_t(%2d,%2d)[dGloc_stm]:       %8.2f" % (i_t, j_t, dGloc_stm))
+            print ("aa pq_h(%2d,%2d)[dGloc_fs]:        %8.2f" % (i_t, j_t, -dGloc_fs))
+            print ("aa pq_h(%2d,%2d)[dGpqh_cap]:       %8.2f" % (i_h, j_h, dGpqh_cap))
             
-            print "--------------------------------    -------"
-            print "aa ij_t(%2d,%2d)[dGaa_full]:       %8.2f" % (i_t, j_t, dGaa_full)
+            print ("--------------------------------    -------")
+            print ("aa ij_t(%2d,%2d)[dGaa_full]:       %8.2f" % (i_t, j_t, dGaa_full))
             
-            print "reference (global entropy at pqh):"
-            print "aa pq_h(%2d,%2d)[dGpqh_TdS]:       %8.2f" % (i_h, j_h, dGpqh_TdS)
-            print stem_aa
-            print "Exiting new_make_aaStemMotif()"
+            print ("reference (global entropy at pqh):")
+            print ("aa pq_h(%2d,%2d)[dGpqh_TdS]:       %8.2f" % (i_h, j_h, dGpqh_TdS))
+            print (stem_aa)
+            print ("Exiting new_make_aaStemMotif()")
             
             """
             if ctpaa == 'I' or ctpaa == 'M':
-                print "planned exit"
+                print ("planned exit")
                 sys.exit(0)
             #
             sys.exit(0)
@@ -1380,16 +1580,16 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         
         link_S = Link(stm)
         if flag_debug:
-            print link_S.motif[0].show_Motif()
+            print (link_S.motif[0].show_Motif())
         #
         
         self.smap.glink[i][j].add_link(link_S)
         
         if flag_debug:
-            print "XXXXXXXXXX"
+            print ("XXXXXXXXXX")
             self.show_StemMotif(i, j, stm)
-            print "Exit new_make_aaStemMotif{(%d,%d)}" % (i,j)
-            print self.smap.glink[i][j].lg[0].motif[0].show_Motif()
+            print ("Exit new_make_aaStemMotif{(%d,%d)}" % (i,j))
+            print (self.smap.glink[i][j].lg[0].motif[0].show_Motif())
             #if i == 1 and 30 == j:  sys.exit(0)
             #if i == 0 and 11 == j:  sys.exit(0)
             #sys.exit(0)
@@ -1425,22 +1625,22 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
     
     
     def show_StemMotif(self, i, j, stm):
-        print "Stem:"
-        print stm.disp_Stem()
+        print ("Stem:")
+        print (stm.disp_Stem())
         
         V = 0.0
         for k in range(0, len(stm.stem)-1):
             V += stm.dGp[k]
-            print " (%2d,%2d)   %8.2f" % (stm.stem[k].i, stm.stem[k].j, stm.dGp[k])
+            print (" (%2d,%2d)   %8.2f" % (stm.stem[k].i, stm.stem[k].j, stm.dGp[k]))
         #
         
         dGij = stm.get_Vij()
         V += stm.dG_l - stm.dG_fs
         V += stm.Vpqh + stm.dGloop
-        print "V_tot = %8.2f, dGloop = %8.2f" % (V, stm.dGloop)
+        print ("V_tot = %8.2f, dGloop = %8.2f" % (V, stm.dGloop))
         
         btp = "sa"
-        print "general: ", (i,j), dGij, stm.stem, btp, xi
+        print ("general: ", (i,j), dGij, stm.stem, btp, xi)
                 
         stmlen = len(stm.stem)
         i_t = i;        j_t = j
@@ -1469,22 +1669,22 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         
         """
         
-        print "new_make_aaStemMotif(): anti-parallel stem"
-        print "aa ij_t (tail): ", i_t, j_t
-        print "aa ij_h (head): ", i_h, j_h
-        print "aa ijhh (jnct): ", ihh, jhh, ", dijhh: ", (jhh - ihh)
-        print "region does not have a defined terminus"
+        print ("new_make_aaStemMotif(): anti-parallel stem")
+        print ("aa ij_t (tail): ", i_t, j_t)
+        print ("aa ij_h (head): ", i_h, j_h)
+        print ("aa ijhh (jnct): ", ihh, jhh, ", dijhh: ", (jhh - ihh))
+        print ("region does not have a defined terminus")
         # !!!xxx
         
         #if i_t == 5 and j_t == 48:
         #if i_t == 5 and j_t == 13:            
         if i_t == 2 and j_t == 45:
-            print "btp(%d,%d) = %s" % (i, j, btp)
+            print ("btp(%d,%d) = %s" % (i, j, btp))
             for m in range(0, len(self.smap.glink[i_t][j_t].lg)):
-                print self.smap.glink[i_t][j_t].lg[m].motif[0].show_Motif()
+                print (self.smap.glink[i_t][j_t].lg[m].motif[0].show_Motif())
             #
             
-            print "get_bondtype: ", self.btype[i][j].btp
+            print ("get_bondtype: ", self.btype[i][j].btp)
             #sys.exit(0)
         # 
         #sys.exit(0)
@@ -1546,10 +1746,10 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         #
         
         if flag_debug:
-            print "stem terminates at pqh(%2d,%2d)" % (ph, qh)
-            print "scan zone:   %s" % (fr_zones)
-            print "branchlist:  %s" % (branchlist)
-            #print "find_branching 1: exit"; sys.exit(0)
+            print ("stem terminates at pqh(%2d,%2d)" % (ph, qh))
+            print ("scan zone:   %s" % (fr_zones))
+            print ("branchlist:  %s" % (branchlist))
+            #print ("find_branching 1: exit"); sys.exit(0)
         #endif
         
         """@
@@ -1574,11 +1774,11 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             dGpqh_cap = MLclose
             
             if flag_debug:
-                print "stem head forms an H-loop:"
-                print "dGpqh_V    = %8.2f" % (dGpqh_V)
-                print "MLclose    = %8.2f" % (MLclose)
-                print "--------------    -------"
-                print "dGpqh_cap  = %8.2f" % (dGpqh_cap)
+                print ("stem head forms an H-loop:")
+                print ("dGpqh_V    = %8.2f" % (dGpqh_V))
+                print ("MLclose    = %8.2f" % (MLclose))
+                print ("--------------    -------")
+                print ("dGpqh_cap  = %8.2f" % (dGpqh_cap))
             #
         elif len(branchlist) == 1:
             # terminate at (ph,qh) with I loop
@@ -1591,11 +1791,11 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             dGpqh_cap = dGpqh_V + MLclose
             branchlist = [(ptk, qtk)]
             if flag_debug:
-                print "stem head forms an I-loop:"
-                print "dGpqh_V    = %8.2f" % (dGpqh_V)
-                print "MLclose    = %8.2f" % (MLclose)
-                print "--------------    -------"
-                print "dGpqh_cap  = %8.2f" % (dGpqh_cap)
+                print ("stem head forms an I-loop:")
+                print ("dGpqh_V    = %8.2f" % (dGpqh_V))
+                print ("MLclose    = %8.2f" % (MLclose))
+                print ("--------------    -------")
+                print ("dGpqh_cap  = %8.2f" % (dGpqh_cap))
             #
             
         else: # len(branchlist) > 1
@@ -1618,14 +1818,14 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             MLclose   = dGpqh_d53p + MLloopEV
             dGpqh_cap = dGpqh_V + MLclose 
             if flag_debug:
-                print "stem head forms an MBL:"
-                print "dGpqh_d53p = %8.2f" % (dGpqh_d53p)
-                print "MLloopEV   = %8.2f" % (MLloopEV)
-                print "--------------    -------"
-                print "MLclose    = %8.2f" % (MLclose)
-                print "dGpqh_V    = %8.2f" % (dGpqh_V)
-                print "--------------    -------"
-                print "dGpqh_cap  = %8.2f" % (dGpqh_cap)
+                print ("stem head forms an MBL:")
+                print ("dGpqh_d53p = %8.2f" % (dGpqh_d53p))
+                print ("MLloopEV   = %8.2f" % (MLloopEV))
+                print ("--------------    -------")
+                print ("MLclose    = %8.2f" % (MLclose))
+                print ("dGpqh_V    = %8.2f" % (dGpqh_V))
+                print ("--------------    -------")
+                print ("dGpqh_cap  = %8.2f" % (dGpqh_cap))
             #
             #sys.exit(0)
             
@@ -1648,8 +1848,8 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         flag_debug = debug
         i = stem[0][0]; j = stem[0][1]; dGij = stem[1]
         if flag_debug:
-            print "Enter make_StemMotif{(%d,%d), dGij=%8.2f}" % (i,j, dGij)
-            print "stem: ", stem
+            print ("Enter make_StemMotif{(%d,%d), dGij=%8.2f}" % (i,j, dGij))
+            print ("stem: ", stem)
         #
         
         join = []
@@ -1665,15 +1865,15 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         btp = btp_general
         if len(btp_special) > 0:
             if flag_debug:
-                print "make_StemMotif()"
-                print "special: ", (i,j), dGij, join, btp_special
+                print ("make_StemMotif()")
+                print ("special: ", (i,j), dGij, join, btp_special)
             #
             btp = btp_special
         else:
             if flag_debug:
-                print "general: ", (i,j), dGij, join, btp_special
-                print "btp_general: ", btp_general
-                print "btp_special: ", btp_special
+                print ("general: ", (i,j), dGij, join, btp_special)
+                print ("btp_general: ", btp_general)
+                print ("btp_special: ", btp_special)
             #
         #
         i_t = i; j_t = j
@@ -1684,7 +1884,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             i_h = i + stmlen; j_h = j + stmlen
             ihh = i_h - 1;    jhh = j_h - 1
         #
-
+        
         """@
         
         I know, it is kind of strange, but whether the stem is
@@ -1720,22 +1920,22 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         """
         
         if flag_debug:
-            print "make_StemMotif(): parallel stem"
-            print "pp ij_t (tail): ", i_t, j_t
-            print "pp ij_h (head): ", i_h, j_h
-            print "pp ijhh (jnct): ", ihh, jhh, ", dijhh: ", (jhh - ihh)
-            print "region does not have a defined terminus"
+            print ("make_StemMotif(): parallel stem")
+            print ("pp ij_t (tail): ", i_t, j_t)
+            print ("pp ij_h (head): ", i_h, j_h)
+            print ("pp ijhh (jnct): ", ihh, jhh, ", dijhh: ", (jhh - ihh))
+            print ("region does not have a defined terminus")
             # !!!xxx
             if i_t == 1 and j_t == 30:
             #if i_t == 5 and j_t == 13:            
-                print "btp(%d,%d) = %s" % (i, j, btp)
+                print ("btp(%d,%d) = %s" % (i, j, btp))
                 for m in range(0, len(self.smap.glink[i_t][j_t].lg)):
-                    print self.smap.glink[i_t][j_t].lg[m].motif[0].show_Motif()
+                    print (self.smap.glink[i_t][j_t].lg[m].motif[0].show_Motif())
                 #
-                print "get_bondtype: ", self.btype[i][j].btp
+                print ("get_bondtype: ", self.btype[i][j].btp)
                 # was: self.get_bondtype(self.btype[i][j].wt)
                 # self.hv[i][j] -> self.btype[i][j].wt
-                print "all_ctcf:     ", self.all_ctcf
+                print ("all_ctcf:     ", self.all_ctcf)
                 #sys.exit(0)
                 #
             # sys.exit(0)
@@ -1743,13 +1943,13 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         
         link_S = Link(i_t, j_t, dGij, 'S', btp, join)
         if flag_debug:
-            print link_S.motif[0].show_Motif()
+            print (link_S.motif[0].show_Motif())
         #
         self.smap.glink[i_t][j_t].add_link(link_S)
         
         if flag_debug:
-            print "Exit make_StemMotif{(%d,%d)}" % (i,j)
-            print self.smap.glink[i_t][j_t].lg[0].motif[0].show_Motif()
+            print ("Exit make_StemMotif{(%d,%d)}" % (i,j))
+            print (self.smap.glink[i_t][j_t].lg[0].motif[0].show_Motif())
             #if i_t == 1 and 30 == j_t:  sys.exit(0)
             #if i_t == 5 and 13 == j_t:  sys.exit(0)
             
@@ -1774,8 +1974,8 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
     #
     
     def lookupCap(self, i_h, j_h, dG_h, flag_debug = False):
-
-        flag_debug = False # True #
+        
+        #flag_debug = False # True #
         has_cap = False
         ctp_h = 'X'
         btp_h = '-'
@@ -1792,10 +1992,10 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         n_x = len(self.smap.glink[i_x][j_x].lg)
         n_h = len(self.smap.glink[i_h][j_h].lg)
         if flag_debug:
-            print "Enter lookupCap{ij(%d,%d), dG_h(%8.2f)}" % (i_h, j_h, dG_h)
-            print "lg x: ", n_x
-            print "lg h: ", n_h
-            print "btype(%d,%d).pair = %d" % (i_h, j_h, self.btype[i_h][j_h].pair)
+            print ("Enter lookupCap{ij(%d,%d), dG_h(%8.2f)}" % (i_h, j_h, dG_h))
+            print ("lg x: ", n_x)
+            print ("lg h: ", n_h)
+            print ("btype(%d,%d).pair = %d" % (i_h, j_h, self.btype[i_h][j_h].pair))
         #
         
         if n_x > 0 and n_h > 0:
@@ -1814,7 +2014,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             ctp_h = self.smap.glink[i_h][j_h].lg[0].motif[0].get_ctp()
             ctp_x = self.smap.glink[i_x][j_x].lg[0].motif[0].get_ctp()
             if flag_debug:
-                print "ctp_h: ", ctp_h, ", ctp_x: ", ctp_x 
+                print ("ctp_h: ", ctp_h, ", ctp_x: ", ctp_x)
             #
             
             if ctp_x == 'J' or ctp_x == 'I':
@@ -1830,12 +2030,12 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                         btp_h = 's'
                         has_cap = True
                         if flag_debug:
-                            print "lookupCap, J: ", ctp_x
-                            print "Vij_h: %8.2f, (%s)" % (Vij_h, ctp_h)
-                            print "len lg: ", len(self.smap.glink[i_x][j_x].lg)
-                            print self.smap.glink[i_h][j_h].lg[0].motif[0].show_Motif()
-                            print self.smap.glink[i_x][j_x].lg[0].motif[0].show_Motif()
-                            print "dG_h: ", dG_h, ", jn_h: ", jn_h
+                            print ("lookupCap, J: ", ctp_x)
+                            print ("Vij_h: %8.2f, (%s)" % (Vij_h, ctp_h))
+                            print ("len lg: ", len(self.smap.glink[i_x][j_x].lg))
+                            print (self.smap.glink[i_h][j_h].lg[0].motif[0].show_Motif())
+                            print (self.smap.glink[i_x][j_x].lg[0].motif[0].show_Motif())
+                            print ("dG_h: ", dG_h, ", jn_h: ", jn_h)
                             # sys.exit(0)
                         #
                         
@@ -1855,12 +2055,12 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                     btp_h = 's'
                     has_cap = True
                     if flag_debug:
-                        print "lookupCap, P: ", ctp_x
-                        print "Vij_h: %8.2f, (%s)" % (Vij_h, ctp_h)
-                        print "len lg: ", len(self.smap.glink[i_x][j_x].lg)
-                        print self.smap.glink[i_h][j_h].lg[0].motif[0].show_Motif()
-                        print self.smap.glink[i_x][j_x].lg[0].motif[0].show_Motif()
-                        print "dG_h: ", dG_h, ", jn_h: ", jn_h
+                        print ("lookupCap, P: ", ctp_x)
+                        print ("Vij_h: %8.2f, (%s)" % (Vij_h, ctp_h))
+                        print ("len lg: ", len(self.smap.glink[i_x][j_x].lg))
+                        print (self.smap.glink[i_h][j_h].lg[0].motif[0].show_Motif())
+                        print (self.smap.glink[i_x][j_x].lg[0].motif[0].show_Motif())
+                        print ("dG_h: ", dG_h, ", jn_h: ", jn_h)
                         # sys.exit(0)
                     #
                     
@@ -1871,19 +2071,23 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                 btp_h = self.smap.glink[i_h][j_h].lg[0].motif[0].get_btp()
                 jn_h  = self.smap.glink[i_h][j_h].lg[0].motif[0].get_branches()
                 if flag_debug:
-                    print "B: btp_h: ", btp_h, ", jn_h: ", jn_h
+                    print ("B: btp_h: ", btp_h, ", jn_h: ", jn_h)
                 #
                 
                 if Vij_h < 0.0:
-                    dG_h += Vij_h
+                    #dG_h += Vij_h
+                    """@
+                    
+                    we don't include Vij_h for this case because it
+                    already included at the end of the present stem"""
                     ctp_h = 'B'
                     has_cap = True
                     if flag_debug:
-                        print "lookupCap, B: ", ctp_h
-                        print "Vij_h: %8.2f, (%s)" % (Vij_h, ctp_h)
-                        print "len lg: ", len(self.smap.glink[i_h][j_h].lg)
-                        print self.smap.glink[i_h][j_h].lg[0].motif[0].show_Motif()
-                        print "dG_h: ", dG_h, ", jn_h: ", jn_h
+                        print ("lookupCap, B: ", ctp_h)
+                        print ("Vij_h: %8.2f, (%s)" % (Vij_h, ctp_h))
+                        print ("len lg: ", len(self.smap.glink[i_h][j_h].lg))
+                        print (self.smap.glink[i_h][j_h].lg[0].motif[0].show_Motif())
+                        print ("dG_h: ", dG_h, ", jn_h: ", jn_h)
                         # sys.exit(0)
                     #
                         
@@ -1920,11 +2124,11 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                         ctp_h = 'I'
                         has_cap = True
                         if flag_debug:
-                            print "lookupCap, B: ", ctp_h
-                            print "Vij_h: %8.2f, (%s)" % (Vij_h, ctp_h)
-                            print "len lg: ", len(self.smap.glink[i_h][j_h].lg)
-                            print self.smap.glink[i_h][j_h].lg[0].motif[0].show_Motif()
-                            print "dG_h: ", dG_h, ", jn_h: ", jn_h
+                            print ("lookupCap, B: ", ctp_h)
+                            print ("Vij_h: %8.2f, (%s)" % (Vij_h, ctp_h))
+                            print ("len lg: ", len(self.smap.glink[i_h][j_h].lg))
+                            print (self.smap.glink[i_h][j_h].lg[0].motif[0].show_Motif())
+                            print ("dG_h: ", dG_h, ", jn_h: ", jn_h)
                             # sys.exit(0)
                         #
                         
@@ -1941,18 +2145,6 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         return has_cap, ctp_h, btp_h, dG_h, jn_h
     #
     
-    def is_connected_aaStem(self, slen1, ph1, qh1, slen2, pt2, qt2):
-        """@
-        
-        For chromatin, this is basically just an empty function to
-        passify the torturous scanning routines in
-        Vienna2TreeNode. Other systems like RNA, require all this
-        parsing to establish what is a connected stem, but at least
-        for 5 kbp resolution chromatin, this is completely irrelevant.
-
-        """
-        return False
-    #
     
     
     # see if there is a Motif of type Stem at (i,j)
@@ -1963,13 +2155,20 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         stem_pp = []
         
         if DEBUG_find_ifStem:
-            print "Enter find_ifStem{ij=(%d,%d), dGij=%8.2f, btp(%s)}" % (i, j, dGij, btp)
+            print ("Enter find_ifStem{ij=(%d,%d), dGij=%8.2f, btp(%s)}" % (i, j, dGij, btp))
         #
         
         
         # search for an antiparallel connection
         flag_pairs_aa = True
         k = 1
+        
+        if DEBUG_find_ifStem:
+            wt_aa = self.hv[i][j] # self.hv[iaa][jaa]
+            print ("(%2d,%2d): fe.dGp = %8.2f, fe.hv = %8.2f" \
+                   % (i, j, self.btype[i][j].dGp, wt_aa))
+        #
+        
         while flag_pairs_aa:
             # i+k -?- j-k 
             #  ..........
@@ -1977,14 +2176,18 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             # i+1 -?- j-1
             #   i --- j
             
+            
             iaa = i + k; jaa = j - k
-            dGp_aa = self.btype[iaa][jaa].dGp # self.hv[iaa][jaa]
+            dGijaa = self.btype[iaa][jaa].dGp # self.hv[iaa][jaa]
+            
             if DEBUG_find_ifStem:
-                print "(%d,%d): fe.hv = " % (iaa, jaa), self.btype[iaa][jaa].dGp, \
-                    "btype.wt = ", dGp_aa
+                wt_aa = self.hv[iaa][jaa] # self.hv[iaa][jaa]
+                print ("(%2d,%2d): fe.dGp = %8.2f, fe.hv = %8.2f" \
+                       % (iaa, jaa, self.btype[iaa][jaa].dGp, wt_aa))
             #
-            if dGp_aa < 0.0 and (jaa - iaa) > (1 + self.minLoopLen):
-                btpx = self.btype[iaa][jaa].btp # was self.get_bondtype(dGp_aa)
+            
+            if dGijaa < 0.0 and (jaa - iaa) > (1 + self.minLoopLen):
+                btpx = self.btype[iaa][jaa].btp 
                 if btpx == 's':
                     btpx = 'sa'
                 else:
@@ -1993,18 +2196,15 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                     btpx = 'c'
                 #
                 
-                dGijaa  = dGp_aa
-                # 190524 was self.calc_dG(iaa,  jaa, dGp_aa, self.T, "find_ifStem 1")
-                
-                
                 pairs_aa += [((iaa, jaa), dGijaa, btpx)]
                 if DEBUG_find_ifStem:
-                    print "ijaa: ", iaa, jaa
+                    print ("ijaa: ", iaa, jaa)
                 k += 1
             else:
                 flag_pairs_aa = False
             #
         #
+        
         if len(pairs_aa) > 0:
             btpx = btp
             if not (btp == 's' or btp == 'sa'):
@@ -2012,30 +2212,41 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             else:
                 btpx = 'sa'
             #
+            
+            # include the base of the stem at (i, j) at the tail of
+            # the stem
             pairs_aa = [((i, j), dGij, btpx)] + pairs_aa
             
             if DEBUG_find_ifStem:
-                print "pairs_aa: ", pairs_aa
+                print ("pairs_aa: ", pairs_aa)
             #
-            # Compute the total free energy of the motif.  In the case
-            # of antiparallel stems, they are joined by an
-            # antiparallel connector like 'B', 'I', 'K', 'M' or
-            # 'W'. Therefore, the _last item_ on the list should NOT
-            # be computed from the free energy of a closing loop, as
-            # this will result in double counting the closing region.
+            
+            """@
+            
+            Compute the total free energy of the motif.  In the case
+            of antiparallel stems, they are joined by an antiparallel
+            connector like 'B', 'I', 'K', 'M' or 'W'. Therefore, the
+            _last item_ on the list should NOT be computed from the
+            free energy of a closing loop, as this will result in
+            double counting the closing region.  """
+            
             dGaa = 0.0
             for k in range(0, len(pairs_aa)):
                 dGaa += pairs_aa[k][1]
                 if DEBUG_find_ifStem:
-                    print pairs_aa[k][0], pairs_aa[k][1]
+                    print ("(%2d,%2d) %8.2f" \
+                           % (pairs_aa[k][0][0], pairs_aa[k][0][1], pairs_aa[k][1]))
                 #
-            #
+                
+            #|endfor
+            
             kstm = len(pairs_aa)
             iaa = i + kstm -1 ; jaa = j - kstm + 1
             if DEBUG_find_ifStem:
-                print "dGaa: %8.2f" % dGaa
-                print "ijaa: (%2d,%2d)" % (iaa, jaa)
+                print ("dGaa: %8.2f" % dGaa)
+                print ("ijaa: (%2d,%2d)" % (iaa, jaa))
             #
+            
             has_cap, ctpaa, btpaa, dGaa, jnaa \
                 = self.lookupCap(iaa, jaa, dGaa, DEBUG_find_ifStem)
             
@@ -2043,12 +2254,12 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             if DEBUG_find_ifStem:
                 i_t = i;   j_t = j
                 i_h = iaa; j_h = jaa
-                print "aa ij_t (tail): ", i_t, j_t, dGaa
-                print "aa ij_h (tail): ", i_h, j_h, ctpaa, btpaa 
-                print "aa ijaa:        ", iaa, jaa
-                print stem_aa
+                print ("aa ij_t (tail): ", i_t, j_t, dGaa)
+                print ("aa ij_h (tail): ", i_h, j_h, ctpaa, btpaa )
+                print ("aa ijaa:        ", iaa, jaa)
+                print (stem_aa)
                 # if ctpaa == 'I' or ctpaa == 'M':
-                #     print "planned exit"
+                #     print ("planned exit")
                 #     sys.exit(0)
                 # #
             #
@@ -2057,8 +2268,8 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         use_parallel_option = False # True # 
         if not use_parallel_option:
             if DEBUG_find_ifStem:
-                print "Exit find_ifStem{ij=(%d,%d)}" % (i, j)
-                print pairs_aa, pairs_pp
+                print ("Exit find_ifStem{ij=(%d,%d)}" % (i, j))
+                print (pairs_aa, pairs_pp)
                 # sys.exit(0)
             #
 
@@ -2105,7 +2316,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
               (  8,  19)[ 0][l-sp   ] dGij_B =   -2.767
               (  7,  18)[ 0][l-sp   ] dGij_B =   -2.767
               (  2,  20)[ 0][K-end  ] dGij_B =    0.000
-  
+              
               > 00001    dG =  -16.604   p =   0.98910511
               ccxxxccxxxcccyyyccyyycc
               ..<AB..EDC...>ab..edc..
@@ -2147,8 +2358,9 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         k = 1
         i_t = i;     j_t = j
         if DEBUG_find_ifStem:
-            print "ijpp: (%2d,%2d)" % (i, j)
+            print ("ijpp: (%2d,%2d)" % (i, j))
         #
+        
         while flag_pairs_pp:
             # we only search backwards with this because we go over
             # old solutions.
@@ -2171,13 +2383,14 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                 # 190524 was self.calc_dG(ipp, jpp, dGp_pp, self.T, "find_ifStem 2")
                 pairs_pp += [((ipp, jpp), dGijpp, btpx)]
                 if DEBUG_find_ifStem:
-                    print "ijpp: (%2d,%2d)" % (ipp, jpp)
+                    print ("ijpp: (%2d,%2d)" % (ipp, jpp))
                 #
                 k += 1
             else:
                 flag_pairs_pp = False
             #
         #
+        
         stmlenpp = k 
         
         if len(pairs_pp) > 0:
@@ -2193,14 +2406,14 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             for k in range(0, len(pairs_pp)):
                 dGpp += pairs_pp[k][1]
                 if DEBUG_find_ifStem:
-                    print pairs_pp[k][0], pairs_pp[k][1]
+                    print (pairs_pp[k][0], pairs_pp[k][1])
                 #
             #
             kstmpp = len(pairs_pp)
             ipp = i + kstmpp; jpp = j - kstmpp
             if DEBUG_find_ifStem:
-                print "dGpp: %8.2f" % dGpp
-                print "ijpp: (%2d,%2d)" % (ipp, jpp)
+                print ("dGpp: %8.2f" % dGpp)
+                print ("ijpp: (%2d,%2d)" % (ipp, jpp))
             #
             i_t = i;          j_t = j
             i_h = i + kstmpp; j_h = j + kstmpp
@@ -2230,7 +2443,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                     
                     dGh1pp, cp, ctp, pks, wps = self.filter_BIKMSW_from_glink(ipp, j_t - 1)
                     if DEBUG_find_ifStem:
-                        print "dGh1pp: %8.2f, (%s)" % (dGh1pp, ctp), cp, pks, wps
+                        print ("dGh1pp: %8.2f, (%s)" % (dGh1pp, ctp), cp, pks, wps)
                     #
                 #
             #
@@ -2252,26 +2465,26 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                 # particular article. It seems that python sort finds
                 # the same result, but I don't know what it is doing
                 # or why, so I worry.
-                print "pairs_pp organization"
-                print "before:         ", pairs_pp
+                print ("pairs_pp organization")
+                print ("before:         ", pairs_pp)
                 pairs_pp = self.ins_sort_stempp(pairs_pp)
-                print "after ins_sort: ", pairs_pp
-                print "----------------"
-                print "ij:          ", i, j
-                print "ij_t (tail): ", i_t, j_t
-                print "ij_h (head): ", i_h, j_h
-                print "ijhh:        ", ihh, jhh
+                print ("after ins_sort: ", pairs_pp)
+                print ("----------------")
+                print ("ij:          ", i, j)
+                print ("ij_t (tail): ", i_t, j_t)
+                print ("ij_h (head): ", i_h, j_h)
+                print ("ijhh:        ", ihh, jhh)
                 
                 # this was for a particular problem, but it may be
                 # needed again.
                 if i_t == 2 and j_t == 13:
-                    print "btp(%d,%d) = %s" % (i, j, btp)
+                    print ("btp(%d,%d) = %s" % (i, j, btp))
                     for m in range(0, len(self.smap.glink[i_t][j_t].lg)):
-                        print self.smap.glink[i_t][j_t].lg[m].motif[0].show_Motif()
-                    print "get_bondtype: ", self.btype[i][j].btp
+                        print (self.smap.glink[i_t][j_t].lg[m].motif[0].show_Motif())
+                    print ("get_bondtype: ", self.btype[i][j].btp)
                     # was self.get_bondtype(self.btype[i][j].wt)
                     # self.hv[i][j] -> self.btype[i][j].wt
-                    print "all_ctcf:         ", self.all_ctcf
+                    print ("all_ctcf:         ", self.all_ctcf)
                     #sys.exit(0)
                 #
             #
@@ -2288,7 +2501,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             dGpp = 0.0
             for pp in pairs_pp:
                 if DEBUG_find_ifStem:
-                    print pp[1]
+                    print (pp[1])
                 #
                 dGpp += pp[1]
             #
@@ -2299,11 +2512,11 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             #
             stem_pp = [(i_t, j_t), dGpp, pairs_pp]
             if DEBUG_find_ifStem:
-                print "pp ij_t (tail): ", i_t, j_t, dGpp
-                print "pp ij_h (head): ", i_h, j_h              
-                print stem_pp
+                print ("pp ij_t (tail): ", i_t, j_t, dGpp)
+                print ("pp ij_h (head): ", i_h, j_h)
+                print (stem_pp)
                 if len(pairs_pp) > 1:
-                    print "pp planned exit"
+                    print ("pp planned exit")
                     # sys.exit(0)
                 #
             #
@@ -2311,8 +2524,8 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         
         if DEBUG_find_ifStem:
-            print "Exit find_ifStem{ij=(%d,%d)}" % (i, j)
-            print pairs_aa, pairs_pp
+            print ("Exit find_ifStem{ij=(%d,%d)}" % (i, j))
+            print (pairs_aa, pairs_pp)
             # sys.exit(0)
         #
         return stem_aa, stem_pp
@@ -2320,7 +2533,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
     
     def searchForPKs(self, iz, jz, debug_searchForPKs = False):
         if debug_searchForPKs:
-            print "Enter searchForPKs{ijz = (%d,%d)}" % (iz, jz)
+            print ("Enter searchForPKs{ijz = (%d,%d)}" % (iz, jz))
         #
         ijzlist  = [] # scan window where we search for PKs
         ijrtlist = [] # the domains in the largest window region
@@ -2343,9 +2556,9 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             # region (iz,jz) when len(ijrtlist) > 1.
             
             if debug_searchForPKs:
-                print "ijz = (%2d,%2d)" % (iz, jz)
-                print "ctp(%s), btp(%s), V(%8.2f), ijrtlist = %s" \
-                    % (ctp, btp, V, ijrtlist)
+                print ("ijz = (%2d,%2d)" % (iz, jz))
+                print ("ctp(%s), btp(%s), V(%8.2f), ijrtlist = %s" \
+                    % (ctp, btp, V, ijrtlist))
             #
             
             if len(ijrtlist) == 1 and not ijrtlist[0][0] == 0:
@@ -2392,17 +2605,17 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             
             
             if debug_searchForPKs:
-                print "ijzlist: ", ijzlist
+                print ("ijzlist: ", ijzlist)
                 
                 for zz in ijzlist:
                     
                     dGmin = self.traceback_mFE(zz[0], zz[1], 0, debug_searchForPKs)
                     sstr = string.join(self.opt_ss_seq, '')
-                    print sstr
-                    print dGmin
+                    print (sstr)
+                    print (dGmin)
                 #
-                print "searchForPKs"
-                # if jz == 46: print "xx pk exit"; sys.exit(0)
+                print ("searchForPKs")
+                # if jz == 46: print ("xx pk exit"); sys.exit(0)
             
             #
             # return 0
@@ -2411,8 +2624,8 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             ijrtlist = [(iz, jz)] # search window of root domain
         #
         if debug_searchForPKs:
-            print "ijzlist:  ", ijzlist
-            print "ijrtlist: ", ijrtlist
+            print ("ijzlist:  ", ijzlist)
+            print ("ijrtlist: ", ijrtlist)
         #
         
         for k in range(0, len(ijzlist)):
@@ -2438,14 +2651,14 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                     if edgebase + L >= self.N:
                         L = (self.N - 1) - edgebase
                     #
-                    print "pkaa: ", pkaa
-                    print "ijrt  = (%3d,%3d): " % (irt,  jrt)
-                    print "ijdz  = (%3d,%3d): " % (iz,   jz)
-                    print "ij_pk = (%3d,%3d): " % (i_pk, j_pk)
-                    print "edgebase(%d) + L(%d): %d" % (edgebase, L, edgebase + L)
+                    print ("pkaa: ", pkaa)
+                    print ("ijrt  = (%3d,%3d): " % (irt,  jrt))
+                    print ("ijdz  = (%3d,%3d): " % (iz,   jz))
+                    print ("ij_pk = (%3d,%3d): " % (i_pk, j_pk))
+                    print ("edgebase(%d) + L(%d): %d" % (edgebase, L, edgebase + L))
                     
-                    print "dGpk(%8.2f)   dGbest(%8.2f)   ddGpk(%8.2f)" \
-                        % (dGpk, dGbest, (dGpk - dGbest))
+                    print ("dGpk(%8.2f)   dGbest(%8.2f)   ddGpk(%8.2f)" \
+                        % (dGpk, dGbest, (dGpk - dGbest)))
                 #
             #
             
@@ -2464,13 +2677,13 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                     if edgebase + L >= self.N:
                         L = (self.N - 1) - edgebase
                     #
-                    print "pkpp: ", pkpp
-                    print "ijrt  = (%3d,%3d): " % (irt,  jrt)
-                    print "ijdz  = (%3d,%3d): " % (iz,   jz)
-                    print "ij_pk = (%3d,%3d): " % (i_pk, j_pk)
-                    print "edgebase(%d) + L(%d): %d" % (edgebase, L, edgebase + L)
-                    print "dGpk(%8.2f)   dGbest(%8.2f)   ddGpk(%8.2f)" \
-                        % (dGpk, dGbest, (dGpk - dGbest))
+                    print ("pkpp: ", pkpp)
+                    print ("ijrt  = (%3d,%3d): " % (irt,  jrt))
+                    print ("ijdz  = (%3d,%3d): " % (iz,   jz))
+                    print ("ij_pk = (%3d,%3d): " % (i_pk, j_pk))
+                    print ("edgebase(%d) + L(%d): %d" % (edgebase, L, edgebase + L))
+                    print ("dGpk(%8.2f)   dGbest(%8.2f)   ddGpk(%8.2f)" \
+                        % (dGpk, dGbest, (dGpk - dGbest)))
                 #
             #
             
@@ -2478,17 +2691,17 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             
             if debug_searchForPKs and (len(pkaa) > 0 or len(pkpp) > 0):
                 # still checking this
-                print ">>> after find_best_PK()"
+                print (">>> after find_best_PK()")
                 if len(pkaa) > 0: 
-                    print "pkaa: pk stem length %2d; " % len(pkaa[2]), pkaa 
+                    print ("pkaa: pk stem length %2d; " % len(pkaa[2]), pkaa)
                 #
                 if len(pkpp) > 0:
-                    print "pkpp: pk stem length %2d; " % len(pkpp[2]), pkpp 
+                    print ("pkpp: pk stem length %2d; " % len(pkpp[2]), pkpp)
                 #
             #
         #
         if STOP_AT_FIND:
-            print "planned stop"
+            print ("planned stop")
             sys.exit(0)
         #
         
@@ -2506,8 +2719,8 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             ir = bb[0]; jr = bb[1]
             if ir < i_pk and i_pk < jr:
                 if show:
-                    print "ir(%d) < i_pk(%d) < jr(%d) < j_pk(%d)" % (ir, i_pk, jr, j_pk)
-                    print "branches: ", branches
+                    print ("ir(%d) < i_pk(%d) < jr(%d) < j_pk(%d)" % (ir, i_pk, jr, j_pk))
+                    print ("branches: ", branches)
                 #
                 is_inside = True
                 break
@@ -2522,25 +2735,33 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         
         flag_debug_PK = debug 
         if flag_debug_PK:
-            print "Enter find_best_PK{ijz(%3d,%3d), ijrt(%3d,%3d), edgebase(%d)}" \
-                % (iz, jz, irt, jrt, edgebase)
+            print ("Enter find_best_PK{ijz(%3d,%3d), ijrt(%3d,%3d), edgebase(%d)}" \
+                % (iz, jz, irt, jrt, edgebase))
         #
         L = self.scan_ahead
         if edgebase + L >= self.N:
             L = self.N - edgebase - 1
         #
-
+        
         branches = None
         dGmin = self.traceback_mFE(iz, jz, 0, flag_debug_PK)
         if self.smap.glink[iz][jz].lg[0].motif[0].get_ctp() == 'W':
-            # print "found W at ijz(%d,%d)" % (iz,jz)
-            branches =   self.smap.glink[iz+1][jz-1].lg[0].motif[0].get_base()
+            if jz - iz > 2: 
+                branches =  self.smap.glink[iz+1][jz-1].lg[0].motif[0].get_base()
+            else:
+                branches = []
+                print ("found W at ijz(%d,%d), search region (%d,%d) diff(%d)" \
+                           % (iz,jz, iz+1, jz-1, jz - iz))
+                #sys.exit(0)
+            #
+            
         else:
             branches =   self.smap.glink[iz][jz].lg[0].motif[0].get_base()
         #
+        
         """
         if len(branches) > 1:
-            print "found a region with %d branches" % len(branches), branches
+            print ("found a region with %d branches" % len(branches), branches)
             sys.exit(0)
         #
         """
@@ -2552,9 +2773,9 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         # provide a list of open locations for pk binding
         
         if flag_debug_PK:
-            print "find_best_PK{ijrt(%d,%d), leading edge(L=%d):  %d}" \
-                % (irt, jrt, L, edgebase+L)
-            print string.join(self.opt_ss_seq, '')
+            print ("find_best_PK{ijrt(%d,%d), leading edge(L=%d):  %d}" \
+                % (irt, jrt, L, edgebase+L))
+            print (''.join(self.opt_ss_seq))
         #
         
         best_dG = INFINITY
@@ -2572,7 +2793,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         # first, scan to find the best attachment point
         for jp in range(edgebase+L, edgebase, -1):
             if flag_debug_PK:
-                print "jp = %2d" % jp
+                print ("jp = %2d" % jp)
             #
             
             """@
@@ -2592,7 +2813,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             for ip in range(irt+1, jrt):
                 iaa = ip
                 ipp = jrt - iaa + irt
-                # print "ijpp = (%3d,%3d), ijaa = (%3d,%3d)" % (ipp, jp, iaa, jp)
+                # print ("ijpp = (%3d,%3d), ijaa = (%3d,%3d)" % (ipp, jp, iaa, jp))
                 
                 """
                 
@@ -2601,7 +2822,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                 #############################
                 """
                 
-                # print "anti-parallel case:"
+                # print ("anti-parallel case:")
                 
                 dGp_f = self.btype[iaa][jp].dGp # dGp_f = dGp Forward
                 
@@ -2618,7 +2839,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                                             self.T,
                                             "find_best_PK ap search")
                     """
-                    # print "aa: dGijp = %8.2f" % dGijp
+                    # print ("aa: dGijp = %8.2f" % dGijp)
                     
                     if ssv[iaa] == '.' and ssv[jp] == '.':
                         
@@ -2644,12 +2865,12 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                         
                         # find _a_ best on for a given jrt
                         if last_iaa < iaa and dGijp < best_ddGaa:
-                            # print "1(aa). iaa, jp: ", iaa, jp
+                            # print ("1(aa). iaa, jp: ", iaa, jp)
                             best_ddGaa = dGijp
                             best_daa   = (iaa, jp)
                             #
                         elif dGijp < best_dGaa and dGijp < dGaa_cur:
-                            # print "2(aa). iaa, jp: ", iaa, jp
+                            # print ("2(aa). iaa, jp: ", iaa, jp)
                             best_ddGaa = dGijp
                             best_daa   = (iaa, jp)
                             best_Spklistaa = []
@@ -2662,7 +2883,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                 # now the parallel case:
                 # #############################
                 
-                # print "parallel case:"
+                # print ("parallel case:")
                 
                 dGp_b = self.btype[ipp][jp].dGp # dGp_b = dGp Backward
                 
@@ -2674,13 +2895,13 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                     
                     dGijp = dGp_b
                     """190524 was
-
+                    
                     dGijp = self.calc_dG(ipp, jp,
                                             dGp_b,
                                             self.T,
                                             "find_best_PK pp search")
                     """
-                    # print "pp: dGijp = %8.2f" % dGijp
+                    # print ("pp: dGijp = %8.2f" % dGijp)
                     if ssv[ipp] == '.' and ssv[jp] == '.':
                         # currently, we just look for any slot where
                         # we can cram a link. (See above comments on
@@ -2696,12 +2917,12 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                         
                         # find _a_ best on for a given jrt
                         if last_ipp > ipp and dGijp < best_ddGpp:
-                            # print "1(pp). ijp, jp: ", ipp, jp
+                            # print ("1(pp). ijp, jp: ", ipp, jp)
                             best_ddGpp = dGijp
                             best_dpp   = (ipp, jp)
                             #
                         elif dGijp < best_dGpp and dGijp < dGpp_cur:
-                            # print "2(pp). ijp, jp: ", ipp, jp
+                            # print ("2(pp). ijp, jp: ", ipp, jp)
                             best_ddGpp = dGijp
                             best_dpp   = (ipp, jp)
                             best_Spklistpp = []
@@ -2710,7 +2931,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                     #
                 #
             #
-
+            
             # anti-parallel result
             if best_ddGaa < 0.0:
                 if last_iaa < iaa:
@@ -2718,7 +2939,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                     btp = self.btype[i_aa][j_aa].btp
                     # was self.get_bondtype(self.btype[i_aa][j_aa].wt) 
                     if btp == 's' or btp == 'sp':
-                        #print "aa pk: s or sp: ", i_aa, j_aa, btp 
+                        #print ("aa pk: s or sp: ", i_aa, j_aa, btp)
                         #sys.exit(0)
                         btp = 'sa'
                         
@@ -2736,20 +2957,20 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                         is an antiparallel stem
                         
                         """
-                        print "aa pk: not s or sp: ", i_aa, j_aa, btp
+                        #print ("aa pk: not s or sp: ", i_aa, j_aa, btp)
                         #sys.exit(0)
                         btp = 'c'
                     #
-
+                    
                     best_Spklistaa += [(best_daa, best_ddGaa, btp)] 
                     last_iaa      = i_aa
                     flag_find = True
                     if flag_debug_PK:
-                        print "last_iaa; ", last_iaa
-                        print "best_daa(%2d,%2d), best_ddGaa(%8.2f), dGijp(%8.2f)" \
-                            % (best_daa[0], best_daa[1], best_ddGaa, dGijp)
-                        print "best_Spklistaa: ", best_Spklistaa
-                        print "ij:  ", irt, jrt
+                        print ("last_iaa; ", last_iaa)
+                        print ("best_daa(%2d,%2d), best_ddGaa(%8.2f), dGijp(%8.2f)" \
+                            % (best_daa[0], best_daa[1], best_ddGaa, dGijp))
+                        print ("best_Spklistaa: ", best_Spklistaa)
+                        print ("ij:  ", irt, jrt)
                     #
                 #
             #
@@ -2761,7 +2982,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                     btp = self.btype[i_pp][j_pp].btp
                     # was self.get_bondtype(self.btype[i_pp][j_pp].wt)
                     if btp == 's' or btp == 'sa':
-                        #print "pp pk: s or sa: ", i_pp, j_pp, btp 
+                        # print ("pp pk: s or sa: ", i_pp, j_pp, btp)
                         #sys.exit(0)
                         btp = 'sp'
                     else:
@@ -2778,7 +2999,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                         is a parallel stem.
                         
                         """
-                        print "pp pk: not s or sa: ", i_pp, j_pp, btp 
+                        # print ("pp pk: not s or sa: ", i_pp, j_pp, btp)
                         # sys.exit(0)
                         btp = 't'
                     #
@@ -2788,19 +3009,19 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                     last_ipp = i_pp
                     flag_find = True
                     if flag_debug_PK:
-                        print "last_ipp; ", last_ipp
-                        print "best_dpp(%2d,%2d), best_ddGpp(%8.2f), dGijp(%8.2f)" \
-                            % (best_dpp[0], best_dpp[1], best_ddGpp, dGijp)
-                        print "best_Spklistpp: ", best_Spklistpp
-                        print "ijrt:  ", irt, jrt
+                        print ("last_ipp; ", last_ipp)
+                        print ("best_dpp(%2d,%2d), best_ddGpp(%8.2f), dGijp(%8.2f)" \
+                            % (best_dpp[0], best_dpp[1], best_ddGpp, dGijp))
+                        print ("best_Spklistpp: ", best_Spklistpp)
+                        print ("ijrt:  ", irt, jrt)
                     #
                 #
             #
         #
         if flag_debug_PK:
-            print "find_best_PK(): finished search"
-            print "best_Spklistaa: ", best_Spklistaa
-            print "best_Spklistpp: ", best_Spklistpp
+            print ("find_best_PK(): finished search")
+            print ("best_Spklistaa: ", best_Spklistaa)
+            print ("best_Spklistpp: ", best_Spklistpp)
         #
         
         pklist_aa = []
@@ -2824,7 +3045,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                 jp = max_j
                 dGaa += dGmin
                 if flag_debug_PK:
-                    print "aa, ijp: ", ip, jp
+                    print ("aa, ijp: ", ip, jp)
                 #
                 pklist_aa = [(ip, jp), dGaa, best_Spklistaa]
                 
@@ -2842,32 +3063,32 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                 jp = max_j
                 dGpp += dGmin
                 if flag_debug_PK:
-                    print "pp, ijp: ", ip, jp
+                    print ("pp, ijp: ", ip, jp)
                 #
                 # to avoid duplication of the same structure found both ways
                 if not (dGaa == dGpp and len(best_Spklistaa) == len(best_Spklistpp)):
                     pklist_pp = [(ip, jp), dGpp, best_Spklistpp]
             #
             if flag_debug_PK:
-                print "aa:  ", pklist_aa
-                print "pp:  ", pklist_pp
+                print ("aa:  ", pklist_aa)
+                print ("pp:  ", pklist_pp)
                 #
                 nlen = 4
                 if len(pklist_aa) > nlen or len(pklist_pp) > nlen:
-                    print "find_best_PK(): found more than %d items in pklist_aa/pp" % nlen
+                    print ("find_best_PK(): found more than %d items in pklist_aa/pp" % nlen)
                     
                     if STOP_AT_FIND:
-                        print "planned stop"
+                        print ("planned stop")
                         sys.exit(0)
                     #
                 #
             #
         #
         if flag_debug_PK:
-            print "Exiting find_best_PK(%d,%d)" % (irt, jrt)
-            print "pklist_aa: ", pklist_aa
-            print "pklist_pp: ", pklist_pp
-            print "==============================="
+            print ("Exiting find_best_PK(%d,%d)" % (irt, jrt))
+            print ("pklist_aa: ", pklist_aa)
+            print ("pklist_pp: ", pklist_pp)
+            print ("===============================")
             # sys.exsxit(0)
         #endif
         return pklist_aa, pklist_pp
@@ -2896,10 +3117,10 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
     def traceback_mFE(self, i, j, layer, show_structure = False):
         flag_debug = DEBUG_traceback_mFE
         if flag_debug:
-            print "traceback_mFE: ij = (%d,%d), layer=%d" % (i, j, layer)
+            print ("traceback_mFE: ij = (%d,%d), layer=%d" % (i, j, layer))
         #
         if layer > self.maxlayers:
-            print "ERROR: something wrong in the recursion of traceback_mFE!"
+            print ("ERROR: something wrong in the recursion of traceback_mFE!")
             sys.exit(1)
         #
         
@@ -2921,15 +3142,15 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         V    = self.smap.glink[i][j].lg[0].Vij
         join = self.smap.glink[i][j].lg[0].motif[0].get_branches()
         if flag_debug:
-            print ctp, btp, V, join
+            print (ctp, btp, V, join)
         #
         s = self.space(3*layer)
         if show_structure:
-            print "%s[%s](%3d, %3d)[%8.3f]: " % (s, ctp, i,j, V), join
+            print ("%s[%s](%3d, %3d)[%8.3f]: " % (s, ctp, i,j, V), join)
         #
         if ctp == 'M' or ctp == 'P':
             if show_structure:
-                print "%s------------------" % s
+                print ("%s------------------" % s)
             #
             if ctp == 'M':
                 self.opt_ss_seq[i] = '('
@@ -2947,12 +3168,12 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             jn = self.smap.glink[i][j].lg[0].motif[0].get_branches()
             i_I = jn[0][0]; j_I = jn[0][1]
             self.traceback_mFE(i_I, j_I, layer+1, show_structure)
-            #
+            
         elif ctp == 'S':
             flag_debug_S = False # True # 
             if flag_debug_S:
-                print "inside traceback_mFE():"
-                print "stem Motif: ", self.smap.glink[i][j].lg[0].motif[0].show_Motif()
+                print ("inside traceback_mFE():")
+                print ("stem Motif: ", self.smap.glink[i][j].lg[0].motif[0].show_Motif())
             #
             
             btp = self.smap.glink[i][j].lg[0].motif[0].get_btp()
@@ -2961,29 +3182,29 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             for k in range(0, len(jn)):
                 i_h = jn[k][0]; j_h = jn[k][1]
                 if flag_debug_S:
-                    print "ij_h: ", i_h, j_h # head of Stem
+                    print ("ij_h: ", i_h, j_h) # head of Stem
                 #
                 self.opt_ss_seq[i_h] = '('
                 self.opt_ss_seq[j_h] = ')'
             if flag_debug_S:
-                print "final ij_h: ", i_h, j_h
+                print ("final ij_h: ", i_h, j_h)
             #
             if btp == 'c' or btp == 'sa':
                 self.traceback_mFE(i_h, j_h, layer+1, show_structure)
             else:
                 i_h = jn[k][0]; j_h = jn[k][1]
                 if flag_debug_S:
-                    print "ij_h: ", i_h, j_h # head of Stem
-                    print "traceback_mFE(): evaluating parallel stem"
-                    print self.smap.glink[i][j].lg[0].motif[0].show_Motif()
+                    print ("ij_h: ", i_h, j_h) # head of Stem
+                    print ("traceback_mFE(): evaluating parallel stem")
+                    print (self.smap.glink[i][j].lg[0].motif[0].show_Motif())
                 #
                 
                 stmlen = len(jn) - 1
                 i_t = i;          j_t = j
                 i_h = i + stmlen; j_h = j - stmlen
                 if flag_debug_S:
-                    print "pp ij_t (setup): ", i_t, j_t
-                    print "pp ij_h (setup): ", i_h, j_h
+                    print ("pp ij_t (setup): ", i_t, j_t)
+                    print ("pp ij_h (setup): ", i_h, j_h)
                 #
                 
                 if len(self.smap.glink[i_h][j_h].lg) > 0:
@@ -2994,8 +3215,8 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                     #
                 #
                 if flag_debug_S:
-                    print "traceback_mFE(): stem results " 
-                    print ''.join(self.opt_ss_seq)
+                    print ("traceback_mFE(): stem results ")
+                    print (''.join(self.opt_ss_seq))
                     #sys.exit(0)
                 #
                 
@@ -3003,12 +3224,12 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         elif ctp == 'K':
             flag_debug_PK = False # True # 
             if flag_debug_PK:
-                print "tracelink_mFE(), K:"
+                print ("tracelink_mFE(), K:")
             #
             # the root stem
             vR    = self.smap.glink[i][j].lg[0].motif[0].get_base()
             if flag_debug_PK:
-                print vR
+                print (vR)
             #
             i_R  = vR[0][0]; j_R = vR[0][1] 
             join = self.smap.glink[i_R][j_R].lg[0].motif[0].get_branches()
@@ -3025,32 +3246,32 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             # now compute the PK
             pks  = self.smap.glink[i][j].lg[0].motif[0].get_pks()
             if flag_debug_PK:
-                print "pks: ", pks
+                print ("pks: ", pks)
             #
             for x in pks:
                 i_K = x[0][0]; j_K = x[0][1]
                 if flag_debug_PK:
-                    print "ijK: ", i_K, j_K
+                    print ("ijK: ", i_K, j_K)
                 self.opt_ss_seq[i_K] = '['
                 self.opt_ss_seq[j_K] = ']'
                 if show_structure:
-                    print "%s[%s](%3d, %3d)[%8.3f]: " % (s, "l", i_K,j_K, x[1])
+                    print ("%s[%s](%3d, %3d)[%8.3f]: " % (s, "l", i_K,j_K, x[1]))
                 #
             #
             if show_structure:
-                print "%s---" % s
+                print ("%s---" % s)
             if flag_debug_PK:
-                print "pk results: from traceback_mFE()" 
-                print ''.join(self.opt_ss_seq)
+                print ("pk results: from traceback_mFE()" )
+                print (''.join(self.opt_ss_seq))
                 # sys.exit(0)
             #
-        #
+            
         elif ctp == 'W':
             flag_debug_W = False # True # 
             # island
             wyspa = self.smap.glink[i][j].lg[0].motif[0].get_wyspa()
             if flag_debug_W:
-                print "wyspa: ", wyspa
+                print ("wyspa: ", wyspa)
             #
             kv = 0; kmx = len(wyspa)-1
             for wk in wyspa:
@@ -3066,7 +3287,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             # island connections
             jn_w = self.smap.glink[i][j].lg[0].motif[0].get_branches()
             if flag_debug_W:
-                print "jn_w: ", jn_w
+                print ("jn_w: ", jn_w)
             #
             if not (jn_w[0][0] == i and jn_w[0][1] == j):
                 for lk in jn_w:
@@ -3079,13 +3300,13 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             #
             
             if flag_debug_W:
-                print "island results: from traceback_mFE()" 
-                print ''.join(self.opt_ss_seq)
+                print ("island results: from traceback_mFE()")
+                print (''.join(self.opt_ss_seq))
                 
                 nw = 5
                 if len(wyspa) > nw:
-                    print "traceback_mFE(): found more than %d CTCF units, they exist" % nw
-                    print "ij: ", i, j
+                    print ("traceback_mFE(): found more than %d CTCF units, they exist" % nw)
+                    print ("ij: ", i, j)
                     if STOP_AT_FIND:
                         sys.exit(0)
                     #
@@ -3096,7 +3317,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             self.opt_ss_seq[i] = '('
             self.opt_ss_seq[j] = ')'
             if show_structure:
-                print "%s---" % s
+                print ("%s---" % s)
             #
         #
         return V 
@@ -3105,7 +3326,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
     def find_ctcf_islands(self, i, j, best_dG, DEBUG_find_ctcf_islands = False):
         
         if DEBUG_find_ctcf_islands:
-            print "find_ctcf_islands(%d,%d), best_dG = %8.2f" % (i,j, best_dG)
+            print ("find_ctcf_islands(%d,%d), best_dG = %8.2f" % (i,j, best_dG))
         #
         
         """160915wkd: CURRENT STRATEGY
@@ -3147,7 +3368,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         
         keylist = self.all_ctcf.keys()
         if DEBUG_find_ctcf_islands:
-            print "keylist: ", keylist
+            print ("keylist: ", keylist)
         #
         vrlps = [] # oVeRLaPS
         zone  = []
@@ -3159,8 +3380,8 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         # first go through the keylist and find common contacts
         for h in keylist:
             if DEBUG_find_ctcf_islands:
-                print "keylist h: i(=%2d) <= h[0](=%2d) and h[1](=%2d) <= j(=%2d)" \
-                    % (i, h[0], h[1], j)
+                print ("keylist h: i(=%2d) <= h[0](=%2d) and h[1](=%2d) <= j(=%2d)" \
+                    % (i, h[0], h[1], j))
             #
             if h[0] >= i and h[1] <= j and not h == (i,j):
                 if h[0] == i:
@@ -3179,9 +3400,9 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         # in continuing this search
         if not flag_found:
             dGijh  = self.btype[i][j].dGp # self.hv[i][j]
-
+            
             """190524 was 
-
+            
             dGijh  = self.calc_dG(i,  j,
                                      self.btype[i][j].wt, # self.hv[i][j]
                                      self.T,
@@ -3199,10 +3420,10 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                     ctp = self.smap.glink[i+1][j-1].lg[0].motif[0].get_ctp()
                     mjn = self.smap.glink[i+1][j-1].lg[0].motif[0].get_branches()
                 except  (NameError, IndexError, AttributeError) as error:
-                    print "ij(%2d,%2d) -> ip1jm1(%2d,%2d) failed" % (i,j, i+1, j-1)
-                    #print self.smap.glink[i+1][j-1].lg[0].motif[0].show_Motif()
-                    #print ctp
-                    #print mjn
+                    print ("ij(%2d,%2d) -> ip1jm1(%2d,%2d) failed" % (i,j, i+1, j-1))
+                    #print (self.smap.glink[i+1][j-1].lg[0].motif[0].show_Motif())
+                    #print (ctp)
+                    #print (mjn)
                     sys.exit(1)
                 #
                 if ctp == 'X':
@@ -3227,7 +3448,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         #
         
         if DEBUG_find_ctcf_islands:
-            print "vrlps: ", vrlps
+            print ("vrlps: ", vrlps)
         #
         
         
@@ -3242,7 +3463,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         #
         
         if DEBUG_find_ctcf_islands:
-            print "zone: ", zone
+            print ("zone: ", zone)
         #
         
         
@@ -3256,7 +3477,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         """
         
         if DEBUG_find_ctcf_islands:
-            print "dGijh(W) = %8.2f, dGbest = %8.2f" % (dGijh, best_dG)
+            print ("dGijh(W) = %8.2f, dGbest = %8.2f" % (dGijh, best_dG))
         #
         dGh = INFINITY
         
@@ -3291,16 +3512,16 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             for ijh in zone:
                 ih = ijh[0]; jh = ijh[1]
                 if DEBUG_find_ctcf_islands:
-                    print "ijh              i(%3d) <- ih(%3d) <- jh(%3d) <- j(%3d): " \
-                        % (i, ih, jh, j)
+                    print ("ijh              i(%3d) <- ih(%3d) <- jh(%3d) <- j(%3d): " \
+                        % (i, ih, jh, j))
                 #
                 # case where we have an internal CTCF between the 
-                if self.all_ctcf.has_key((ih,jh)) and i < ih and jh < j:
+                if (ih,jh) in self.all_ctcf and i < ih and jh < j:
                     # need to save this result for the next step
                     wyspa += [(ih,jh)]
                     if DEBUG_find_ctcf_islands:
-                        print "internal island: i(%3d) <  ih(%3d) <  jh(%3d) <  j(%3d)" \
-                            % (i, ih, jh, j)
+                        print ("internal island: i(%3d) <  ih(%3d) <  jh(%3d) <  j(%3d)" \
+                            % (i, ih, jh, j))
                     #
                 #
                 if (jh - ih) > 2: # 2 -> ih + 1 = jh - 1
@@ -3309,7 +3530,7 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                         dGh += self.smap.glink[ih+1][jh-1].lg[0].motif[0].Vij
                     #
                     joinW += [(ih+1,jh-1)]
-
+                    
                     """@
                     
                     160923wkd: Even if there is nothing inside, this
@@ -3325,17 +3546,17 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
                     don't indicate this relationship for joinW, then
                     the program just keeps cycling through (38,43) as
                     the reference until the recursion limits kill it.
-
+                    
                     However, recently, I found that the cases like
                     joinW = [(39,39)] are also a problem. so I
                     introduced the condition that jh - ih > 2.
-
+                    
                     """
                 else:
                     sx  = "find_ctcf_islands; warning ctcf ij(%2d,%2d)" % (ih, jh)
                     sx += " --> proximal ligation (j(%d) - i(%d) = %d)" \
                         % (jh, ih, jh - ih)
-                    print sx
+                    print (sx)
                     # sys.exit(0)
                 #
             #
@@ -3358,12 +3579,12 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         #
         
         if DEBUG_find_ctcf_islands:
-            print "wyspa: ", wyspa
-            print "    dGh(%8.2f) vs best_dG(%8.2f)" % (dGh, best_dG)
+            print ("wyspa: ", wyspa)
+            print ("    dGh(%8.2f) vs best_dG(%8.2f)" % (dGh, best_dG))
             if dGh < best_dG:
-                print "    -- island generates more negative free energy"
+                print ("    -- island generates more negative free energy")
             else:
-                print "    -- regular structure is more stable"
+                print ("    -- regular structure is more stable")
         #
         
         if len(vrlps) > 0:
@@ -3374,14 +3595,14 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
         
         if flag_found:
             if DEBUG_find_ctcf_islands:
-                print "full island:  zone(", zone, ")"
+                print ("full island:  zone(", zone, ")")
                 for ff in islands:
-                    print "             wyspa(", ff[0], ")"
-                    print "             joinW(", ff[1], ")"
-                    print "             dG        %8.3f" % ff[2]
-                    print "             dG_best   %8.3f" % best_dG
-                    print "             ddG       %8.3f" % (ff[2] - best_dG)
-                print "found %d CTCF island" % len(wyspa)
+                    print ("             wyspa(", ff[0], ")")
+                    print ("             joinW(", ff[1], ")")
+                    print ("             dG        %8.3f" % ff[2])
+                    print ("             dG_best   %8.3f" % best_dG)
+                    print ("             ddG       %8.3f" % (ff[2] - best_dG))
+                print ("found %d CTCF island" % len(wyspa))
             #
             
             
@@ -3389,8 +3610,8 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
             if STOP_AT_FIND:
                 nzones = 4
                 if len(zone) > nzones:
-                    print "number of CTCFs > %d, stopping the program for reference" \
-                        % nzones
+                    print ("number of CTCFs > %d, stopping the program for reference" \
+                        % nzones)
                     sys.exit(0)
                 #
             #
@@ -3404,21 +3625,39 @@ class BranchEntropy(FreeEnergy, HeatMapTools):
     
 #
 
-
-
 def test0():
-    # 
-    fe = BranchEntropy() ## default settings
+    # this just tests various simple functions 
+    
+    
+    fe = BranchEntropy(SetUpBranchEntropy()) ## default settings
+    
+    # test the entropy calculation term
     Tds = fe.TdS(0, 1, fe.T)
     
-    print "weight    enthalpy       entropy     free energy"
-    print "         [kcal/mol]     [kcal/mol]    [kcal/mol]"
+    print ("weight    enthalpy       entropy     free energy")
+    print ("         [kcal/mol]     [kcal/mol]    [kcal/mol]")
     
     for dw in range(0,10,1):
         dh = fe.dH(float(dw))
-        print "%4d     %8.3f      %8.3f       %8.3f" % (dw, dh, Tds, (dh + Tds))
+        print ("%4d     %8.3f      %8.3f       %8.3f" % (dw, dh, Tds, (dh + Tds)))
     #
+    
+    # test the connect stem functions
+    slen1 = 1; ph1 =  8; qh1 = 46;
+    slen2 = 4; pt2 = 10; qt2 = 45
+    print (fe.is_connected_aaStem(slen1, ph1, qh1, slen2, pt2, qt2))
+    
+    slen1 = 4; ph1 =  3; qh1 = 46;
+    slen2 = 4; pt2 = 10; qt2 = 45
+    print (fe.is_connected_aaStem(slen1, ph1, qh1, slen2, pt2, qt2))
+    
+    
+    slen1 = 1; ph1 =  8; qh1 = 43;
+    slen2 = 4; pt2 = 10; qt2 = 45
+    print (fe.is_connected_ppStem(slen1, ph1, qh1, slen2, pt2, qt2))
 #
+
+
 
 
 def test1(cl):
@@ -3451,48 +3690,77 @@ def test1(cl):
     ss_seq  = "(.(((((......))))).((((.....)))).)"
     #            (2, 17)          (19,31)
     
+    chrseq  = genChrSeq(ss_seq)
+    # sysDefLabels["Chromatin]"]*len(ss_seq) # generates a generic "cccccc ... c"
+    print (ss_seq)
+    print (chrseq)
+    
+    iSetUp = InputSettings("Chromatin")
+    
+    iSetUp.set_source("BranchEntropy")
+    iSetUp.set_program("ChromatinModules.py")
+    
+    iSetUp.set_sequence(chrseq)
+    iSetUp.set_structure(ss_seq)
+    
+    #iSetUp.useTurner  = True
+    #iSetUp.useViS     = False
+    #iSetUp.usegMatrix = args.usegMatrix
+    #iSetUp.gMflnm     = "none"
+    iSetUp.set_FEparamData() # default Turner
+    
+    # set up the actual FE Data according to the settings
+    iSetUp.set_ViennaParams() # presently sets useTurner
+    # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    
+    vs = Vstruct()
+    vs.set_system(iSetUp)
+    
     be = BranchEntropy()
     
     vs = Vstruct()
-    print cl
+    print (cl)
     if len(cl) > 1:
         ss_seq = cl[1]
     #
     try:
-        print "main: input structure sequence:"
-        print ss_seq
+        print ("main: input structure sequence:")
+        print (ss_seq)
     except(UnboundLocalError):
-        print "ERROR, ss_seq is not assigned -- you idiot!"
+        print ("ERROR, ss_seq is not assigned!")
         usage()
         sys.exit(1)
     #
     vs.parse_fullDotBracketStructure(ss_seq, True)
+    print ("1, len(ss_seq)", len(ss_seq))
+    print (ss_seq)
     be.add_hv(vs)
     be.add_btype(vs)
+    print ("2")
     
-    # print "planned exit after running convert_CTCFstruct"; sys.exit(0);
-
+    # print ("planned exit after running convert_CTCFstruct"); sys.exit(0);
+    
     v2t = Vienna2TreeNode(vs)
     v2t.vienna2tree()
-    print "main:"
-
-
+    print ("main:")
+    
+    
     t2m = TreeNode2Motif(v2t)
     t2m.visit(v2t.genTree)
-    print v2t.MPlist
+    print (v2t.MPlist)
     t2m.post_graftMP()
-
+    
     tf = LThreadBuilder(v2t)
     tf.visit(v2t.genTree)
-    print "LThread notation: "
+    print ("LThread notation: ")
     tf.disp_lt()
     
-    # print "planned exit after running vienna2tree"; sys.exit(0);
+    # print ("planned exit after running vienna2tree"); sys.exit(0);
     t2m = TreeNode2Motif(v2t)
     t2m.visit(v2t.genTree)
-    print v2t.MPlist
+    print (v2t.MPlist)
     t2m.post_graftMP()
-    print len(t2m.smap.glink)
+    print (len(t2m.smap.glink))
     
     
     mbl_M = MBLptr(0,33)
@@ -3500,7 +3768,7 @@ def test1(cl):
     mbl_M.addBranch(19,31)
     mbl_M.n = len(mbl_M.Q)
     mbl_M.V = be.cle_MloopEV(0,33, mbl_M, l2m.smap, True)
-    print mbl_M.V
+    print (mbl_M.V)
     
     #i = 2; j = 17
     i = 0; j = 33
@@ -3508,7 +3776,7 @@ def test1(cl):
     mbl_H.addBranch(i,j)
     mbl_H.n = len(mbl_H.Q)
     mbl_H.V = be.cle_HloopE(i, j, mbl_H)
-    print mbl_H.V
+    print (mbl_H.V)
     
     i = 0; j = 33
     p = 2; q = 17
@@ -3516,36 +3784,39 @@ def test1(cl):
     mbl_I.addBranch(p,q)
     mbl_I.n = len(mbl_H.Q)
     mbl_I.V = be.cle_IloopE(i, j, p, q, mbl_H, l2m.smap, True)
-    print mbl_H.V
+    print (mbl_H.V)
 #   
 
 
 
 def main(cl):
-    print cl
+    print (cl)
     m = ''
     if len(cl) == 1:
         # default
         test0()
     else:
         m = cl[1]
-    #
-    if m == "test0":
-        test0()
-    elif m == "test1":
-        v = [cl[0]]
-        if len(cl) == 3:
-            v += [cl[2]]
+    
+        if m == "test0":
+            test0()
+        elif m == "test1":
+            v = [cl[0]]
+            if len(cl) == 3:
+                v += [cl[2]]
+            #
+            print (v)
+            test1(v)
+        else:
+            print ("%s is ignored" % cl[1])
+            usage()
         #
-        print v
-        test1(v)
-    else:
-        print "%s is ignored" % cl[1]
-        usage()
+            
     #
+    
 #
 
 if __name__ == '__main__':
     # running the program
     main(sys.argv)
-    
+#    

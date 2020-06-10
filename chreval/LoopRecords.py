@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -9,7 +9,7 @@ classes:         Branch
 
 # Author:        Wayne Dawson
 # creation date: 180709
-# last update:   190701
+# last update:   200204 (meshed YuriV and Kopernic files, upgraded to python3)
 # version:       0.0
 
 Purpose:
@@ -25,7 +25,32 @@ loops; used by several program in this package
 import sys
 
 from Constants import INFINITY
-from Motif     import Branch
+
+class Branch(object):
+    """
+    This makes it possible to store base pairing vectors in the form
+    of a structure with tags i and j. The value in this is that when
+    you manipulate the contents of an array branch, rather than
+    writing it is branch[k][0] and branch[k][1], you express it as
+    branch[k].i and branch[k].j
+    """
+    def __init__(self, i, j):
+        self.i = i
+        self.j = j
+    #
+    
+    
+    def __str__(self):
+        return "%d  %d " % (self.i, self.j)
+    #
+    
+    def __repr__(self):
+        return self.__str__()
+    #
+    
+#
+
+
 
 class MBLptr(object):
     """
@@ -42,6 +67,7 @@ class MBLptr(object):
         self.Q    = []       # the branches
         self.n    = 0        # the number of branches
     #
+    
     def resetBranch(self):
         self.nm   = 'X'      # name of the link
         self.dr   = "s"     # pair type direction [ap or pp]
@@ -67,9 +93,10 @@ class MBLptr(object):
     def setBranch(self, k, i, j, nm = "branch"):
         flag_pass = True
         if len(self.Q) >= k:
-            print "ERROR: no index %d in this branch (%s)" % (k, nm)
+            print ("ERROR: no index %d in this branch (%s)" % (k, nm))
             sys.exit(1)
         #
+        
         self,Q[k].i = i
         self,Q[k].j = j
         # should actully check if the set branch makes sense, but
@@ -82,9 +109,13 @@ class MBLptr(object):
     
     def getBranchlist(self):
         branches = []
-        for k in range(0, len(self.Q)):
-            branches += [(self.Q[k].i, self.Q[k].j)]
+        if len(self.Q) > 0:
+            for k in range(0, len(self.Q)):
+                branches += [(self.Q[k].i, self.Q[k].j)]
+            #|endfor
+            
         #
+        
         return branches
     #
     
@@ -94,6 +125,7 @@ class MBLptr(object):
             ib = self.Q[0].i
             jb = self.Q[self.n-1].j
         #
+        
         return ib, jb    
     #
     
@@ -105,27 +137,30 @@ class MBLptr(object):
         if flag_reset:
             self.Qbranches = []
         #
+        
         for k in range(0, len(bl)):
             self.Q += [Branch(bl[k][0], bl[k][1])]
-        #
+        #|endfor
         
     #
     
     def __str__(self):
         s = "i,j   (%d,%d)\n" % (self.i, self.j)
         s += "nm    %s\n" % self.nm
+        s += "dr    %s\n" % self.dr
         s += "n     %d\n" % self.n
         s += "V     %10.2f\n" % self.V
         s += "Q:    "
         for k in range(0, len(self.Q)):
             s += "(%d,%d)  " % (self.Q[k].i, self.Q[k].j)
-        #
+        #|endfor
+        
         s += "\n"
         return s
     #
     
     def __repr__(self):
-        print self.__str__()
+        print (self.__str__())
     #
 #
 
@@ -170,19 +205,19 @@ class MBLHandle(object):
         
         
         if new_iMBL_dG < self.best_iMBL_dG:
-            # print "check iMBL FE";
+            # print ("check iMBL FE");
             if self.dG_lb < new_iMBL_dG:  # getFE_LowerBound()
                 
                 if self.debug_MBLHandle:
-                    print "gid(%d): dG_lb(%8.2f) < new_iMBL_dG(%8.2f) < best_iMBL_dG(%8.2f)" \
-                        % (self.gid, self.dG_lb, new_iMBL_dG, self.best_iMBL_dG)
+                    print ("gid(%d): dG_lb(%8.2f) < new_iMBL_dG(%8.2f) < best_iMBL_dG(%8.2f)" \
+                        % (self.gid, self.dG_lb, new_iMBL_dG, self.best_iMBL_dG))
                 #
                 
                 # record the positions and the energy in the M-loop branches. 
                 
-                # print "new_iMBL_dG = %8.2f" % new_iMBL_dG
+                # print ("new_iMBL_dG = %8.2f" % new_iMBL_dG)
                 
-                # print "check iMBL FE"
+                # print ("check iMBL FE")
                 
                 if new_iMBL_dG < self.best_iMBL_dG:
                     self.mbls = []
@@ -192,6 +227,7 @@ class MBLHandle(object):
                     # all the contents in C++, because this is a
                     # complex object with different types of data.
                 #
+                
                 self.best_iMBL_dG = new_iMBL_dG;
                 self.mbls += [MBLptr(self.i,self.j)]
                 # degenerate or not, we now initialize mbls as a vector
@@ -203,48 +239,59 @@ class MBLHandle(object):
                 self.mbls[0].dr = new_MBL.dr
                 for l in range(0, new_MBL.n):
                     self.mbls[0].pushBranch(new_MBL.getBranch(l))
-                #
+                #|endfor
                 
-                # print "passed check point";
+                # print ("passed check point");
                 
                 if self.debug_MBLHandle:  
-                    print "searchForMBL.update_mbl(%s):" % lbl
-                    print "      M-loop(%2d,%2d): new_iMBL_dG = %8.2f" \
-                        % (self.i, self.j, self.mbls[0].V)
-	            print "mbls     name     index        (  p,  q)   "
+                    print ("searchForMBL.update_mbl(%s):" % lbl)
+                    print ("      M-loop(%2d,%2d): new_iMBL_dG = %8.2f" \
+                        % (self.i, self.j, self.mbls[0].V))
+                    print ("mbls     name     index        (  p,  q)   ")
                     for kv in range(0, len(self.mbls)):
-	                for l in range(0, self.mbls[kv].n):
+                        for l in range(0, self.mbls[kv].n):
                             pv = self.mbls[kv].Q[l].i; qv = self.mbls[kv].Q[l].j
                             ctp = self.mbls[kv].nm
                             btp = self.mbls[kv].dr
-	                    print " %2d    %s[%5s]    %2d          (%3d,%3d) "  \
-                                % (kv, ctp, btp, l + 1, pv, qv)
-	                #
-                    #
-	            print "Mloop_wt = %8.2f" % self.Mloop_wt
-	            # sys.exit(0)
+                            print (" %2d    %s[%5s]    %2d          (%3d,%3d) "  \
+                                % (kv, ctp, btp, l + 1, pv, qv))
+                        #|endfor
+                        
+                    #|endfor
+                    
+                    print ("                     Mloop_wt      %8.2f" \
+                        % self.Mloop_wt)
+                    print ("                     ----------    -------")
+                    print ("                     total         %8.2f" \
+                        % (self.mbls[0].V + self.Mloop_wt))
+                    
+                    # sys.exit(0)
                 #endif
-            #
+                
+            
             else:
                 if self.debug_MBLHandle:  
                     s  = "searchForMBL.update_mbl(%s): " % lbl
                     s += "getFE_LowerBound(%8.2f) >= new_iMBL_dG(%8.2f) ?? ==> " \
                          % (self.dG_lb, new_iMBL_dG)
                     s += "lower bound exceeded, skipped recording this info"
-                    print s
-                #endif      
+                    print (s)
+                #endif
+                
             #
-        #
+        
         else:
             if self.debug_MBLHandle:  
                 s  = "searchForMBL.update_mbl(%s): \n" % lbl
                 s += "V[i(%d),p(%d)],V[q(%d),j(%d)]: " % (self.i, p, q, self.j)
-                s += "new_iMBL_dG[%d](%8.2f) < best_iMBL_dG[%d](%8.2f) ?? ==> " \
+                s += "new_iMBL_dG[gid=%d](%8.2f) < best_iMBL_dG[%d](%8.2f) ?? ==> " \
                      % (self.gid, new_iMBL_dG, self.gid, self.best_iMBL_dG)
-                s += "skipped recording this info\n"
-                print s
-            #endif      
+                s += "skipped recording\n"
+                print (s)
+            #endif
+            
         #
+        
     #
     
 #
@@ -258,7 +305,7 @@ def show_MBLHandle(mblh, smap):
     # other part is simplifying the I-loop technology
     
     
-    print "  gid  M-id  branch  (  p,  q)    type             FE        link"
+    print ("  gid  M-id  branch  (  p,  q)    type             FE        link")
     pv = qv = -1
     i = mblh.i; j = mblh.j
     gid = mblh.gid
@@ -268,24 +315,28 @@ def show_MBLHandle(mblh, smap):
         btpx = mblh.mbls[km].dr
         Vijx = mblh.mbls[km].V
         mjnx = mblh.mbls[km].getBranchlist()
-        print "  %2d   %2d   *%2d*     (%3d,%3d)     %s[%5s]   %8.2f   " \
-            % (gid,  0, 0, i, j, ctpx, btpx, Vijx), mjnx
+        print ("  %2d   %2d   *%2d*     (%3d,%3d)     %s[%5s]   %8.2f   " \
+            % (gid,  0, 0, i, j, ctpx, btpx, Vijx), mjnx)
         
         
-        for kv in range(0, mblh.mbls[km].n):
-            pv = mblh.mbls[km].Q[kv].i; qv = mblh.mbls[km].Q[kv].j
-            ctpv = smap.glink[pv][qv].lg[0].motif[0].get_ctp()
-            btpv = smap.glink[pv][qv].lg[0].motif[0].get_btp()
-            Vijv = smap.glink[pv][qv].lg[0].motif[0].get_Vij()
-            mjnv = smap.glink[pv][qv].lg[0].motif[0].get_branches()
-            # print mjn
+        if len(smap.glink[i][j].lg) > 0:
+            for kv in range(0, mblh.mbls[km].n):
+                pv = mblh.mbls[km].Q[kv].i; qv = mblh.mbls[km].Q[kv].j
+                ctpv = smap.glink[pv][qv].lg[0].motif[0].get_ctp()
+                btpv = smap.glink[pv][qv].lg[0].motif[0].get_btp()
+                Vijv = smap.glink[pv][qv].lg[0].motif[0].get_Vij()
+                mjnv = smap.glink[pv][qv].lg[0].motif[0].get_branches()
+                # print (mjn)
             
-            print "             %2d      (%3d,%3d)     %s[%5s]   %8.2f   " \
-                % (kv+1, pv, qv, ctpv, btpv, Vijv), mjnv
-            #
+                print ("             %2d      (%3d,%3d)     %s[%5s]   %8.2f   " \
+                    % (kv+1, pv, qv, ctpv, btpv, Vijv), mjnv)
+            #|endfor
+                
         #
-    #
-    print "Mloop_wt = %8.2f" %  mblh.Mloop_wt
+        
+    #|endfor
+    
+    print ("Mloop_wt = %8.2f" %  mblh.Mloop_wt)
 #
 
 
@@ -293,21 +344,21 @@ def show_MBLHandle(mblh, smap):
 
 def main(cl):
     # tests the operations of Branch and MBLptr
-    print cl
+    print (cl)
     b1 = Branch(1,2)
     b2 = Branch(3,4)
-    print "branch1: ", b1
-    print "branch2: ", b2
+    print ("branch1: ", b1)
+    print ("branch2: ", b2)
     a = MBLptr(0, 10)
     a.pushBranch(b1)
     a.pushBranch(b2)
-    print "branch3 add-> ", (5,6)
+    print ("branch3 add-> ", (5,6))
     a.addBranch(5,6)
-    print a
-    
+    print (a)
     
 #
 
 
 if __name__ == '__main__':
     main(sys.argv)
+#

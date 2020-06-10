@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -9,7 +9,7 @@ Objects:       Cluster
 
 Author:        Wayne Dawson
 creation date: parts 2016 (in chreval), made into a separate object 170426
-last update:   170719
+last update:   200210 (upgrade to python3), 170719, 190812
 version:       0
 
 
@@ -89,9 +89,9 @@ class Cluster:
     def clusterlist(self, ltlist):
         
         htools = HeatMapTools()
-        wt = htools.normalize_matrix(self.calc.dG, "neg")
+        wt = htools.normalize_matrix(self.calc.fe.dG, "neg")
         if self.debug:
-            print len(ltlist)
+            print (len(ltlist))
         #
         
         ij_min = 100000.0
@@ -103,12 +103,14 @@ class Cluster:
                 ctp = tr.ctp
                 btp = tr.btp
                 if tr.ctp == 'P' or tr.ctp == 'J':
-                    print "found a P for ", tr.ij_ndx
+                    # print ("found a P at ", tr.ij_ndx)
                     continue
                 #
+                
                 if ctp == 'K' and (btp == 'bgn' or btp == 'end'):
                     continue
                 #
+                
                 if ctp == 'W' and (btp == 'bgn' or btp == 'end'):
                     continue
                 #
@@ -117,20 +119,25 @@ class Cluster:
                     continue
                 #
                 
+                
+                
                 v = tr.ij_ndx
                 i = v[0]; j = v[1]
-                # print v
+                # print (v)
                 self.clusters[i][j] += 1.0*pBoltz*wt[i][j] #  ij
                 self.clusters[j][i] += 1.0*pBoltz*wt[i][j] #  ji
                 if self.clusters[i][j] < ij_min:
                     ij_min = self.clusters[i][j]
                 #
-            #
-        #
+                
+            #|endfor tr in ltk.thread:
+            
+        #|endfor tr in ltk.thread:
+        
         if ij_min < 0.0:
             shift = - ij_min
-            print "encountered positive entropy values"
-            print "up-shifting free energy map data by ", shift
+            print ("encountered positive entropy values")
+            print ("up-shifting free energy map data by ", shift)
             for j in range(0, self.N):
                 for i in range(0, self.N):
                     if not self.clusters[i][j] == 0.0:
@@ -147,7 +154,7 @@ class Cluster:
         debug_cpiflist = False
         Nlt = len(ltlist)
         if self.debug:
-            print Nlt
+            print (Nlt)
         #
         
         kk = 0 # structure count
@@ -166,14 +173,14 @@ class Cluster:
                 ctp = tr.ctp
                 btp = tr.btp
                 if ctp == 'P' or ctp == 'J':
-                    print "found a P for ", tr.ij_ndx
+                    # print ("found a P for ", tr.ij_ndx)
                     continue
                 #
                 
                 if ctp == 'K' and (btp == 'bgn' or btp == 'end'):
                     if debug_cpiflist:
                         # verify that data is handled correctly
-                        print kk, tr.disp_lnode()
+                        print (kk, tr.disp_lnode())
                     #
                     
                     continue
@@ -181,7 +188,7 @@ class Cluster:
                 elif ctp == 'K':
                     if debug_cpiflist:
                         # verify that data is handled correctly
-                        print kk, tr.disp_lnode()
+                        print (kk, tr.disp_lnode())
                     #
                     
                 #
@@ -189,7 +196,7 @@ class Cluster:
                 if ctp == 'W' and (btp == 'bgn' or btp == 'end'):
                     if debug_cpiflist:
                         # verify that data is handled correctly
-                        print kk, tr.disp_lnode()
+                        print (kk, tr.disp_lnode())
                     #
                     
                     continue
@@ -197,7 +204,7 @@ class Cluster:
                 elif ctp == 'W':
                     if debug_cpiflist:
                         # verify that data is handled correctly
-                        print kk, tr.disp_lnode()
+                        print (kk, tr.disp_lnode())
                     #
                 #
                 
@@ -207,17 +214,18 @@ class Cluster:
                 
                 v = tr.ij_ndx
                 i = v[0]; j = v[1]
-                # print v
+                # print (v)
                 self.cpif[i][j] += 1.0 #  ij
                 self.cpif[j][i] += 1.0 #  ji
-            #
+            #|endfor tr in ltk.thread:
             
             if debug_cpiflist:
-                print "planned exit"
+                print ("planned exit")
                 sys.exit(0)
             #
             
-        #
+        #|endfor ltk in ltlist:
+        
         return 0
         
     #
@@ -253,7 +261,7 @@ class ClustData:
     def get_data(self, flnm):
         flhd, ext = getHeadExt(flnm)
         self.title = flhd
-        print "getting data from %s" % flnm
+        print ("getting data from %s" % flnm)
         htools = HeatMapTools() # default setup GenerateHeatMapTools()
         if self.from_Nenski:
             htools.set_Nenski()
@@ -272,6 +280,7 @@ class ClustData:
             else:
                 gmtrx = htools.read_MatrixFile_wt(flnm, EXTS) # EXT = "clust"
             #
+            
         #
         
         N        = gmtrx.length
@@ -279,7 +288,7 @@ class ClustData:
         clusters = gmtrx.clusters
         
         if self.DEBUG:
-            print htools.disp_fmatrix(hm, "heatmap")
+            print (htools.disp_fmatrix(hm, "heatmap"))
         #
         self.hm_max = htools.hm_max
         self.hm_min = htools.hm_min
@@ -298,24 +307,29 @@ class ClustData:
             for i in range(0,j):
                 if not hm[i][j] == 0:
                     d = j - i
-                    if self.dist.has_key(d):
+                    if d in self.dist:
                         self.dist[d] += 1
                     else:
                         self.dist.update({d : 1 })
                     #
+                    
                     wt = self.wt_range*hm[i][j]
-                    if self.weight.has_key(wt):
+                    if wt in self.weight:
                         self.weight[wt] += 1
                     else:
                         self.weight.update({wt : 1})
                     #
+                    
                 #
-            #
-        #
+            #|endfor
+            
+        #|endfor
+        
         if self.DEBUG:
-            print "weight: ", len(self.weight)
-            print "dist:   ", len(self.dist)
+            print ("weight: ", len(self.weight))
+            print ("dist:   ", len(self.dist))
         #
+        
     #
     
     
@@ -326,14 +340,40 @@ class ClustData:
         if self.title == "None":
             flag_skip = True
         #
+        
         if len(self.weight) == 0:
             flag_skip = True
         #
         
         s = ''
         if not flag_skip:
-            keys = self.weight.keys()
+            keys = list(self.weight.keys())
             keys.sort()
+            
+            """@
+            
+            In python3 keys becomes 
+            
+            dict_keys([ .... ]). 
+            
+            As far as I can tell, it looks like the order is according
+            the way the items were entered. If we don't need to sort
+            the data, then we could just write
+            
+            for v in keys:
+               print v
+            #
+            
+            However, we want the keys sorted, so we will have to work
+            around this. The procedure is as follows
+            
+            keys =  list(self.weight.keys())
+            keys.sort()
+            
+            So we must request the list before we do the sorting.
+            
+            """
+            
             s += "# %s\n" % self.title
             s += "# instances of same matrix element\n"
             s += "#  matrix         number\n"
@@ -342,28 +382,34 @@ class ClustData:
             for ww in keys:
                 s += " %8.3f          %3d\n" % (ww, self.weight[ww])
         #
+        
         return s
     #
+    
+    
     def disp_DistDistrib(self):
         flag_skip = False
         if self.title == "None":
             flag_skip = True
         #
+        
         if len(self.dist) == 0:
             flag_skip = True
         #
         
         s = ''
         if not flag_skip:
-            keys = self.dist.keys()
+            keys = list(self.dist.keys())
             keys.sort()
             s += "# %s\n" % self.title
             s += "# genomic distance vs counts\n"
             s += "# dist     counts\n"
             for dd in keys:
                 s += " %4d        %3d\n" % (dd, self.dist[dd])
-            #
+            #|endfor
+            
         #
+        
         return s
     #
         

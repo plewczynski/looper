@@ -3,16 +3,16 @@
 """@@@
 
 
-Main Module:   SimRNATools.py 
+Main Module:   Chromatin2SimRNA.py 
 
 Classes:       SimRes
-               SimRNAData
+               SimRNARestraints
 
 Functions:
 
 Author:        Wayne Dawson
 creation date: parts 2016, made into a separate object 170314
-last update:   170314
+last update:   200210 (upgraded to python3), 200108
 version:       0
 
 Purpose:
@@ -51,17 +51,17 @@ from ChPair import ChPairData
 import sys
 import os
 
-PROGRAM = "SimRNATools.py"
+PROGRAM = "Chromatin2SimRNA.py"
 
 def usage():
-    print "Usage: %s <file>.chpair" % PROGRAM
+    print ("Usage: %s <file>.chpair" % PROGRAM)
 #
 
 
 resdist = { 'N~N' : 9.0,  'P~P' : 18.7 }
 res_wt  = { 'N~N' : 0.4,  'P~P' :  0.4 }
 
-class SimRes:
+class SimRes(object):
     def __init__(self, i, chainA, atomA, j, chainB, atomB, distAB, wt, xi = 7.0):
         self.i = i
         self.j = j
@@ -80,18 +80,33 @@ class SimRes:
         s = ''
         if fmt == "slope" or fmt == "SLOPE":
             s = "SLOPE    %s/%d/%s   %s/%d/%s %6.2f  %6.2f  %8.3f\n" % \
-                (self.chainA, self.i + 1, self.atomA, self.chainB, self.j + 1, self.atomB, (self.ABdist - 0.5), (self.ABdist + 0.5), self.wt)
+                (self.chainA, self.i + 1, self.atomA,
+                 self.chainB, self.j + 1, self.atomB,
+                 (self.ABdist - 0.5), (self.ABdist + 0.5), self.wt)
         elif fmt == "cle" or fmt == "CLE":
             s = "CLE     %s/%d/%s   %s/%d/%s %6.2f  %6.2f  %8.3f\n" % \
-                (self.chainA, self.i + 1, self.atomA, self.chainB, self.j + 1, self.atomB, self.ABdist, self.xi, self.wt)
+                (self.chainA, self.i + 1, self.atomA,
+                 self.chainB, self.j + 1, self.atomB,
+                 self.ABdist, self.xi, self.wt)
         #
+        
         return s
     #
+    
+    def __str__(self):
+        # supply only the default (fmt = "slope")
+        return self.disp_SimRes()
+    #
+    
+    def __repr__(self):
+        return self.__str__()
+    #
+    
 #
 
 
 
-class SimRNAData:
+class SimRNARestraints:
     def __init__(self, fmt = 'MJB'):
         # options for employing SimRNA
         self.xi      = 7.0    # [nt] Kuhn length
@@ -107,32 +122,43 @@ class SimRNAData:
             if not bb in resdist:
                 bbsplit = bb.split('~')
                 if len(bbsplit) < 2:
-                    print "ERROR: incomplete information on the bead ~ bead information"
+                    print ("ERROR: incomplete information on the bead ~ bead information")
                 else:
-                    print "ERROR: no definition for %s ~ %s interactions" % (bbsplit[0], bbsplit[1])
+                    print ("ERROR: no definition for %s ~ %s interactions" \
+                        % (bbsplit[0], bbsplit[1]))
                 #
-                print "       input key:               '%s'" % bb
+                
+                print ("       input key:               '%s'" % bb)
                 sbb = ''
                 for sr in resdist.keys():
                     sbb += "%s " % sr
-                print "       allowed keys for resdist: %s" % sbb
+                #
+                
+                print ("       allowed keys for resdist: %s" % sbb)
                 flag_pass = False
             #
+            
             if not bb in res_wt:
                 bbsplit = bb.split('~')
                 if len(bbsplit) < 2:
-                    print "ERROR: incomplete information on the bead ~ bead information"
+                    print ("ERROR: incomplete information on the bead ~ bead information")
                 else:
-                    print "ERROR: no definition for %s ~ %s interactions" % (bbsplit[0], bbsplit[1])
+                    print ("ERROR: no definition for %s ~ %s interactions" \
+                        % (bbsplit[0], bbsplit[1]))
                 #
-                print "       input key:               '%s'" % bb
+                
+                print ("       input key:               '%s'" % bb)
                 sbb = ''
                 for sr in res_wt.keys():
                     sbb += "%s " % sr
-                print "       allowed keys: %s" % sbb
+                #
+                
+                print ("       allowed keys: %s" % sbb)
                 flag_pass = False
             #
-        #
+            
+        #|endfor
+        
         return flag_pass 
     #
     
@@ -142,9 +168,10 @@ class SimRNAData:
         # CLE    A/1/P  A/15/P  18.7  7.0  -0.2
         # CLE    A/1/N  A/15/N   9.0  7.0  -0.2
         if not self.checkBBlist(bblist):
-            print "... list cannot be used"
+            print ("... list cannot be used")
             sys.exit(1)
         #
+        
         for tr in lt.thread:
             v = tr.ij_ndx
             i = v[0]; j = v[1]
@@ -155,28 +182,33 @@ class SimRNAData:
             for bb in bblist:
                 bbsplit = bb.split('~')
                 aA = bbsplit[0]; aB = bbsplit[1]
-                # print aA, aB
+                # print (aA, aB)
                 self.simres += [SimRes(i, 'A', aA, j, 'A', aB, resdist[bb], res_wt[bb])]
-            #
-        #
+            #|endfor
+            
+        #|endfor
+        
     #
     
     def ChPair2SimRes(self, chpair, bblist = ['N~N']):
         # CLE    A/1/P  A/15/P  18.7  7.0  -0.2
         # CLE    A/1/N  A/15/N   9.0  7.0  -0.2
         if not self.checkBBlist(bblist):
-            print "... list cannot be used"
+            print ("... list cannot be used")
             sys.exit(1)
         #
+        
         for chp in chpair.data:
             i = chp.i; j = chp.j
             for bb in bblist:
                 bbsplit = bb.split('~')
                 aA = bbsplit[0]; aB = bbsplit[1]
-                # print aA, aB
+                # print (aA, aB)
                 self.simres += [SimRes(i, 'A', aA, j, 'A', aB, resdist[bb], res_wt[bb])]
-            #
-        #
+            #|endfor
+            
+        #|endfor
+        
     #
     
     
@@ -192,6 +224,7 @@ class SimRNAData:
             else:
                 s += "# type  res1      res2      bgn       end    weight\n"
             #
+            
         #
         
         for srk in self.simres:
@@ -202,33 +235,39 @@ class SimRNAData:
             try:
                 fpx = open(flnm, 'w')
             except IOError:
-                print "ERROR: cannot open %s" % flnm
+                print ("ERROR: cannot open %s" % flnm)
                 sys.exit(1)
+            #
+            
             fpx.write(s)
             fpx.close()
         else:
-            print s
+            print (s)
             
         #
+        
         return s
     #
+    
 #
+
+
 # ###########################
 # ###  Main: for testing  ###
 # ###########################
 
 def main(cl):
-    print cl
+    print (cl)
     if len(cl) > 1:
         iflnm = cl[1]
         chdt = ChPairData()
         chdt.read_ChPairFile(iflnm)
-        print chdt.disp_ChPairData(chdt.data)
-        srdt = SimRNAData()
+        print (chdt.disp_ChPairData(chdt.data))
+        srdt = SimRNARestraints()
         srdt.ChPair2SimRes(chdt, ['N~N'])
         srdt.print_SimRNArestraints("test.res") 
-        print "finished the test:"
-        print "Read a chpair file and convert it to SimRNA restraints"
+        print ("finished the test:")
+        print ("Read a chpair file and convert it to SimRNA restraints")
     else:
         usage()
     #

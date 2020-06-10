@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -12,14 +12,23 @@ Objects:         Motif
                  --- motif class objects
                  AST 
                  APT 
+                 XLoop 
+                 MBL 
+                 Branch 
                  Stem 
                  PseudoKnot 
                  ArchMP 
                  MultiPair
 
+Functions:       stemType2PairList 
+                 disp_Motif 
+                 copyStem 
+                 ins_sort_StemList
+                 
+
 Author:          Wayne Dawson
 creation date:   170126
-last update:     190718 
+last update:     200211 (upgraded to python3), prev 190718 
 version:         0.1
 
 Purpose:
@@ -253,25 +262,20 @@ experimental data.
 
 'rp2':   RNApolII
 
-'s': This is the "singleton" bond type. Previously (before 160721), I
-called this type 'n', for "normal". What is normal and is singleton
-any better? Presently, I don't know, but we read in chromatin data of
-weak structural ininteractions between local regions of the structure
-and we predict some loops structures resulting from that. These loop
-structures are assumed to have the chromatin chains oriented in an
-unspecifice orientation (parallel loop or antiparallel loop direction)
-and the interactions are presumed to be weak. Note that 's' could also
-refer to divergent CTCF interactions; i.e., having the "< ... >" type
-of interaction that results in weakly interacting antiparallel chain
+'s': This is the "simple" pair bond type. These loop structures are
+assumed to have the chromatin chains oriented in an unspecifice
+orientation (parallel loop or antiparallel loop direction) and the
+interactions are presumed to be weak. Note that 's' could also refer
+to divergent CTCF interactions; i.e., having the "< ... >" type of
+interaction that results in weakly interacting antiparallel chain
 configurations similar to the convergent CTCF structures only with far
 less binding free energy.
 
-'sa', 'sp': Stem direction specifier.  It is important to specify if the
-collection of pairs is parallel or antiparallel oriented. Therefore,
-we must add a qualifier to this notation; i.e., for structures
-containing the key 'S', we should specify 'sa' (for singleton
-antiparallel) and 'sp' (for singleton parallel).
-
+'sa', 'sp': Stem direction specifier.  It is important to specify if
+the collection of pairs is parallel or antiparallel
+oriented. Therefore, we must add a qualifier to this notation; i.e.,
+for structures containing the key 'S', we should specify 'sa' (for
+simple antiparallel) and 'sp' (for simple parallel).
 
 't' (i.e., "tandem" or "parallel"): This refers to tandem
 configurations wherein the particular orientation of the CTCF binding
@@ -317,37 +321,18 @@ get_branches(self):
 # ==================================================================
 
 """
-class ParseMotif(object):
-    # not sure if this will be useful, but maybe this is a transition tool
-    def __init__(self):
-        self.debug = True
+def motif_error(name, Ob):
+    if not Ob == None:
+        print ("Motif error(%s)" % name, self.Ob.base)
+        print (type(self.Ob))
+        print (self.Ob)
+    else:
+        print ("Motif error(%s)" % name)
+        print ("Object NoneType (undefined)")
     #
-    def get_base(self, mtf):
-        bonds = []
-        if mtf.ctp == 'P' or mtf.ctp == 'J':
-            # J and P do not have a bond at the base
-            bonds = mtf.branch
-        elif mtf.ctp == 'K' or mtf.ctp == 'R':
-            bonds = [(mtf.i, mtf.j)]
-        elif mtf.ctp == 'S':
-            bonds = [(mtf.i, mtf.j)]
-            
-        else:
-            # B, I, K, and M have a bond at the base, and W is
-            # effectively a cluster of bonds, on of which outlines the
-            # entire structure
-            bonds = [mtf.base]
-        #
-        return bonds
-    #
-    def get_branches(self, mtf):
-        jj = []
-        for jjk in mtf.branching:
-            jj += [jjk]
-        return jj
-    #
+    sys.exit(1)
+#
 
-#   
 
 
 class Motif(object):
@@ -360,11 +345,44 @@ class Motif(object):
         self.tlen      = 0.0     # for Stem
         self.xi        = xi      # default Kuhn length
         if len(self.branching) == 0:
-            if ctp == 'B':
+            if ctp == 'B' or ctp == 'W':
+                """190517
+                
+                I encountered the following problem ... Apparently, in
+                this example, the sequence has two neighboring closely
+                ligated structures. Because the program must reject
+                internals, it seems that this created a W-loop for
+                (12,16) that resembled the B-loop. So it tried to
+                store it this way. Presently, I think it is ok to just
+                accept a W as a very strong B-loop. However, this
+                needs to be paid some attention. The relevant output
+                from the debugging settings is shown below.
+                
+                
+                vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+                dGijh(W) =    -3.66, dGbest =    -3.66
+                ijh              i( 12) <- ih( 12) <- jh( 14) <- j( 16): 
+                find_ctcf_islands; warning ctcf ij(12,14) --> proximal ligation (j(14) - i(12) = 2)
+                ijh              i( 12) <- ih( 14) <- jh( 16) <- j( 16): 
+                find_ctcf_islands; warning ctcf ij(14,16) --> proximal ligation (j(16) - i(14) = 2)
+                wyspa:  [(12, 16), (14, 16)]
+                dGh(   -7.76) vs best_dG(   -3.66)
+                -- island generates more negative free energy
+                full island:  zone( [(12, 14), (14, 16)] )
+                wyspa( [(12, 16), (14, 16)] )
+                joinW( [] )
+                dG          -7.760
+                dG_best     -3.664
+                ddG         -4.096
+                found 2 CTCF island
+                ERROR(Motif(12,16)): unrecognized linkage for type W.
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                
+                """
                 self.branching = [(i,j)]
             else:
-                print "ERROR(Motif(%d,%d)): unrecognized linkage for type %s." \
-                    % (i, j, ctp)
+                print ("ERROR(Motif(%d,%d)): unrecognized linkage for type %s." \
+                    % (i, j, ctp))
                 sys.exit(1)
             #
         #
@@ -393,9 +411,9 @@ class Motif(object):
         elif tp.name == "Stem" or tp.name == "MBL" or tp.name == "XLoop":
             return self.Ob.get_base()
         else:
-            print "Motif error(get base)", self.base
-            print type(self.Ob)
-            print self.Ob
+            print ("Motif error(get base)", self.base)
+            print (type(self.Ob))
+            print (self.Ob)
             sys.exit(0)
         #
     
@@ -418,9 +436,9 @@ class Motif(object):
             return self.Ob.get_branches()
         
         else:
-            print "Motif error(get_branches): ", self.base
-            print type(self.Ob)
-            print self.Ob
+            print ("Motif error(get_branches): ", self.base)
+            print (type(self.Ob))
+            print (self.Ob)
             sys.exit(0)
         #
         
@@ -428,8 +446,8 @@ class Motif(object):
 
     def get_stem(self):
         if self.Ob == None:
-            print "ERROR: Stem ijt(%d,%d) not defined!" % (self.base[0], self.base[1])
-            print self.show_Motif()
+            print ("ERROR: Stem ijt(%d,%d) not defined!" % (self.base[0], self.base[1]))
+            print (self.show_Motif())
             sys.exit(1)
         else:
             return self.Ob.get_stem()
@@ -440,17 +458,17 @@ class Motif(object):
         tp = self.Ob
         if tp == None:
             """
-            print "Vij is not set for %s, ctp(%s), btp(%s)" \
-                % (self.base, self.ctp, self.btp)
+            print ("Vij is not set for %s, ctp(%s), btp(%s)" \
+                % (self.base, self.ctp, self.btp))
             sys.exit(1)
             """
             return self.Vij
         elif (tp.name == "Stem" or tp.name == "MBL" or tp.name == "XLoop"):
             return self.Ob.Vij
         else:
-            print "Motif error(get_Vij)", self.base
-            print type(self.Ob)
-            print self.Ob
+            print ("Motif error(get_Vij)", self.base)
+            print (type(self.Ob))
+            print (self.Ob)
             sys.exit(0)
         #
     #
@@ -459,17 +477,17 @@ class Motif(object):
         tp = self.Ob
         if tp == None:
             """
-            print "ctp is not set for %s, ctp(%s), btp(%s)" \
-                % (self.base, self.ctp, self.btp)
+            print ("ctp is not set for %s, ctp(%s), btp(%s)" \
+                % (self.base, self.ctp, self.btp))
             sys.exit(1)
             """
             return self.ctp
         elif (tp.name == "Stem" or tp.name == "MBL" or tp.name == "XLoop"):
             return self.Ob.ctp
         else:
-            print "Motif error(get_ctp)", self.base
-            print type(self.Ob)
-            print self.Ob
+            print ("Motif error(get_ctp)", self.base)
+            print (type(self.Ob))
+            print (self.Ob)
             sys.exit(0)
         #
     #
@@ -477,16 +495,16 @@ class Motif(object):
         tp = self.Ob
         if tp == None:
             """
-            print "btp is not set for %s, ctp(%s), btp(%s)" \
-                % (self.base, self.ctp, self.btp)
+            print ("btp is not set for %s, ctp(%s), btp(%s)" \
+                % (self.base, self.ctp, self.btp))
             sys.exit(1)
             """
             return self.btp
         elif (tp.name == "Stem" or tp.name == "MBL" or tp.name == "XLoop"):
             return self.Ob.btp
         else:
-            print "Motif error(get_btp)", self.base
-            print type(self.Ob)
+            print ("Motif error(get_btp)", self.base)
+            print (type(self.Ob))
             sys.exit(0)
         #
     #
@@ -511,9 +529,9 @@ class Motif(object):
         elif self.Ob.name == "XLoop":
             return self.Ob.disp_XLoop()
         else:
-            print "Motif error(show_Motif)", self.base
-            print type(self.Ob)
-            print self.Ob
+            print ("Motif error(show_Motif)", self.base)
+            print (type(self.Ob))
+            print (self.Ob)
             sys.exit(0)
         #
     #
@@ -537,9 +555,9 @@ class Link:
         # initially, it must be assigned one such object.
         
         self.motif = [Motif(i, j, Vij, ctp, btp, branching, pk, wyspa)]
-
+        
         """@@@
-
+        
         In general, most of the time, self.motif will contain only one
         Motif object -- at least with the present design of an exact
         energy (Vij). However, there is the occasional possibility
@@ -550,7 +568,7 @@ class Link:
         structures within a tolerance of ${\Delta\Delta G}, then this
         object could contain many elements within this range of
         tolerance.
-
+        
         """
         self.Vij = Vij
     #
@@ -561,14 +579,14 @@ class Link:
         # VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
         if not self.Vij == Vij:
             newmotif = Motif(i, j, Vij, ctp, btp, branching, pk)
-            print "ERROR(Link) energy existing motif and current motif not in tolerance"
-            print "new structure:"
-            print newmotif.show_Motif()
-            print "existing structure(s): "
+            print ("ERROR(Link) energy existing motif and current motif not in tolerance")
+            print ("new structure:")
+            print (newmotif.show_Motif())
+            print ("existing structure(s): ")
             for vv in self.motif:
-                print vv.show_Motif()
+                print (vv.show_Motif())
             #
-            print "Vij(current) = %8.2f, Vij(new) = %8.2f" % (self.Vij, float(Vij))
+            print ("Vij(current) = %8.2f, Vij(new) = %8.2f" % (self.Vij, float(Vij)))
             sys.exit(1)
         #
         # AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
@@ -579,12 +597,12 @@ class Link:
     # add an object that is already assigned Motif (presently not used)
     def add_Motif_ob(self, newmotif):
         if not self.Vij == newmotif.Vij:
-            print "ERROR(Link) energy existing motif and current motif not in tolerance"
-            print "new structure:"
-            print newmotif.show_Motif()
-            print "existing structure(s): "
+            print ("ERROR(Link) energy existing motif and current motif not in tolerance")
+            print ("new structure:")
+            print (newmotif.show_Motif())
+            print ("existing structure(s): ")
             for vv in self.motif:
-                print vv.show_Motif()
+                print (vv.show_Motif())
             #
             sys.exit(1)
         #
@@ -642,7 +660,7 @@ class Map:
     def __init__(self, N):
         self.N  = N
         if N <= 0:
-            print "ERROR: size of requested matrix (%d) makes no sense" % N
+            print ("ERROR: size of requested matrix (%d) makes no sense" % N)
             sys.exit(1)
         #
         
@@ -758,10 +776,15 @@ notation, it is rather poor, as I came to realize eventually.
 
 """
 def stemType2PairList(stem):
+    # print "stemType2PairList: ", type(stem[0]) # check type
     stem_vv = []
     vtp = '-'
+    lstem = len(stem)
     if   type(stem[0]) == Pair:
-        if len(stem) > 1:
+        
+        # 200211: improved this section so it makes more sense
+        
+        if lstem > 1:
             # this is mainly for checking data consistency
             if   stem[0].i < stem[1].i and stem[1].j < stem[0].j:
                 vtp = 'a'
@@ -769,34 +792,51 @@ def stemType2PairList(stem):
                 vtp = 'p'
             
             else:
-                print "ERROR(stemType2PairList): stem makes no sense"
-                print "stem = ", stem
+                print ("ERROR(stemType2PairList): stem makes no sense")
+                print ("stem = ", stem)
                 sys.exit(1)
             #
             
-        else:
-            vtp = 'a'
-        #
-        
-        for sv in stem:
-            if not (sv.v == vtp or sv.v == 'base'):
-                print "WARNING(stemType2PairList): inconsistent stem types"
-                print "       proposed \'%s\', analyzed \'%s\'" % (sv.v, vtp)
-                print "       stem: ", stem
-                if len(stem) > 1:
-                    print "stem[0]=(%d,%d), stem[1]=(%d,%d)" \
-                        % (stem[0].i, stem[0].j, stem[1].i, stem[1].j)
-                #
-                
-                
-                #sys.exit(1)
-                # probably can force a change here, but presently, it stops
+            if not stem[0].v == "base":
+                stem[0].v = vtp
             #
             
-            stem_vv += [sv] # already properly formated
+            stem_vv = [stem[0]]
+            
+            if lstem-1 > 2:
+                
+                for k in range(1, lstem-1): # sv in stem:
+                    
+                    if   stem[k].i < stem[k+1].i and stem[k+1].j < stem[k].j:
+                        vtp = 'a'
+                    elif stem[k].i < stem[k+1].i and stem[k].j < stem[k+1].j:
+                        vtp = 'p'
+                        
+                    else:
+                        print ("ERROR(stemType2PairList): stem makes no sense")
+                        print ("stem = ", stem)
+                        sys.exit(1)
+                    #
+                    
+                    stem[k].v = vtp
+                    stem_vv += [stem[k]] # already properly formated
+                #|endfor
+                
+            #
+            
+            stem[lstem-1].v = vtp # assign the last vtp for final value
+            stem_vv += [stem[lstem-1]] # already properly formated
+            
+            
+        else:
+            vtp = 'a'
+            if not stem[0].v == "base":
+                stem[0].v = vtp
+            #
+            
+            stem_vv = [stem[0]]
         #
         
-        # could also use "stem_vv = stem"
         
     elif type(stem[0]) == Branch:
         # almost there, but not quite
@@ -807,8 +847,8 @@ def stemType2PairList(stem):
                 vtp = 'p'
             
             else:
-                print "ERROR(stemType2PairList): stem makes no sense"
-                print "stem = ", stem
+                print ("ERROR(stemType2PairList): stem makes no sense")
+                print ("stem = ", stem)
                 sys.exit(1)
             #
             
@@ -833,8 +873,8 @@ def stemType2PairList(stem):
                 vtp = 'p'
             
             else:
-                print "ERROR(stemType2PairList): stem makes no sense"
-                print "stem = ", stem
+                print ("ERROR(stemType2PairList): stem makes no sense")
+                print ("stem = ", stem)
                 sys.exit(1)
             #
             
@@ -851,9 +891,9 @@ def stemType2PairList(stem):
         #
         
     else:
-        print "ERROR(stemType2PairList): unrecognized type"
-        print "type = ", type(stem[0])
-        print "stem = ", stem
+        print ("ERROR(stemType2PairList): unrecognized type")
+        print ("type = ", type(stem[0]))
+        print ("stem = ", stem)
         sys.exit(1)
     #
     
@@ -981,6 +1021,7 @@ class MBL(APT):
         for k in range(0, len(branches)):
             self.branching += [branches[k]]
         #
+        
         self.base      = (i, j) # reference point or base
         
         
@@ -1005,6 +1046,8 @@ class MBL(APT):
         jj = []
         for jjk in self.branching:
             jj += [jjk]
+        #
+        
         return jj
     #
     
@@ -1016,6 +1059,7 @@ class MBL(APT):
             vv = self.branching[k]
             s += "%2d  (%2d,%2d)\n" % (k, vv[0], vv[1])
         #
+        
         return s
     #
     
@@ -1091,7 +1135,7 @@ class Stem(APT): # inherits abstract pair type (APT)
         self.Vij       = 0.0        # the total free energy at (it, jt)
         self.dGp       = []         # individual base pair free energy contributions
         self.dGloop    = 0.0        # H/I/M loop correction at (ph,qh)
-        self.Vpqh      = 0.0        # the linking free energy at (ph, qh): dGcap = dGloop + Vpqh
+        self.Vpqh      = 0.0        # the linking free energy at (ph, qh): dGcap=dGloop+Vpqh
         self.ctp       = 'S'        # connection type at (it, jt)
         self.btp       = self.vtype # bond type (vtype but with Stem needs addendum)
         self.branching = []         # branching points (if any)
@@ -1123,6 +1167,10 @@ class Stem(APT): # inherits abstract pair type (APT)
     def get_base(self):
         base = [self.base]
         return base
+    #
+    
+    def get_ctp(self):
+        return self.ctp
     #
     
     def get_stem(self):
@@ -1207,9 +1255,10 @@ class Stem(APT): # inherits abstract pair type (APT)
 def is_pktype(tp):
     match = True
     if not (tp == 'K' or tp == 'R'):
-        print "ERROR: unrecognized pseudoknot type (%s)" % tp
+        print ("ERROR: unrecognized pseudoknot type (%s)" % tp)
         match = False
     #
+    
     return match
 #
 
@@ -1218,6 +1267,71 @@ class PseudoKnot(APT):
     """
     PseudoKnot: builds a stem that can be passed to Motif or used to
     build a structure map
+    
+    basic "core PK"
+    
+    
+         . ' . L
+       .     ._ /.jK
+       .     |_|
+        .    |_|         linkages  ==> [L]
+         \_ /   \        rootstems ==> [R]
+         |_|    '        branches  ==> [R]
+      iK.|_|    .
+         / \    .
+          R  --
+    
+    
+    slightly more complex "core PK"
+    
+    
+        . .      . ' . L
+      .    \ _ _.    ._ /.jK
+      .     |_|_|2   |_|
+        . ./    .    |_|                linkages  ==> [L]
+                 \_ /   \       . .     rootstems ==> [1=R]
+                 |_|    '_ _ /     .    branches  ==> [1=R, 2, 3]
+              iK.|_|   3|_|_|      .  
+                 / \___/     \ . . 
+                  1   
+    
+    
+    basic "extended PK"
+    
+    
+         . ' .L   . ' .
+       .     ._ /     .
+       .     |_|      .
+        .    |_|     .     linkages  ==> [L]
+         \_ /   \_ .       rootstems ==> [R1, R2]
+         |_|    |_|        branches  ==> [R1, R2]
+      iR.|_|    |_|.jR
+         / \____/ \
+         R1      R2
+    
+    A more complex construction would include branches in any of the
+    three loops
+    
+    A more complex "extended PK"
+               
+    
+         . ' .L   . ' .
+       .     ._ /     .
+       .     |_|      .
+        .    |_|     .     linkages  ==> [L]
+         \_ /   \_ .       rootstems ==> [R1, R2]
+         |_|    |_|        branches  ==> [R1, R2, 1]
+      iR.|_| 1  |_|.jR
+         / \___/  \
+         R1 |_|  R2
+            |_|
+           /   \
+          .     .
+           . . . 
+    
+    There may some redundancy between the stem at R1 and R2 which is
+    covered by branches.
+    
     """ 
     
     def __init__(self, i, j, pktype):
@@ -1226,20 +1340,36 @@ class PseudoKnot(APT):
         self.name      = "PseudoKnot"
         self.pktype    = pktype # must be defined
         """
+        pktype must be defined. Accordingly,
+        
         K type: core pseudoknot (anti-parallel)
         R type: extended pseudoknot (anti-parallel)
         """
         if not is_pktype(pktype):
-            print "Error: unrecognized pseudoknot type (%2d,%2d)[pktype = %s]" \
-                % (i, j, pktype)
+            print ("Error: unrecognized pseudoknot type (%2d,%2d)[pktype = %s]" \
+                % (i, j, pktype))
             sys.exit(1)
         #
+        
+        self.mark = False
+        """@
+        
+        mark: In building a pseudoknot in Vienna2TreeNode, we need to
+        avoid double counting of the stems, so when mark is set to
+        True, this stem has been copied to PseudoKnot and it should
+        not be located in the genStem definition as a "Stem" anymore
+        but as __part__ of a pseudoknot.
+        
+        """
+        
         
         self.roottmp   = [] # placeholder saves stemtail information
         self.rootstems = [] # type Stem
         self.linkages  = [] # type Stem
         
-        
+        self.branching = []
+        # reference to the pMBL comprising the root stem and the
+        # remaining structures arranged between ipk and jpk
         
         self.xi = xi # [nt] default value
         
@@ -1249,48 +1379,127 @@ class PseudoKnot(APT):
         
         self.vtype = 'pk'
         
-        
+        # free energy contributions (the sum of other interactions)
         self.Vij  = 0.0     # the free energy
-        self.ctp  = pktype  # connection type 
+        # free energy contributions (the sum of other interactions)
+        self.Hij  = 0.0     # the enthalpy
+        
+        self.Vbr  = 0.0     # free energy of the junction branches
+        self.Hbr  = 0.0     # enthalpy of the junction branches
+        
+        self.ctp  = pktype  # connection type ('K' or 'R' only!)
         self.btp  = 'pk'    # bond type (redundant, but basic label)
-        self.branching = []
-        # reference to the pMBL comprising the root stem and the
-        # remaining structures arranged between ipk and jpk
         self.base = (i,j)   # tail of the structure (ipk,jpk)
         # ---------------------------------------------------
         
     #
     
-    def __str__(self):
-        return "%s pk struct(%3d, %3d)" % (self.pktype, self.it, self.jt)
+    
+    def get_base(self):
+        base = [self.base]
+        return base
     #
+    
+    def get_rootstems(self):
+        return self.rootstems
+    #
+    
+    def get_linkages(self):
+        return self.linkages
+    #
+    
+    def get_ctp(self):
+        return self.ctp
+    #
+    
+    def get_btp(self):
+        return self.btp
+    #
+    
+    def get_Vij(self):
+        return self.Vij
+    #
+    
+    def get_branches(self):
+        """@
+        
+        190731:
+        
+        The concept of "branching" was introduced because there could
+        be branches extending from the root stems and the linkage
+        stems. For example,
+        
+        (((((...((((....))))..[[[....)))))...(((....)))...((((..]]]..(((....)))...))))
+        ^--------------------------------^   ^--------^   ^--------------------------^
+                  branch 1                    branch 2           branch3
+                 root stem 1                  junction          root stem 2
+        
+        The original idea was rather vague. 
+        
+        For core PKs, the junction region is defined as the region
+        between jr1 and ql. This can be handled directly by the
+        linkage stem information.
+        
+        For extended PKs, the junction region is not contained in
+        branch1 (root1) or branch3 (root2). However, branch2 is not
+        contained in either of these two. So branching consists of
+        branch2.
+        
+        To some extent, the branches are not really used, but perhaps
+        that is partly because I had not really figured out exactly
+        what the purpose of "branching" was until recently (~200610).
+        
+        """
+        
+        jj = []
+        for jjk in self.branching:
+            jj += [jjk]
+        #
+        
+        return jj
+    #
+    
     
     
     def disp_PseudoKnot(self):
         s = ''
         if len(self.rootstems) > 0:
-            s  += "%s- pk(%3d,%3d): rootstems -> " % (self.pktype, self.it, self.jt)
+            s  += "%s- pk(%3d,%3d): root stem tail(s)    -> " \
+                  % (self.pktype, self.it, self.jt)
             for vv in self.rootstems:
                 s += "(%2d,%2d)[%s], " % (vv.it, vv.jt, vv.vtype)
             #
+            
         else:
-            s  += "%s- pk(%3d,%3d): roottmp   -> " % (self.pktype, self.it, self.jt)
+            s  += "%s- pk(%3d,%3d): tmproot stm tail(s)  -> " \
+                  % (self.pktype, self.it, self.jt)
             for vv in self.roottmp:
                 s += "(%2d,%2d), " % (vv[0], vv[1])
             #
         #
+        
         s += "\n"
-        s += "                linkages  -> "
+        s += "                linkage stem tail(s) -> "
         for vv in self.linkages:
-            s += "(%2d,%2d)[%s], " % (vv.it, vv.jt, vv.vtype)
+            s += "(%2d,%2d)[%s]," % (vv.it, vv.jt, vv.vtype)
         #
+        
+        s += '\n'
+        
+        s += "dGpk = %8.2f, dHpk = %8.2f" % (self.Vij, self.Hij)
         return s
+    #
+    
+    def __str__(self):
+        #return "%s pk struct(%3d, %3d)" % (self.pktype, self.it, self.jt)
+        return self.disp_PseudoKnot()
     #
     
     
     def __repr__(self):
         return self.__str__()
     #
+    
 #
 
 
@@ -1317,6 +1526,7 @@ class ArchMP(APT):
                 s += "(%3d,%3d), " % (vv.i, vv.j)
             #
         #
+        
         return s
     #
     
@@ -1344,14 +1554,21 @@ class MultiPair(APT):
         # transition to a new motif format
         
         self.vtype = "wyspa"
+        # free energy contribution
         self.Vij   = 0.0     # the free energy
+        
+        # enthalpy contribution
+        self.Hij   = 0.0     # the free energy
+        
         self.ctp   = 'W'     # connection type 
         self.btp   = "wyspa" # bond type (redundant, but basic label)
-        self.branching  = []      # what linkage is pointed to
-        # reference to the pMBLs comprising the root stem extending from and the
-        # remaining structures arranged between ipk and jpk
+        self.branching  = []
+        # branching: the stuff between the arches: after laying down
+        # the arches, we need to know what is between them. This
+        # expresses the pMBLs between the arches
         self.base = (i,j)   # tail of the structure (i_W,j_W)
         # ---------------------------------------------------
+        
     #
     
     def __str__(self):
@@ -1364,6 +1581,7 @@ class MultiPair(APT):
             s += '\n'
             s += self.arches[k].disp_AMP()
         #
+        
         return s
     #
     
@@ -1373,18 +1591,28 @@ class MultiPair(APT):
 #
 
 
-def disp_Motif(otype):
+def disp_Motif(otype, flag_brief = False):
     node_type = type(otype).__name__
     s = "%s(%2d,%2d) -> " % (node_type, otype.it, otype.jt)
-    if node_type == "Stem":
-        s = otype.disp_Stem()
+    if   node_type == "Stem":
+        s = otype.disp_Stem(flag_brief)
+        
+    elif node_type == "MBL":
+        s = otype.disp_MBL()
+        
+    elif node_type == "XLoop":
+        s = otype.disp_XLoop()
+        
     elif node_type == "PseudoKnot":
         s = otype.disp_PseudoKnot()
+        
     elif node_type == "MultiPair":
         s = otype.disp_MultiPair()
+        
     else:
         s += "\n!!! undefined structure !!!"
     #
+    
     return s
 #
 
@@ -1397,6 +1625,7 @@ def copyStem(stem):
         pr.put_ssPair(i, j, nm, v)
         bps += [pr]
     #
+    
     newStem = Stem(bps)
     return newStem
 #
@@ -1406,7 +1635,7 @@ def copyStem(stem):
 def ins_sort_StemList(StemTypes, order = 'it'):
     
     """@
-
+    
     This insertion sort method has a worst case time complexity of
     (N-1)N/2. The worst case example is one where we have the list in
     exactly the opposite order of what we desire. In this list, we
@@ -1473,8 +1702,8 @@ def ins_sort_StemList(StemTypes, order = 'it'):
             
         #
     else:
-        print "ERROR(ins_sort_StemList): unrecognized option (%s)" % order
-        print "                          allowed options: \"it\" or \"jt\"."
+        print ("ERROR(ins_sort_StemList): unrecognized option (%s)" % order)
+        print ("                          allowed options: \"it\" or \"jt\".")
         sys.exit(1)
     #
         
@@ -1503,11 +1732,11 @@ def test0():
     root_stem = [a1,a2]
     rss = Stem(root_stem)
     
-    print rss.disp_Stem()
+    print (rss.disp_Stem())
     nm1 = NewMotif(rss)
-    print nm1.motif.disp_Stem()
-    print nm1.motif.name
-    print nm1.motif.it, nm1.motif.jt
+    print (nm1.motif.disp_Stem())
+    print (nm1.motif.name)
+    print (nm1.motif.it, nm1.motif.jt)
     
     l1 = Pair()
     l1.put_ssPair(5, 18, 'bp', 'a')
@@ -1516,25 +1745,25 @@ def test0():
     linkage_stem = [l1, l2]
     lss = Stem(linkage_stem)
     
-    print lss.disp_Stem()
+    print (lss.disp_Stem())
     nm2 = NewMotif(lss)
-    print nm2.motif.disp_Stem()
-    print nm2.motif.name
-    print nm2.motif.it, nm2.motif.jt
-    print "-----"
-    print nm2.gmotif().disp_Stem()
-    print "-----"
+    print (nm2.motif.disp_Stem())
+    print (nm2.motif.name)
+    print (nm2.motif.it, nm2.motif.jt)
+    print ("-----")
+    print (nm2.gmotif().disp_Stem())
+    print ("-----")
     
     pk = PseudoKnot(0, 18, 'K')
     pk.rootstems = [rss]
     pk.linkages  = [lss]
-    print pk.disp_PseudoKnot()
-    print pk.pktype
+    print (pk.disp_PseudoKnot())
+    print (pk.pktype)
     nm3 = NewMotif(pk)
-    print nm3.gmotif().name, nm3.gmotif().it, nm3.gmotif().jt
-    print nm3.gmotif().disp_PseudoKnot()
-    print "xxx"
-    print nm3.disp()
+    print (nm3.gmotif().name, nm3.gmotif().it, nm3.gmotif().jt)
+    print (nm3.gmotif().disp_PseudoKnot())
+    print ("xxx")
+    print (nm3.disp())
 #
 
 def test1():
@@ -1543,18 +1772,18 @@ def test1():
         stem_list += [(k, 12-k)]
     #
     stem_Pair = stemType2PairList(stem_list)
-    print "stem_list:   ", stem_list
-    print "stem_Pair 1: ", stem_Pair
+    print ("stem_list:   ", stem_list)
+    print ("stem_Pair 1: ", stem_Pair)
 
     stem_Brnx = []
     for pv in stem_list:
         stem_Brnx += [Branch(pv[0], pv[1])]
     #
     stem_Pair2 = stemType2PairList(stem_Brnx)
-    print "stem_Pair 2: ", stem_Pair2
+    print ("stem_Pair 2: ", stem_Pair2)
     
     stem_Pair3 = stemType2PairList(stem_Pair)
-    print "stem_Pair 3: ", stem_Pair3
+    print ("stem_Pair 3: ", stem_Pair3)
 #
 
 

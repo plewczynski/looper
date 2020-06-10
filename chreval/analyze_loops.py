@@ -1,19 +1,19 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
-Main Program:  anal_loops.py (ANALyze LOOPS)
+Main Program:  analyze_loops.py (ANALYZE LOOPS)
 
-Classes:       Anal
+Classes:       AnalyzeLoops
 
 Author:        Wayne Dawson
 creation date: mostly 2016 and up to March 2017.
-last update:   180709
+last update:   200311 additional minor fixes to code.
 version:       0
 
-anal_loops.py (ANALyze LOOPS)
+analyze_loops.py (ANALyze LOOPS)
     
-    Anal is an analysis tool that runs batch calculations with
+    AnalyzeLoops is an analysis tool that runs batch calculations with
     Chreval.
     
     The input file is a list of loops formatted according to Przemek's
@@ -21,7 +21,7 @@ anal_loops.py (ANALyze LOOPS)
     extension 'txt').
     
     command line example:
-    > anal_loops.py -ff loops.CTCF.annotated.bed -dG
+    > analyze_loops.py -ff loops.CTCF.annotated.bed -dG
     
     where the file "loops.CTCF.annotated.bed" contains a list of data
     formatted according to Przemek. This has the format
@@ -53,7 +53,7 @@ anal_loops.py (ANALyze LOOPS)
     An alternative file input would involve the following command line
 
     command line example:
-    > anal_loops.py -ff wayn_active_inactive.txt wayn_compartments.txt wayn_open.txt -dG
+    > analyze_loops.py -ff wayn_active_inactive.txt wayn_compartments.txt wayn_open.txt -dG
 
     where the various list of "txt" files (wayn_active_inactive.txt,
     etc.) are formatted according to Teresa.
@@ -158,10 +158,14 @@ anal_loops.py (ANALyze LOOPS)
 
 """
 
+# python functions
 import sys
 import os
 import chreval
-from GetOpts import GetOpts
+
+# local functions
+from FileTools import getHeadExt
+from GetOpts   import GetOpts
 
 from ChromatinData import Data
 from ChromatinData import make_file_heading
@@ -170,29 +174,32 @@ from Functions import hamming_bin
 from Functions import hamming_str
 from Functions import similar
 
-#
-PROGRAM = "anal_loops.py"
+from LThread import DispLThread
+
+# labels
+PROGRAM = "analyze_loops.py"
 
 def usage():
-    print "USAGE: %s -ff file.bed file.bed ... " % PROGRAM
+    print ("USAGE: %s -ff file.bed file.bed ... " % PROGRAM)
 #
 
 
 
-class Anal:
+class AnalyzeLoops:
     def __init__(self, data):
-        self.debug              = False
-        self.data               = data
-        self.oflnm              = ''
-        self.iflnms             = ''
-        self.cdata              = data.cdata
-        self.keylist            = data.keylist
-        self.datatype           = data.datatype
-        self.res                = "res5kb"
-        self.range_TddS         = 2.0
-        self.range_ddG          = 2.0
+        self.debug        = False
+        self.data         = data
+        self.oflnm        = ''
+        self.iflnms       = ''
+        self.cdata        = data.cdata
+        self.keylist      = data.keylist
+        self.datatype     = data.datatype
+        self.res          = "res5kb"
+        self.range_TddS   = 2.0
+        self.range_ddG    = 2.0
+        self.hm_missing   = []
     #
-
+    
     def get_PET_wt(self, ky, wt):
         ctcf1 = self.cdata[ky].ctcf1
         ctcf2 = self.cdata[ky].ctcf2
@@ -202,6 +209,7 @@ class Anal:
         elif (ctcf1 == 'L' and ctcf2 == 'R'):
             wt_ctcf *= 0.05
         #
+        
         return wt_ctcf
     #
     
@@ -211,15 +219,18 @@ class Anal:
             header = '# files:\n'
         else:
             header = '# file:\n'
+        #
+        
         for fk in range(0, len(self.data.flhd)):
             header += "#   %s.%s\n" % (self.data.flhd[fk], self.data.ext[fk])
-        #
+        #|endfor
+        
         header += '#\n'
         header += "# interactions:\n"
         for ntrctn in self.data.interaction:
             header += "#   %s\n" % ntrctn
-        #
-
+        #|endfor
+        
         header += "# comments:\n"
         if len(self.data.description) > 0:
             for dscrbk in self.data.description:
@@ -228,11 +239,15 @@ class Anal:
                         header += "#   %s\n" % s
                     #
                 #
+                
                 if n > 1:
                     header += "#   ----\n"
                 #
-            #
+                
+            #|endfor
+            
         #
+        
         header += "# ----\n"
         
         # thermodynamic parameters
@@ -251,23 +266,25 @@ class Anal:
         header += "# ----\n"
         
         return header
-        
-        
+    #
     
-    def anal_loops(self, cl):
-        print "anal_loops()"
+    
+    def analyze_loops(self, cl):
+        print ("analyze_loops()")
         keylist = self.keylist
         if len(self.keylist) == 0:
-            print "setting keylist"
-            print "length of the dataset: ", len(self.cdata)
+            print ("setting keylist")
+            print ("length of the dataset: ", len(self.cdata))
             keylist = self.data.ordered_keylist()
-        # print keylist
-        # print self.cdata.keys()
-        # print self.data.chrmsm_grp.keys()
+        #
+        
+        # print (keylist)
+        # print (self.cdata.keys())
+        # print (self.data.chrmsm_grp.keys())
         # sys.exit(0)
         self.oflnm              = cl.f_output
         self.iflnms             = cl.f_activity
-        
+        self.use_eheat          = cl.use_eheat
         
         full_cmplxtydict = { 'cmplx1' : False,
                              'cmplx2' : False,
@@ -280,47 +297,56 @@ class Anal:
         # never get to this point!
         for k in range(0, len(self.data.taglist)):
             for tlk in self.data.taglist[k]:
-                if full_cmplxtydict.has_key(tlk): 
+                if tlk in full_cmplxtydict: 
                     full_cmplxtydict[tlk] = True
                 #
-            #
-        #
+            #|endfor
+            
+        #|endfor
+        
         for fc in full_cmplxtylist:
             if full_cmplxtydict[fc]:
                 cmplxty += [fc]
             #
-        #
+            
+        #|endfor
         
-        
+        # order changed 200219
         full_epidict = { 'open'      : False,
                          'active'    : False,
                          'A'         : False,
                          'B'         : False,
                          'repressed' : False }
         
-        full_epilist = ['open', 'active', 'A', 'B', 'repressed']
+        # order changed 200219
+        full_epilist = ['active', 'open', 'A', 'B', 'repressed']
         epilist = []
         # self.data.taglist is the list that is used
         for k in range(0, len(self.data.taglist)):
             for tlk in self.data.taglist[k]:
-                if full_epidict.has_key(tlk): 
+                if tlk in full_epidict: 
                     full_epidict[tlk] = True
                 #
-            #
+                
+            #|endfor
+            
         #
-        #
+        
+        
         for el in full_epilist:
             if full_epidict[el]:
                 epilist += [el]
             #
-        #
+            
+        #|endfor
+        
+        self.hm_missing  = []
         
         p_active    = 0.0
         p_open      = 0.0
         p_repressed = 0.0
         p_A         = 0.0
         p_B         = 0.0
-        missing     = []
         rPET_wt     = []
         wt_PETo     = cl.PETwt
         
@@ -340,32 +366,44 @@ class Anal:
         
         
         # begin by setting up save file with header information
+        
+        # (1) main file produced by the program containing general information
         rflnm = self.oflnm  # the output file name
         
+        rflhd, ext  = getHeadExt(rflnm)
+        # (2) secondary information: all the dG values
+        rflnm_dG = rflhd + "_dG.dat"
+        
+        # (3) secondary information: all the p(dG) values
+        rflnm_p  = rflhd + "_p.dat"
+        
+        
         dlabel = "# chr     begin        end      ctcf1   ctcf2     nPET      "
+        
         for cc in cmplxty:
             dlabel += "%s     " % cc
         #
+        
         plabel = "len    dG_0      TdS_0     dGbar     TdSbar    p_max     "
         if flag_allwts:
-            print "all:"
+            print ("all:")
             plabel += "p_sim    cmplx  p_ham    cmplx  p_dTdS   cmplx  p_ddG    cmplx  "
         elif flag_similar:
-            print "similar:"
+            print ("similar:")
             plabel = "len    dG_0      TdS_0     p_sim    cmplx  "
         elif flag_hamming:  # based on string edits
-            print "Hamming:"
+            print ("Hamming:")
             plabel = "len    dG_0      TdS_0     p_ham    cmplx  "
         elif flag_TdS:
-            print "dTdS:"
+            print ("dTdS:")
             plabel = "len    dG_0      TdS_0     p_dTdS   cmplx  "
         elif flag_ddG:
-            print "ddG:"
+            print ("ddG:")
             plabel = "len    dG_0      TdS_0     p_ddG    cmplx  "
         else:
-            print "basic:"
+            print ("basic:")
         #
-        fp = open(rflnm, 'w')
+        
         edatfld = ''
         if self.datatype == 'type1':
             edatfld += "active    open   repressed      A        B"
@@ -373,9 +411,27 @@ class Anal:
             for kxs in epilist:
                 edatfld += "%8s  " % kxs
             #
+            
         #
+        
+        # (1) write the main file introduction: header and line contents
+        fp = open(rflnm, 'w')
         fp.write("%s" % header)
         fp.write("%s%s%s\n" % (dlabel, plabel, edatfld))
+        fp.close()
+        
+        # (2) write the secondary information: header and line contents
+        dlabel_dG = dlabel + "len       dG_k  ----------->>>>"
+        fp = open(rflnm_dG, 'w')
+        fp.write("%s" % header)
+        fp.write("%s\n" % dlabel_dG)
+        fp.close()
+        
+        # (3) write the secondary information: header and line contents
+        dlabel_p  = dlabel + "len       p_k  ------------>>>>"
+        fp = open(rflnm_p, 'w')
+        fp.write("%s" % header)
+        fp.write("%s\n" % dlabel_p)
         fp.close()
         
         
@@ -388,7 +444,7 @@ class Anal:
             name = self.cdata[ky].name
             bgn  = self.cdata[ky].bgn
             end  = self.cdata[ky].end
-                        
+            
             flhd = make_file_heading(name, bgn, end, self.res)
             
             # #######################################################
@@ -396,9 +452,15 @@ class Anal:
             # then skip any further analysis.
             # #######################################################
             
-            # print "evaluating: ", os.path.exists(cl.f_heatmap[0]), cl.f_heatmap[0]
-            if not os.path.exists(flhd + ".heat"):
-                missing += [ flhd ]
+            flnm = flhd + ".heat"
+            if self.use_eheat:
+                flnm = flhd + ".eheat"
+            #
+            
+            print ("file %s exists? %s" % (flnm, os.path.exists(flnm)))
+            
+            if not os.path.exists(flnm):
+                self.hm_missing += [ flhd ]
                 continue
             #
             
@@ -416,6 +478,7 @@ class Anal:
                 p_active, p_open, p_repressed, p_A, p_B = self.data.get_type2_prob(ky)
                 cl.PETwt = self.get_PET_wt(ky, wt_PETo)
             #
+            
             self.cdata[ky].state["active"]    = p_active
             self.cdata[ky].state["open"]      = p_open
             self.cdata[ky].state["repressed"] = p_repressed
@@ -424,19 +487,24 @@ class Anal:
             rPET_wt += [ [ cl.PETwt, flhd ] ] 
             
             # configuration settings
-            cl.f_heatmap     = [flhd + ".heat"]
+            flnm = flhd + ".heat"
+            if self.use_eheat:
+                flnm = flhd + ".eheat"
+            #
+            
+            cl.f_heatmap     = [flnm]
             cl.allowed_extns = cl.EXTS["chreval.py"]
             # have to override the extension settings when calling
             # programs such as chreval.py that involve heatmaps.
             
             
-            print "\n\nfile name: %s.heat" % flhd
+            print ("\n\nfile name: %s" % flnm)
             manager = chreval.Manager()
             manager.runCalculations(cl)
             # manager.printResults()
             
             length = manager.N
-            dt     = chreval.DispThreads(manager.calc.N)
+            dt     = DispLThread(manager.calc.N)
             pr     = manager.trace.lt[0].p
             pr_h   = pr
             ham_include   = 0
@@ -449,179 +517,218 @@ class Anal:
             TdS_0  = manager.trace.lt[0].TdS
             dG_0   = manager.trace.lt[0].dG
             s_0    = dt.makeLThreadDotBracket_1b(manager.trace.lt[0], 0)
+            
+            
             # True option produces only the structure string
             
             if flag_allwts:
-                print "start-->[%4d]: %s   %8.3g" \
-                    % (0, s_0,              pr)
+                print ("start-->[%4d]: %s   %8.3g" \
+                    % (0, s_0,              pr))
                 sim_include += 1
                 ham_include += 1
                 dTdSp_include += 1
                 ddGp_include += 1
             elif flag_hamming_bin:
-                print "start-->[%4d]: %s   %8.4f   %3d   %8.3g" \
-                    % (0, s_0, 1.0, 0,      pr)
+                print ("start-->[%4d]: %s   %8.4f   %3d   %8.3g" \
+                    % (0, s_0, 1.0, 0,      pr))
                 ham_include += 1
             elif flag_hamming:  # based on string edits
-                print "start-->[%4d]: %s   %8.4f   %3d   %8.3g" \
-                    % (0, s_0, 1.0, 0,      pr)
+                print ("start-->[%4d]: %s   %8.4f   %3d   %8.3g" \
+                    % (0, s_0, 1.0, 0,      pr))
                 ham_include += 1
             elif flag_TdS:
-                print "start-->[%4d]: %s   %8.4f   %3d   %8.3f   %8.3g" \
-                    % (0, s_0, 1.0, 0, 0.0, pr)
+                print ("start-->[%4d]: %s   %8.4f   %3d   %8.3f   %8.3g" \
+                    % (0, s_0, 1.0, 0, 0.0, pr))
                 dTdSp_include += 1
             elif flag_ddG:
-                print "start-->[%4d]: %s   %8.4f   %3d   %8.3f   %8.3g" \
-                    % (0, s_0, 1.0, 0, 0.0, pr)
+                print ("start-->[%4d]: %s   %8.4f   %3d   %8.3f   %8.3g" \
+                    % (0, s_0, 1.0, 0, 0.0, pr))
                 ddGp_include += 1
             elif flag_similar:
-                print "start-->[%4d]: %s   %8.4f   %8.3g" \
-                    % (0, s_0, 1.0,         pr)
+                print ("start-->[%4d]: %s   %8.4f   %8.3g" \
+                    % (0, s_0, 1.0,         pr))
                 sim_include += 1
             elif flag_basic:
-                print "start-->[%4d]: %s   %8.3g" \
-                    % (0, s_0,              pr)
+                print ("start-->[%4d]: %s   %8.3g" \
+                    % (0, s_0,              pr))
             #
             
             for cnt in range(1, len(manager.trace.lt)):
+                
+                # I start to wonder what this is really doing. It
+                # doesn't seem to be adding any new information, or
+                # maybe I have missed something.
+                
                 s_cnt = dt.makeLThreadDotBracket_1b(manager.trace.lt[cnt], True)
                 p_cnt = manager.trace.lt[cnt].p
                 if flag_allwts:
                     if self.debug:
-                        print "        [%4d]: %s   %8.3g" \
-                            % (cnt, s_cnt, p_cnt)
+                        print ("        [%4d]: %s   %8.3g" \
+                            % (cnt, s_cnt, p_cnt))
                     #
+                    
                     if similar(s_0, s_cnt) > 0.95:
                         if self.debug:
-                            print "included[%4d]: %s   %8.4f   %8.3g" \
-                                % (cnt, s_cnt, similar(s_0,s_cnt), p_cnt)
+                            print ("included[%4d]: %s   %8.4f   %8.3g" \
+                                % (cnt, s_cnt, similar(s_0,s_cnt), p_cnt))
                         #
+                        
                         pr_s += manager.trace.lt[cnt].p
                         sim_include += 1
                     #
+                    
                     if hamming_str(s_0, s_cnt) < 5:
                         if self.debug:
-                            print "included[%4d]: %s   %8.4f   %3d   %8.3g" \
-                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), p_cnt)
+                            print ("included[%4d]: %s   %8.4f   %3d   %8.3g" \
+                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), p_cnt))
                         #
+                        
                         pr_h += manager.trace.lt[cnt].p
                         ham_include += 1
                     #
+                    
                     TdS_cnt = manager.trace.lt[cnt].TdS
                     delta_TdS = TdS_0 - TdS_cnt
                     if -self.range_TddS < delta_TdS and delta_TdS < self.range_TddS:
                         if self.debug:
-                            print "included[%4d]: %s   %8.4f   %3d   %8.3f   %8.3g" \
-                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), delta_TdS, p_cnt)
+                            print ("included[%4d]: %s   %8.4f   %3d   %8.3f   %8.3g" \
+                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), delta_TdS, p_cnt))
                         #
+                        
                         pr_TdS += manager.trace.lt[cnt].p
                         dTdSp_include += 1
                     #
+                    
                     dG_cnt = manager.trace.lt[cnt].dG
                     delta_dG = dG_cnt - dG_0
                     if delta_dG < self.range_ddG:
                         if self.debug:
-                            print "included[%4d]: %s   %8.4f   %3d   %8.3f   %8.3g" \
-                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), delta_dG, p_cnt)
+                            print ("included[%4d]: %s   %8.4f   %3d   %8.3f   %8.3g" \
+                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), delta_dG, p_cnt))
                         #
+                        
                         pr_ddG += manager.trace.lt[cnt].p
                         ddGp_include += 1
                     #
+                    
                 elif flag_hamming_bin:
                     if hamming_bin(s_0, s_cnt) < 5:
                         if self.debug:
-                            print "included[%4d]: %s   %8.4f   %3d   %8.3g" \
-                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_bin(s_0,s_cnt), p_cnt)
+                            print ("included[%4d]: %s   %8.4f   %3d   %8.3g" \
+                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_bin(s_0,s_cnt), p_cnt))
                         #
+                        
                         pr_h += manager.trace.lt[cnt].p
                         ham_include += 1
                     else:
                         if self.debug:
-                            print "        [%4d]: %s   %8.4f   %3d   %8.3g" \
-                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_bin(s_0,s_cnt), p_cnt)
+                            print ("        [%4d]: %s   %8.4f   %3d   %8.3g" \
+                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_bin(s_0,s_cnt), p_cnt))
                         #
+                        
                     #
+                    
                 elif flag_hamming: # based on string edits
                     if hamming_str(s_0, s_cnt) < 5:
                         if self.debug:
-                            print "included[%4d]: %s   %8.4f   %3d   %8.3g" \
-                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), p_cnt)
+                            print ("included[%4d]: %s   %8.4f   %3d   %8.3g" \
+                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), p_cnt))
                         #
+                        
                         pr_h += manager.trace.lt[cnt].p
                         ham_include += 1
+                        
                     else:
                         if self.debug:
-                            print "        [%4d]: %s   %8.4f   %3d   %8.3g" \
-                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), p_cnt)
+                            print ("        [%4d]: %s   %8.4f   %3d   %8.3g" \
+                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), p_cnt))
                         #
+                        
                     #
+                    
                 elif flag_TdS:
                     TdS_cnt = manager.trace.lt[cnt].TdS
                     delta_TdS = TdS_0 - TdS_cnt
                     if -self.range_TddS < delta_TdS and delta_TdS < self.range_TddS:
                         if self.debug:
-                            print "included[%4d]: %s   %8.4f   %3d   %8.3f   %8.3g" \
-                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), delta_TdS, p_cnt)
+                            print ("included[%4d]: %s   %8.4f   %3d   %8.3f   %8.3g" \
+                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), delta_TdS, p_cnt))
                         #
+                        
                         pr_TdS += manager.trace.lt[cnt].p
                         dTdSp_include += 1
+                        
                     else:
                         if self.debug:
-                            print "        [%4d]: %s   %8.4f   %3d   %8.3f   %8.3g" \
-                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), delta_TdS, p_cnt)
+                            print ("        [%4d]: %s   %8.4f   %3d   %8.3f   %8.3g" \
+                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), delta_TdS, p_cnt))
                         #
+                        
                     #
+                    
                 elif flag_ddG:
                     dG_cnt = manager.trace.lt[cnt].dG
                     delta_dG = dG_cnt - dG_0
                     if delta_dG < self.range_ddG:
                         if self.debug:
-                            print "included[%4d]: %s   %8.4f   %3d   %8.3f   %8.3g" \
-                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), delta_dG, p_cnt)
+                            print ("included[%4d]: %s   %8.4f   %3d   %8.3f   %8.3g" \
+                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), delta_dG, p_cnt))
                         #
+                        
                         pr_ddG += manager.trace.lt[cnt].p
                         ddGp_include += 1
+                        
                     else:
                         if self.debug:
-                            print "        [%4d]: %s   %8.4f   %3d   %8.3f   %8.3g" \
-                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), delta_dG, p_cnt)
+                            print ("        [%4d]: %s   %8.4f   %3d   %8.3f   %8.3g" \
+                                % (cnt, s_cnt, similar(s_0,s_cnt), hamming_str(s_0,s_cnt), delta_dG, p_cnt))
                         #
+                        
                     #
+                    
                 elif flag_similar:
                     if similar(s_0, s_cnt) > 0.95:
                         if self.debug:
-                            print "included[%4d]: %s   %8.4f   %8.3g" \
-                                % (cnt, s_cnt, similar(s_0,s_cnt), p_cnt)
+                            print ("included[%4d]: %s   %8.4f   %8.3g" \
+                                   % (cnt, s_cnt, similar(s_0,s_cnt), p_cnt))
                         #
+                        
                         pr_s += manager.trace.lt[cnt].p
                         sim_include += 1
+                        
                     else:
                         if self.debug:
-                            print "        [%4d]: %s   %8.4f   %8.3g" \
-                                % (cnt, s_cnt, similar(s_0,s_cnt), p_cnt)
+                            print ("        [%4d]: %s   %8.4f   %8.3g" \
+                                % (cnt, s_cnt, similar(s_0,s_cnt), p_cnt))
                         #
+                        
                     #
+                    
                 elif flag_basic:
                     # just the first boltzmann probability 
                     if self.debug:
-                        print "        [%4d]: %s   %8.3g" \
-                            % (cnt, s_cnt, p_cnt)
+                        print ("        [%4d]: %s   %8.3g" \
+                            % (cnt, s_cnt, p_cnt))
                     #
+                    
                 #
+                
                 else:
-                    print "anal_loops(): Sorry, something is really fucked up"
+                    print ("analyze_loops(): Sorry, something is really fucked up")
                     sys.exit(1)
                 #
-            #
+                
+            #|endfor
             
             # self.datatype == 'type1': // self.datatype == 'type2':
             # store the information in a temporary buffer
             
+            # (1) write the main file results for current calculation
             dGbar = dG_0 / float(length)
             TdSbar = TdS_0 / float(length)
             output =  "%s  %5d  %8.2f  %8.2f  %8.3f  %8.3f   " \
                       % (self.cdata[ky].disp_data(), length, dG_0, TdS_0, dGbar, TdSbar)
-            #
+            
             if flag_allwts:
                 output +=  "%8.5f  " % pr
                 output +=  "%8.5f  %4d  " % (pr_s, sim_include)
@@ -648,7 +755,8 @@ class Anal:
             else:
                 for kxs in epilist:
                     output += "  %8.5f" % self.cdata[ky].state[kxs]
-                #
+                #|endfor
+                
                 output += "\n" 
             #
             
@@ -656,30 +764,73 @@ class Anal:
             fp.write(output)
             fp.close()
             
-        #
-
-        if not os.path.exists("loops_missing.txt"):
-            fp = open("loops_missing.txt", 'w')
-            s = "missing files:\n"
-            for m in missing:
-                s += m + '\n'
-            fp.write(s)
+            # (2,3) make a lists of all dG and p(dG) data
+            dG_list = ''
+            p_list  = ''
+            for ltk in manager.trace.lt:
+                dG_list += "%10.2f " % ltk.dG
+                p_list  += "%10.3g " % ltk.p
+            #
+            
+            # (2) write the secondary information file results for current calculation
+            output_dG =  "%s  %5d    " % (self.cdata[ky].disp_data(), length)
+            output_dG += dG_list
+            output_dG += "\n" 
+            fp = open(rflnm_dG, 'a')
+            fp.write(output_dG)
             fp.close()
+            
+            # (3) write the secondary information file results for current calculation
+            output_p =  "%s  %5d    " % (self.cdata[ky].disp_data(), length)
+            output_p += p_list
+            output_p += "\n" 
+            fp = open(rflnm_p, 'a')
+            fp.write(output_p)
+            fp.close()
+            
+            
         #
         
-        if not os.path.exists("loops_weights.txt"):
-            fp = open("loops_weights.txt", 'w')
-            fp.write("file                                          PET wts: \n")
-            # 
+        
+        try:
+            flnm_missing = rflhd + "_files_missing.dat"
+            fp = open(flnm_missing, 'w')
+            s = "# missing files:\n"
+            for m in self.hm_missing:
+                s += m + '\n'
+            #|endfor
+            
+            fp.write(s)
+            fp.close()
+            
+        except:
+            # soldier on brother
+            print ("ERROR: cannot open %s" % flnm_missing)
+        #
+        
+        
+        try:
+            flnm_weights = rflhd + "_loop_weights.dat"
+            fp = open(flnm_weights, 'w')
+            fp.write("#file                                         PET wts: \n")
+             
             for r in rPET_wt:
                 fp.write("%40s   %8.3f\n" % (r[1], r[0]))
+            #
+            
             fp.close()
+            
+        except:
+            # soldier on brother
+            print ("ERROR: cannot open %s" % flnm_weights)
         #
-        print "finished calculations"
-        print "see results:           'loops_result.dat'"
-        print "    missing files:     'loops_missing.txt'"
-        print "    chromatin weights: 'loops_weights.txt'"
-        print "DONE"
+        
+        
+        print ("finished calculations")
+        print ("see results:           %s" % rflnm)
+        print ("    missing files:     %s" % flnm_missing)
+        print ("    chromatin weights: %s" % flnm_weights)
+        print ("DONE")
     #
     
 #    
@@ -696,23 +847,26 @@ def main(cl):
     dt = Data()
     iflnms = CL.f_activity
     oflnm  = CL.f_output 
-    print iflnms
+    print (iflnms)
     
     
     for f in iflnms:
         if os.path.exists(f):
             dt.readfile(f)
         else:
-            print "ERROR: cannot open %s; the file missing" % f
+            print ("ERROR: cannot open %s; the file missing" % f)
             sys.exit(1)
         #
-    #
+        
+    #|endfor
+    
     dt.ordered_keylist() # make an ordered list in terms of chromosome
                          # number and region
-    dt.display_Data(False)
+    show_data = True # False # 
+    dt.display_Data(show_data)
     
-    an = Anal(dt)
-    an.anal_loops(CL)
+    an = AnalyzeLoops(dt)
+    an.analyze_loops(CL)
     
 #
 

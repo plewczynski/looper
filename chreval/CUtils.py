@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -8,7 +8,7 @@ Classes:       String
 
 Author:        Wayne Dawson
 creation date: 2016 (160903)
-last update:   190124
+last update:   200210 (upgraded to python3), 190124
 version:       0
 
 
@@ -32,9 +32,9 @@ import sys
 class String:
     def __init__(self, span = 4):
         if span > 20:
-            print "WARNING: hollerith string can have up to %d zeros" % span
+            print ("WARNING: hollerith string can have up to %d zeros" % span)
         elif span <= 1:
-            print "ERROR: hollerith range should be greater than 1"
+            print ("ERROR: hollerith range should be greater than 1")
             sys.exit(1)
         #
         self.hspan = span
@@ -45,11 +45,11 @@ class String:
         try:
             nt = int(n)
         except ValueError:
-            print "ERROR(StringU.hollerith): input '%s' variable not an integer" % n
+            print ("ERROR(StringU.hollerith): input '%s' variable not an integer" % n)
             sys.exit(1)
         #
         if n < 0:
-            print "ERROR(StringU.hollerith): integer %d must be greater than or equal to zero." % n
+            print ("ERROR(StringU.hollerith): integer %d must be greater than or equal to zero." % n)
             sys.exit(1)
         #
         d = 0
@@ -59,7 +59,7 @@ class String:
                 break
             nt /= 10
             d+= 1
-        # print d
+        # print (d)
         s = ''
         for k in range(0, (self.hspan-d)):
             s += '0'
@@ -77,7 +77,7 @@ class String:
         try:
             i = int(s)
         except ValueError:
-            print "ERROR(StringU.h2i): input hollerith '%s' does not yield an integer" % h
+            print ("ERROR(StringU.h2i): input hollerith '%s' does not yield an integer" % h)
             sys.exit(1)
         #
         return i
@@ -91,7 +91,7 @@ class String:
         flag_isNumber = False
         s = str(value)
         a = s.strip().split('.')
-        # print a, len(a), a[0].isdigit()
+        # print (a, len(a), a[0].isdigit())
 
         if not len(a) == 0:
             a0 = a[0]
@@ -109,7 +109,7 @@ class String:
             #
         #
         if not flag_isNumber:
-            print "Warning(float): '%s' is not a number" % value
+            print ("Warning(float): '%s' is not a number" % value)
         #
         return flag_isFloat
     #
@@ -122,7 +122,7 @@ class String:
         
         s = str(value)
         a = s.strip().split('.')
-        # print a
+        # print (a)
         if not len(a) == 0:
             a0 = a[0]
             if a0[0] == '-':
@@ -141,7 +141,7 @@ class String:
         #
         
         if not flag_isNumber:
-            print "Warning(int): '%s' is not a number" % value
+            print ("Warning(int): '%s' is not a number" % value)
         #
         return flag_isInt
     #

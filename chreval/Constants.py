@@ -1,18 +1,21 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
 program:        Constants.py
 
 Creation Date:  cr 2017.03~
-Last Update:    180904
+Last Update:    200416, more refactoring of constants
 Version:        1.0
 
 
 Purpose:
 
-Contains constants that are often used in various programs. Having one
-file that contains them all helps to keep everything regular.
+Contains a hodgepodge of constants, labels and indices that that are
+often used by various programs. These are uniform, fundamental
+definitions that are used in all the programs but don't really have a
+home anywhere. Having one file that contains them all helps to keep
+everything regular.
 
 Comments:
 
@@ -22,6 +25,7 @@ the upgrades of the vsfold series will probably be inherited to do RNA
 structure prediction eventually.
 
 """
+
 
 # #################################################################
 # ###############  General configuration CONSTANTS  ###############
@@ -56,9 +60,42 @@ kB       = 0.0019872041 # [kcal/mol] (Boltzmann constant)
 
 # source: https://en.wikipedia.org/wiki/Boltzmann_constant
 
+T37C     = 310.15  # [K] temperature at 37 C in Kelven
+T_0C     = 273.15  # [K] temperature at  0 C in Kelven
+
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 # #################################################################
 
+# #################################################################
+# ########################  Control labels  #######################
+# #################################################################
+# vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+
+# Used for testing etc in various modules. In particular, it is used
+# by SO_dG_barrier and CtData to filter LThread data It is also used
+# by RNAModules and ChromatinModules
+blm_labels  = {'B' : True,
+               'I' : True,
+               'M' : True }
+
+skip_labels = {'bgn' : True,
+               'end' : True,
+               '-'   : True }
+
+
+base_labels = {'B' : True,
+               'I' : True,
+               'M' : True,
+               'S' : True,
+               'K' : True,
+               'W' : True }
+
+pk_labels   = {'K' : True,
+               'R' : True }
+
+
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# #################################################################
 
 
 # #################################################################
@@ -66,9 +103,6 @@ kB       = 0.0019872041 # [kcal/mol] (Boltzmann constant)
 # ###############   used in 1D structure notation   ###############
 # #################################################################
 # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-
-sysDefLabels = { "Chromatin" : 'c',
-                 "RNA"       : 'A'}
 
 
 # used for PKs and parallel stems
@@ -427,6 +461,5 @@ Xlist   = {  0 :  [],  # ['(', ')'],
 
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 # #################################################################
-
 
 

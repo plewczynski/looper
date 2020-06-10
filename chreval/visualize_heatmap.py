@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -59,8 +59,8 @@ PROGRAM = "make_heatmap.py" # name of the program
 
 # general usage statement
 def usage():
-    print "USAGE: %s file" % PROGRAM
-    print "       ... where the input file *must* have the extension 'heat'!" 
+    print ("USAGE: %s file" % PROGRAM)
+    print ("       ... where the input file *must* have the extension 'heat'!" )
 #
 
 """
@@ -104,7 +104,7 @@ class Plot(object):
     
     def plot(self, hm):
     
-        print "drawing plot..."
+        print ("drawing plot...")
         
         # axes
         fig, ax = plt.subplots()
@@ -133,8 +133,8 @@ class Plot(object):
 
 def main(cl):
     if SHOWMAIN:
-        print cl
-        print "number of args: %d" % (len(cl))
+        print (cl)
+        print ("number of args: %d" % (len(cl)))
     #
     
     # parse the command line
@@ -169,17 +169,17 @@ def main(cl):
     
     # assign arguments
     args = parser.parse_args()
-    # print args
+    # print (args)
     flnm = args.heatmap
     raw_data = args.raw_data
     hic_data = args.hic_data
     show_wts    = args.show_weights
-    print 'flnm ', flnm
+    print ('flnm ', flnm)
     flhd, ext = getHeadExt(flnm)
     
     cd = ClustData(raw_data)
     if hic_data:
-        print "HiC data"
+        print ("HiC data")
         cd.set_Nenski()
         
         """@@@
@@ -195,9 +195,9 @@ def main(cl):
         here. Keep in mind that not all data From Nencki is HiC.
 
         """
-    print "get_data:"
+    print ("get_data:")
     hm, N = cd.get_data(flnm)
-    print "plot:"
+    print ("plot:")
     pt = Plot()
     pt.plot(hm)
     

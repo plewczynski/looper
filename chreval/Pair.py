@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -17,7 +17,7 @@ Functions:       BranchList2list
  
 Author:          Wayne Dawson
 creation date:   170126 (refactored as independent unit 190704)
-last update:     190718
+last update:     200211 (upgraded to python3), 190718
 version:         0.1
 
 Purpose:
@@ -58,18 +58,18 @@ def find_this_ij(k_target, Xlist):
     
     
     if debug_find_this_ij:
-        print "enter find_this_ij: look for i = ", k_target
+        print ("enter find_this_ij: look for i = ", k_target)
     #
     i = -1; j = -1; v = '-'
     flag_found = False
     for xk in Xlist:
         i, j, v, c = xk.get_ssPair()
         if debug_find_this_ij:
-            print k_target, i,j
+            print (k_target, i,j)
         #
         if i == k_target:
             if debug_find_this_ij:
-                print "found: ", i, j, v
+                print ("found: ", i, j, v)
             #
             flag_found = True
             break
@@ -77,7 +77,7 @@ def find_this_ij(k_target, Xlist):
     #
     if not flag_found:
         if debug_find_this_ij:
-            print "position %d not found!" % k_target
+            print ("position %d not found!" % k_target)
         #
         i = -1; j = -1
     #
@@ -182,9 +182,9 @@ class Pair(object):
     # this is used!
     def put_ssPair_j(self, j, nm = 'bp', v = 'a'):
         if not self.name == nm:
-            print "ERROR(Pair): improperly matched type"
-            print "             (i,j) = (%d,%d)" % (self.i, j)
-            print "             name(%s) != new name(%s) " % (self.name, nm)
+            print ("ERROR(Pair): improperly matched type")
+            print ("             (i,j) = (%d,%d)" % (self.i, j))
+            print ("             name(%s) != new name(%s) " % (self.name, nm))
         #
         self.ch_j = 'A'
         self.j = j
@@ -289,18 +289,24 @@ def rlist2vsPair(rlist, stype = '-', name = "bp"):
         for k in range(0, len(rlist)-1):
             i1 = rlist[k  ][0]; j1 = rlist[k  ][1]
             i2 = rlist[k+1][0]; j2 = rlist[k+1][1]
+            
             if i1 < i2 and i2 < j1 and j1 < j2:
                 is_ppstem = True
+                
             elif i1 < i2 and j2 < j1:
                 if is_ppstem:
-                    print "ERROR(rlist2vsPair): There seems to be a mixture of "
-                    print "                     parallel and antiparallel interactions"
+                    print ("ERROR(rlist2vsPair): There seems to be a mixture of ")
+                    print ("                     parallel and antiparallel interactions")
                     for vv in rlist:
-                        print vv
-                    #
+                        print (vv)
+                    #|endfor
+                    
                 #
+                
             #
-        #
+            
+        #|endfor
+        
         for k in range(0, len(rlist)):
             iss = rlist[k][0]; jss = rlist[k][1]
             if is_ppstem:
@@ -312,7 +318,9 @@ def rlist2vsPair(rlist, stype = '-', name = "bp"):
                 a.put_ssPair(iss, jss, name, 'a')
                 vsPairList += [a]
             #
-        #
+            
+        #|endfor
+        
     else:
         if stype == 'p':
             for k in range(0, len(rlist)):
@@ -320,15 +328,20 @@ def rlist2vsPair(rlist, stype = '-', name = "bp"):
                 a = Pair()
                 a.put_ssPair(iss, jss, name, 'p')
                 vsPairList += [a]
-            #
+            #|endfor
+            
         else:
             for k in range(0, len(rlist)):
+                iss = rlist[k][0]; jss = rlist[k][1]
                 a = Pair()
                 a.put_ssPair(iss, jss, name, stype)
                 vsPairList += [a]
-            #
+            #|endfor
+            
         #
+        
     #
+    
     return vsPairList
 #
 

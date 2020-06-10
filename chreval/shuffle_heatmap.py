@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -10,7 +10,7 @@ Functions:     shuffle_heatmap
 
 Author:        Wayne Dawson
 creation date: 2016/2017
-last update:   190718
+last update:   200211 (upgraded to python3), 190718
 version:       0
 
 
@@ -56,7 +56,7 @@ from FileTools    import FileTools
 from FileTools    import getHeadExt
 from ChPair       import ChPairData
 from ChPair       import shuffle_ChPairData
-from SimRNATools  import SimRNAData
+from Chromatin2SimRNA import SimRNARestraints #from SimRNATools  import SimRNAData
 import sys
 import random
 import argparse
@@ -102,63 +102,63 @@ def shuffle_heatmap(cl):
     #
     # assign arguments
     args = parser.parse_args()
-    # print args
+    # print (args)
     iflnm = args.f_chpair[0]
     iflhd, ext = getHeadExt(iflnm)
     oflhd = iflhd
-    #print args.sqlen
-    #print args.n_shuffled
+    #print (args.sqlen)
+    #print (args.n_shuffled)
     if not args.f_header == None:
         oflhd = args.f_header[0]
     #
     try:
         N = int(args.sqlen[0])
     except ValueError:
-        print "ERROR: input value for the sequence length must be an integer"
-        print "       entered value: '%s'" % args.sqlen
+        print ("ERROR: input value for the sequence length must be an integer")
+        print ("       entered value: '%s'" % args.sqlen)
         sys.exit(1)
     #
     try:
         Nshuf = int(args.n_shuffled[0])
     except ValueError:
-        print "ERROR: number of shuffled structures must be a POSITIVE integer"
-        print "       entered value: '%s'" % args.n_shuffled
+        print ("ERROR: number of shuffled structures must be a POSITIVE integer")
+        print ("       entered value: '%s'" % args.n_shuffled)
         sys.exit(1)
     #
     if Nshuf < 0:
-        print "ERROR: number of shuffled structures must be a POSITIVE integer"
-        print "       entered value: %d" % Nshuf
+        print ("ERROR: number of shuffled structures must be a POSITIVE integer")
+        print ("       entered value: %d" % Nshuf)
         sys.exit(1)
     #
     use_SimRNA = args.oSimRNA
     use_heatmap = args.oHeat
-    print iflnm
+    print (iflnm)
     ft = FileTools()
     
     if not ft.check_ext(iflnm, ["chpair"], "shuffle_heatmap"):
-        print "ERROR: input file is flawed"
+        print ("ERROR: input file is flawed")
         sys.exit(0)
     #
     
-    print 'input file name:   ', iflnm
+    print ('input file name:   ', iflnm)
     if use_SimRNA:
-        print 'output files will contain SimRNA restraint data'
+        print ('output files will contain SimRNA restraint data')
     else:
-        print 'output files will contain heatmap data'
+        print ('output files will contain heatmap data')
     #
     
     chdt = ChPairData()
     if N > 0:
-        print "N = ", N
+        print ("N = ", N)
         chdt.set_vsqlen(N) # means N was set as an option
     #
     chdt.read_ChPairFile(iflnm)
-    #print chdt.disp_ChPairData(chdt.data)
+    #print (chdt.disp_ChPairData(chdt.data))
     for k in range(1, Nshuf+1):
         oflnm = oflhd + "_x%s.simres" % (string.zfill(k, 3))
-        print oflnm
+        print (oflnm)
         nchdt = shuffle_ChPairData(chdt)
-        #print chdt.disp_ChPairData(nchdt.data)
+        #print (chdt.disp_ChPairData(nchdt.data))
         srdt = SimRNAData()
         srdt.ChPair2SimRes(nchdt, ['N~N'])
         srdt.print_SimRNArestraints(oflnm, "slope", True) 

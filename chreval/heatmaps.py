@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """@
@@ -67,16 +67,16 @@ def heatmap(data, karirotyp, chromosom, resolution=100000):
         x = round_int(i[1], resolution)/resolution
         y = round_int(i[5], resolution)/resolution
         hm[x][y][1] += i[6]
-    print 
+    print ()
 
     m = hm[:,:,1].max()
-    print m
+    print (m)
     hm = hm[:,:,1]/m
-    print "Amplification..."
+    print ("Amplification...")
     hm = wzmocnienie(hm, 200)
-    print "Rotation..."
+    print ("Rotation...")
     hm = ndimage.rotate(hm,-135)
-    print "Trimming... "
+    print ("Trimming... ")
     lx, ly = hm.shape    
     hm = hm[ lx/ 2:, :]
     return hm
@@ -89,16 +89,16 @@ def main():
     parser.add_argument("chromosome", help="np chr22" )
     args = parser.parse_args()
     
-    #print args
-    #print args.karyotype
-    #print args.chromosome
-    #print args.singletons
+    #print (args)
+    #print (args.karyotype)
+    #print (args.chromosome)
+    #print (args.singletons)
     #sys.exit(0)
     
     chromosome = args.chromosome
-    print "Openning karyotype..."
+    print ("Openning karyotype...")
     karyotype = getKaryotype(args.karyotype)
-    print "Read singletons..."
+    print ("Read singletons...")
     
     # reads the file; e.g., "chrY.PET1.GM12878.CTCF.singletons_cluster_PET_2_3.txt"
 
@@ -123,13 +123,13 @@ def main():
     # example.
     singletons = [ i for i in singletons if i[0] == chromosome and i[3] == chromosome]
 
-    print "Heatmap..."
+    print ("Heatmap...")
     hm = heatmap(singletons, karyotype, chromosome, 100000)
     fig = plt.figure()
     ax1 = fig.add_subplot('111')
     ax1.imshow(hm, interpolation="none", extent=[0, karyotype[chromosome],karyotype[chromosome]/sqrt(2),0], aspect='auto', origin="upper")
     
-    print "drawing plot..."
+    print ("drawing plot...")
     plt.imshow(hm)
     plt.show()
     

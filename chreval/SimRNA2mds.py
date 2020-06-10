@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -12,7 +12,7 @@ Functions:     doSimRNA2mds
 
 Author:        Wayne Dawson
 creation date: parts 2016, made into a separate object 170314
-last update:   170314
+last update:   200211 (upgraded to python3), 170314
 version:       0
 
 Purpose:
@@ -38,7 +38,7 @@ REF = {"P" : None }
 
 
 def usage():
-    print "USAGE: %s pdbfile" % PROGRAM
+    print ("USAGE: %s pdbfile" % PROGRAM)
 #
 
 # ATOM      1  B   BEA A   1    1506.7671833.735  62.005  0.00  0.00           C
@@ -105,14 +105,14 @@ class DataPDB:
         self.heteroatoms = []
         self.connect = []
         self.ref = REF
-        self.ref['P'] = Rename('B  ', 'BEA', 'C')
+        self.ref['P'] = Rename('P  ', 'BEA', 'P')
     #
 
     def readpdb(self, flnm):
         try:
             fp = open(flnm, 'r')
         except IOError:
-            print "ERROR: cannot open %s" % flnm
+            print ("ERROR: cannot open %s" % flnm)
             sys.exit(1)
         #
         
@@ -122,14 +122,14 @@ class DataPDB:
         acnt = 0
         for lfpk in lfp:
             lbl = lfpk[0:6]
-            # print lbl
+            # print (lbl)
             if lbl == "ATOM  ":
                 anm = lfpk[12:16]
                 rnm = lfpk[17:20]
                 chn = lfpk[21:22]
                 rnb = lfpk[22:26]
-                # print ndx, anm, rnm, rnb
-                if self.ref.has_key(anm.strip()):
+                # print (ndx, anm, rnm, rnb)
+                if anm.strip() in self.ref:
                     acnt += 1
                     ndx = acnt
                     try:
@@ -137,10 +137,10 @@ class DataPDB:
                         y = float(lfpk[38:46])
                         z = float(lfpk[46:54])
                     except ValueError:
-                        print "ERROR: problems reading coordinate data in pdb file %s" % flnm
-                        print "       line number %d"
-                        print "REMARK                       >_???.??|_???.??|_???.??|<"
-                        print lfpk.strip()
+                        print ("ERROR: problems reading coordinate data in pdb file %s" % flnm)
+                        print ("       line number %d")
+                        print ("REMARK                       >_???.??|_???.??|_???.??|<")
+                        print (lfpk.strip())
                         sys.exit(1)
                     try:
                         b = float(lfpk[54:60])
@@ -151,7 +151,7 @@ class DataPDB:
                     except ValueError:
                         v = 0.0
                     a = lfpk[72:80]
-                    # print ndx, anm, rnm, rnb, len(a)
+                    # print (ndx, anm, rnm, rnb, len(a))
                     if len(a) == 0:
                         a = anm.strip()
                         atom = ''
@@ -169,10 +169,10 @@ class DataPDB:
                     self.atoms += [ r ]
                 #
             elif lbl == "CONECT":
-                #print lfpk.strip()
+                #print (lfpk.strip())
                 self.connect += [ lbl.strip() ]
             elif lbl == "HETATM":
-                #print lfpk.strip()
+                #print (lfpk.strip())
                 self.heteroatoms += [ lbl.strip() ]
                 
             #
@@ -219,7 +219,7 @@ def doSimRNA2mds(cl):
     #
     pdbflnm_in = cl[1]
     if not path.isfile(pdbflnm_in):
-        print "ERROR: cannot find %s" % pdbflnm_in
+        print ("ERROR: cannot find %s" % pdbflnm_in)
         usage()
         sys.exit(1)
     #

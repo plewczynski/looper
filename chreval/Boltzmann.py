@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """Main Program:  Boltzmann.py 
 
@@ -6,7 +6,7 @@ Classes:       Boltzmann
 
 Author:        Wayne Dawson
 creation date: mostly 2016 and up to March 2017 (separated from chreval 180709)
-last update:   190522
+last update:   200603 (minor bug fixes, upgraded to python3)
 version:       0
 
 Purpose:
@@ -73,12 +73,14 @@ SHOWMAIN     = False # Debugging in main()
 
 # 2. special local global function
 def usage():
-    print "USAGE: %s" % PROGRAM
+    print ("USAGE: %s" % PROGRAM)
 #
-# At present, there is not much reason to use this at all. The only
-# thing that can be done with this object independent of the programs
-# that use it is to run a test, and that test is not so interesting
-# presently. Nevertheless, maybe it will be useful at some point.
+
+# At present, there is not much reason to use "usage()" at all. The
+# only thing that can be done with this object independent of the
+# programs that use it is to run a test, and that test is not so
+# interesting presently. Nevertheless, maybe it will be useful at some
+# point.
 
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 # ################################################################
@@ -108,18 +110,33 @@ class Boltzmann:
     #
     
     def calc_Z(self, lt, T):
+        """@
+        
+        Technically, this should be calc_Q, not calc_Z, because Z is
+        generally reserved from the "partition function", which is an
+        evaluation with respect dU not dG. Anyway, that is due to some
+        historical misunderstandings that persisted for some
+        time. Anyway, the meaning is "__Boltzmann distribution__"
+        regardless of the particular notion I use here.
+        
+        """
+        
         kBT = self.kB * T
+
+        """@
         
-        # Result: $Z = 1 + \sum_k {\exp(-dG_k / kBT) }$
+        Result: $Z = 1 + \sum_k {\exp(-dG_k / kBT) }$
         
-        # The method for calculating the partition function may seem a
-        # bit odd at first brush. After all, the mathematical formula
-        # is really quite straight forward.
+        The method for calculating the partition function may seem a
+        bit odd at first brush. After all, the mathematical formula is
+        really quite straight forward.
         
-        # The problem is that floats have a limit in size
-        # that can be easily exceeded. So we have first construct the
-        # exponents and then analyze them through a subsidiary
-        # function KahanSumExp() to add the exponentials together.
+        The problem is that floats have a limit in size that can be
+        easily exceeded. So we have first construct the exponents and
+        then analyze them through a subsidiary function KahanSumExp()
+        to add the exponentials together.
+        
+        """
         
         # math.exp
         self.explist = []
@@ -128,26 +145,35 @@ class Boltzmann:
         #
         
         self.Z, self.shift = KahanSumExp(self.explist)
+        
+        print ("\nBoltzmann distribution Q: %10.4g" % self.Z)
+        print ("Kahan Summation shift:     %d\n" % self.shift)
+        
         re_wt = float(2**self.shift)
         self.flag_set_Z = True # calculation of Z is now done!
         
-        # 
+        
         if self.shift > -1: # self.debug:
             if self.debug_Boltzmann:
-                print "Z = ", self.Z
-                print "shift: %4d,  new exp wt: %.1f" % (self.shift, re_wt)
+                print ("Z = ", self.Z)
+                print ("shift: %4d,  new exp wt: %.1f" % (self.shift, re_wt))
             #
-
+            
             # print out the first ten arguments of on the partition
             # function exponential term
-            #                             #        #
-            print "ndx    arg       dG/kBT          dG        p(ndx)"
+            
+            #markings                     #        #
+            print ("ndx    arg       dG/kBT          dG        p(ndx)")
             for k in range(0, len(self.explist)):
                 if k > 10: # could be a huge list
                     break
-                print "%2d  %8.2f   %8.2f  %12.2f    %8.3g" \
-                    % (k, self.explist[k], (-lt[k].dG/kBT), lt[k].dG, self.calc_p(lt[k], T))
-            #
+                #
+                
+                print ("%2d  %8.2f   %8.2f  %12.2f    %8.3g" \
+                    % (k, self.explist[k], (-lt[k].dG/kBT), lt[k].dG, self.calc_p(lt[k], T)))
+                
+            #|endfor
+            
             # sys.exit(0)
         #
     #
@@ -155,7 +181,7 @@ class Boltzmann:
     
     def set_LThread_TdS(self, lt, T):
         if not self.flag_set_Z:
-            print "ERROR(Boltzmann.calc_p()): Z is undefined"
+            print ("ERROR(Boltzmann.calc_p()): Z is undefined")
             sys.exit(1)
         #
         
@@ -165,29 +191,39 @@ class Boltzmann:
                 v = tr.ij_ndx
                 i = v[0]
                 j = v[1]
-                # print "ij= ", i, j
+                # print ("ij= ", i, j)
                 lt[m].TdS += self.fe.TdS(i,j,T)
-            #
-        #
+                
+            #|endfor
+            
+        #|endfor
+        
         if self.debug_Boltzmann:
             dt = DispLThread(self.calc.N)
             for m in range(0, len(lt)):
                 ss_m = dt.makeLThreadDotBracket_1b(lt[m], True)
-                print m, lt[m].TdS, ss_m, lt[m].p
+                print (m, lt[m].TdS, ss_m, lt[m].p)
+                
+            #|endfor
+            
             sys.exit(0)
         #
+        
         return lt
     #
     
     def set_LThread_p(self, lt, T):
         if not self.flag_set_Z:
-            print "ERROR(Boltzmann.calc_p()): Z is undefined"
+            print ("ERROR(Boltzmann.calc_p()): Z is undefined")
             sys.exit(1)
+        #
+        
         # Note:
         # $p = exp( -dG_k / kBT ) / Z$ 
         # $p = exp( -dG_k / kBT ) / \[ 1 + \sum_k {\exp(-dG_k / kBT)} \]$ 
         
         kBT = self.kB * T
+        
         # math.exp
         if self.shift > 0:
             for k in range(0, len(lt)):
@@ -196,7 +232,10 @@ class Boltzmann:
                     lt[k].p = 0.0
                 else:
                     lt[k].p = exp( exponent - float(self.shift)*log(2) ) / self.Z
-            #
+                #
+                
+            #|endfor
+            
         else:
             for k in range(0, len(lt)):
                 exponent = - (lt[k].dG / kBT)
@@ -205,25 +244,31 @@ class Boltzmann:
                 else:
                     lt[k].p = exp( exponent ) / self.Z
                 #
-            #
+                
+            #|endfor
+            
         #
+        
         return lt
     #
     
     def calc_p(self, ltk, T):
         if not self.flag_set_Z:
-            print "ERROR(Boltzmann.calc_p()): Z is undefined"
+            print ("ERROR(Boltzmann.calc_p()): Z is undefined")
             sys.exit(1)
         #
+        
         kBT = self.kB * T
         # math.exp
         if self.shift > 0:
-            # print (float(self.shift)*log(2))
+            # print ((float(self.shift)*log(2)))
             exponent = - (ltk.dG / kBT)
             if exponent - self.shift * log(2) < -708.396:
                 p = 0.0 # surely, this is neglectable
             else:
                 p = exp( exponent - float(self.shift)*log(2) ) / self.Z
+            #
+            
         else:
             exponent = - (ltk.dG / kBT)
             if exponent - self.shift * log(2) < -708.396:
@@ -231,7 +276,9 @@ class Boltzmann:
             else:
                 p = exp( exponent ) / self.Z
             #
+            
         #
+        
         return p
     #
 #
@@ -244,7 +291,7 @@ def test5():
     flag_KahanSumExp_USE_SORT = True
     dG_vr_kBT = [10, 37, 34, 0.1, 0.0004, 34, 37.1, 37.2, 36.9, 709, 710, 711]
     Z, shift = KahanSumExp(dG_vr_kBT)
-    print "{0} x 2^{1}".format(Z, shift)
+    print ("{0} x 2^{1}".format(Z, shift))
     wt = float(2**shift)
     p = []
     for k in range(0, len(dG_vr_kBT)):
@@ -254,11 +301,11 @@ def test5():
         summation += pk
         
     if shift > 1.0: # self.debug:
-        print Z
-        print "shift: ", shift, "new exp wt: ", wt
+        print (Z)
+        print ("shift: ", shift, "new exp wt: ", wt)
         for k in range(0, len(dG_vr_kBT)):
-            print "%2d  %8.2f   %12.3g" % (k, dG_vr_kBT[k], p[k])
-        print "summation of p: %12.5g" % summation
+            print ("%2d  %8.2f   %12.3g" % (k, dG_vr_kBT[k], p[k]))
+        print ("summation of p: %12.5g" % summation)
         # sys.exit(0)
     #
 #    
@@ -267,7 +314,7 @@ def test5():
 
 def main(cl):
     # presently doesn't do anything
-    print cl
+    print (cl)
 #
 
 

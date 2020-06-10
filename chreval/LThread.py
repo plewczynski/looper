@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """Main Module:   LThread.py 
 
@@ -10,7 +10,7 @@ Objects:       DispLThread
 
 Author:        Wayne Dawson
 creation date: 170126
-last update:   190705
+last update:   200211 (upgraded to python3), 191016
 version:       0.1
 
 Purpose:
@@ -80,12 +80,22 @@ from NaryTree   import Node
 from NaryTree   import NodeAnalysis
 from NaryTree   import TreeBuilder
 
+from MolSystem import MolSystem
+from MolSystem import genChrSeq
+from MolSystem import genRNASeq
+
 # ################################################################
 # ############  Local-global functions and constants  ############
 # ################################################################
 # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 
-# 1. control parameters tests etc in the program
+# Control parameters tests etc in the program used by SO_dG_barrier
+# and CtData to filter LThread data It is also used by RNAModules and
+# ChromatinModules
+from Constants import blm_labels
+from Constants import skip_labels
+from Constants import base_labels
+from Constants import pk_labels
 
 # Test   function
 #  0     a _very basic_ test of this module
@@ -95,15 +105,16 @@ TEST = 0
 
 # 2. special local global function
 
-PROGRAM      = "LThread.py"  # name of the program
+PROGRAM = "LThread.py"  # name of the program
 
 # This is not used so much now that I have introduced GetOpts.py,
 # but it may still be useful at the very beginning of the program and
 # possibly in other parts.
 
 def usage():
-    print "USAGE: %s" % PROGRAM
+    print ("USAGE: %s" % PROGRAM)
 #
+
 
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 # ################################################################
@@ -149,20 +160,48 @@ class LNode(object):
     #
     
     def disp_lnode(self):
-        s = " (%3d, %3d)[%s-%5s] dGij_B = %8.2f" \
+        s = "(%3d, %3d)[%s-%5s] dGij_B = %8.2f" \
             % (self.ij_ndx[0], self.ij_ndx[1],
-               self.ctp, string.ljust(self.btp, 5), self.dGij_B)
+               self.ctp, str.ljust(self.btp, 5), self.dGij_B)
+        # python2: string.ljust(self.btp, 5)
+        # python3: str.ljust(self.btp, 5)
         return s
     #
+    
+    def __str__(self):
+        return self.disp_lnode()
+    #
+    
+    def __repr__(self):
+        return self.__str__()
+    #
+    
 #
 
+
 class LThread(object):
-    def __init__(self, N):
+    def __init__(self, N, molsys):
+        # int
+        # class MolSystem
+        
+        self.molsys = molsys
+        # Employing molsys (class MolSystem) may be overkill, but
+        # right now (200229), I am looking for a way to pass critical
+        # information around properly so that the various modules know
+        # exactly what to do. This package would contain everything
+        # necessary to exchange all the core information between
+        # Vienna and LThread.
+        
         self.sqlen  = N
         self.thread = []
         self.dG     = INFINITY
+        self.nbp    =   0
         self.TdS    =   0.0
         self.p      = -99.99
+    #
+    
+    def set_system(self, s):
+        self.molsys.set_ParamType(s)
     #
     
     def add_lnode(self, ij_ndx, Vij_B, ctp = 'B', btp = 's'):
@@ -171,11 +210,55 @@ class LThread(object):
     #
     
     def compute_dG(self):
+        """calculate the total FE of the structure"""
         dG = 0.0
         for tk in self.thread:
             dG += tk.dGij_B
+        #endfor
+        
         self.dG = dG
+        return dG
     #
+    
+    def compute_nbp(self):
+        """calculate the number of pairs in the structure"""
+        self.nbp = 0
+        for tk in self.thread:
+            if tk.dGij_B == 0.0:
+                continue
+            #
+            
+            if tk.ctp == 'S' or tk.ctp == 'B' or tk.ctp == 'I' or tk.ctp == 'M':
+                self.nbp += 1
+            #
+            
+        #endfor
+        
+        return self.nbp
+    #
+    
+    def disp_LThread(self):
+        # For some reason that I cannot understand, this always
+        # insists on displaying the brackets defining the boundaries
+        # of the list; therefore, I use the '\n' characters before and
+        # after to help separate it.
+        
+        s = '' 
+        for k in range(len(self.thread)):
+            s += "%s\n" % self.thread[k].disp_lnode()
+        #
+        
+        return s
+    #
+    
+    def __str__(self):
+        return self.disp_LThread()
+    #
+    
+    def __repr__(self):
+        return self.__str__()
+    #
+    
 #
 
 
@@ -183,10 +266,11 @@ class DispLThread(object):
     
     def __init__(self, N):
         self.N      = N
-
+        self.vSeq = []
         
-        
-        # options for employing SimRNA (not used!!!)
+        # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+        # #######  options for employing SimRNA (not used!!!)  #######
+        # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
         self.add_P    = False  # include P to P in restraint file
         self.add_N    = True   # include N to N in restraint file
         self.xi       = 7.0    # [nt] Kuhn length
@@ -195,22 +279,26 @@ class DispLThread(object):
         self.Nweight  = -0.2   # the N weight for SimRNA restraint
         self.Pweight  = -0.2   # the P weight for SimRNA restraint
         self.restType = "slope" # option for "slope" or "CLE"
-        self.vSeq = []
+        # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        # #######  options for employing SimRNA (not used!!!)  #######
+        # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     #
     
     # display a given thread
     def disp_LThread(self, lt):
         # lt ==> [LThread()]: list of type LThread()
         #         LThread.thread  ==> list of type LNode()
-        #                         
+                                 
         for ltk in lt:
             ltk.compute_dG()
-            print "total free energy: %8.3f" % ltk.dG
-            print "number of pairs: ", len(ltk.thread)
+            print ("total free energy: %8.3f" % ltk.dG)
+            print ("number of pairs: ", len(ltk.thread))
             for thk in ltk.thread:
-                print thk.disp_lnode() # LThread.thread[k].disp_lnode()
-            #
+                print (thk.disp_lnode()) # LThread.thread[k].disp_lnode()
+            #|endfor
+            
         #
+        
         # sys.exit(0)
     #
     
@@ -220,23 +308,23 @@ class DispLThread(object):
     def disp_this_LThread(self, lt, n):
         # lt ==> [LThread()]: list of type LThread()
         #         LThread.thread  ==> list of type LNode()
-        #                         
+                                 
         lt[n].compute_dG()
-        print "total free energy: %8.3f" % lt[n].dG
-        print "number of pairs: ", len(lt[n].thread)
+        print ("total free energy: %8.3f" % lt[n].dG)
+        print ("number of pairs: ", len(lt[n].thread))
         for thk in lt[n].thread:
-            print thk.disp_lnode() # LThread.thread[k].disp_lnode()
-        #
+            print (thk.disp_lnode()) # LThread.thread[k].disp_lnode()
+        #|endfor
         
         # sys.exit(0)
     #
     
-
+    
     
     
     def set_strand_direction(self, ctp, btp, counter, callprgm = "undefined"):
         btpp = list(btp)
-        # print btpp
+        # print (btpp)
         i_lab = '('; j_lab = ')'
         if ctp == 'S':
             if btpp[0] == 's':
@@ -248,9 +336,10 @@ class DispLThread(object):
                     j_lab = num2rpr[counter]
                     counter += 1
                 #
+                
             else:
                 if btp == 'c':
-                    # 
+                     
                     i_lab = '('
                     j_lab = ')'
                 elif btp == 't' or btp == 'r' or btp == 'l':
@@ -259,16 +348,18 @@ class DispLThread(object):
                     j_lab = num2rpr[counter]
                     counter += 1
                 else:
-                    print "problems in resolving structure in %s():" % callprgm
+                    print ("problems in resolving structure in %s():" % callprgm)
                     sys.exit(1)
                 #
+                
             #
+            
         else:
             # probably a PK
             i_lab = num2lpr[counter]
             j_lab = num2rpr[counter]
             counter += 1
-            
+        #    
         
         return i_lab, j_lab, counter
     #
@@ -277,14 +368,20 @@ class DispLThread(object):
         bbb = []
         for i in range(0, self.N):
             bbb += ['.']
+        #
+        
         return bbb
     #
     
     def makeLThreadDotBracket_1b(self, lt, structure_layout = 0, is_chromatin = True):
+        """something like a SimRNA output of various structures"""
+        
+        # this method should now be considered obsolete
         flag_debug = False # True # 
         if flag_debug:
-            print "Enter makeLThreadDotBracket_1b()", len(lt.thread)
+            print ("Enter makeLThreadDotBracket_1b()", len(lt.thread))
         #
+        
         seqv  = self.vSeq
         sssv  = []
         ctcfv = []
@@ -294,11 +391,12 @@ class DispLThread(object):
         nws   = -1
         w_pointer = 0
         counter = 3
-
+        
         if is_chromatin:
             for i in range(0, self.N):
                 seqv += ['c']
             #
+            
         #
         
         for i in range(0, self.N):
@@ -314,17 +412,21 @@ class DispLThread(object):
             ctp = tr.ctp
             btp = tr.btp
             if flag_debug:
-                print v, ctp, btp, tr.dGij_B        
+                print (v, ctp, btp, tr.dGij_B)
             #
             
-            if not counter < len(num2lpr): 
-                # this is _not_ good, and it can lead to major issues
-                # for long sequences ... here it just arbitrarilly
-                # forces it down without consideration of anything, so
-                # it is unlikely to be a good situation if it
-                # happens. Anyway, presently, there are not any other
-                # ways to do a single line sequence with parallel
-                # stems using varna.
+            if not counter < len(num2lpr):
+                """@
+                
+                this is _not_ good, and it can lead to major issues
+                for long sequences ... here it just arbitrarilly
+                forces it down without consideration of anything, so
+                it is unlikely to be a good situation if it
+                happens. Anyway, presently, there are not any other
+                ways to do a single line sequence with parallel stems
+                using varna.
+                
+                """
                 counter = 3
             #
             
@@ -334,24 +436,33 @@ class DispLThread(object):
                 npks += 1
                 pkv += [self.makeBlank()] # add another linkage channel
                 if flag_debug:
-                   print "begin PK(%d)" % npks
+                   print ("begin PK(%d)" % npks)
                 #
+                
                 continue
             #
+            
+            if btp == "tdngl":
+                continue
+            #
+            
+            
             if ctp == 'R' and btp == 'bgn':
                 
                 npks += 1
                 pkv += [self.makeBlank()] # add another linkage channel
                 if flag_debug:
-                   print "begin PK(%d)" % npks
+                   print ("begin PK(%d)" % npks)
                 #
+                
                 continue
             #
+            
             if ctp == 'K' and (btp == 'end' or (npks > k_pointer and btp == 'l')):
                 # This seems to be a problematic spot
                 
-                #print "end of PK(%d)" % npks
-                #print "k_pointer = %d, npks = %d, btp = %s" % (k_pointer, npks, btp)
+                #print ("end of PK(%d)" % npks)
+                #print ("k_pointer = %d, npks = %d, btp = %s" % (k_pointer, npks, btp))
                 k_pointer += 1
                 continue
             #
@@ -363,6 +474,7 @@ class DispLThread(object):
                     sssv[v[0]] = '{'
                     sssv[v[1]] = '}'
                 #
+                
                 continue
             #
             
@@ -373,23 +485,27 @@ class DispLThread(object):
             
             if ctp == 'l':
                 if btp == 'bgn' or btp == 'end':
-                    # I think this is probably the point where we can
-                    # increment the counter over a succession of of
-                    # the same antiparallel stem; end should certainly
-                    # kick this to increment up one.
-
-                    # For the case of parallel stems, this is handled
-                    # with the step below. So it seems like what needs
-                    # to be done is look a little deeper into
-                    # things. It might be good to have the label
-                    # "bgn-ap" and "bgn-pp". This would allow
-                    # incrementing the thing as a unit (ap) or
-                    # individually (pp). It would also be possibe to
-                    # look ahead to see whether the set is 'ap' or
-                    # 'pp'. 
+                    """@
+                    
+                    I think this is probably the point where we can
+                    increment the counter over a succession of of the
+                    same antiparallel stem; end should certainly kick
+                    this to increment up one.
+                    
+                    For the case of parallel stems, this is handled
+                    with the step below. So it seems like what needs
+                    to be done is look a little deeper into things. It
+                    might be good to have the label "bgn-ap" and
+                    "bgn-pp". This would allow incrementing the thing
+                    as a unit (ap) or individually (pp). It would also
+                    be possibe to look ahead to see whether the set is
+                    'ap' or 'pp'.
+                    
+                    """
                     continue
                 #
-                #print v
+                
+                #print (v)
                 if btp == 'sp':
                     i_lab, j_lab, counter \
                         = self.set_strand_direction(ctp,
@@ -398,22 +514,26 @@ class DispLThread(object):
                                                     "makeLThreadDotBracket_1b")
                     sssv[v[0]] = i_lab
                     sssv[v[1]] = j_lab
+                    
                 else:
                     sssv[v[0]] = '['
                     sssv[v[1]] = ']'
                 #
-                #print npks, k_pointer
+                
+                #print (npks, k_pointer)
                 if npks > k_pointer:
                     pkv[k_pointer][v[0]] = '('
                     pkv[k_pointer][v[1]] = ')'
-                    #print pkv[k_pointer]
+                    #print (pkv[k_pointer])
+                    
                 else:
                     pkv[npks][v[0]] = '('
                     pkv[npks][v[1]] = ')'
-                    #print pkv[npks]
+                    #print (pkv[npks])
                 #
+                
             elif ctp == 'W': # island (wyspa)
-                # print v
+                # print (v)
                 sssv[v[0]] = '|'
                 sssv[v[1]] = '|'
                 ctcfv[v[0]] = '|'
@@ -427,8 +547,9 @@ class DispLThread(object):
                     sssv[v[0]] = '('
                     sssv[v[1]] = ')'
                 #
+                
             else:
-                # print v
+                # print (v)
                 sssv[v[0]] = '('
                 sssv[v[1]] = ')'
             #
@@ -438,11 +559,13 @@ class DispLThread(object):
                     seqv[v[0]] = 'x'
                     seqv[v[1]] = 'y'
                 #
+                
             elif btp == 'c':
                 if is_chromatin:                
                     seqv[v[0]] = 'W'
                     seqv[v[1]] = 'Z'
                 #
+                
                 sssv[v[0]] = '{'
                 sssv[v[1]] = '}'
             elif btp == 't' or btp == 'r' or btp == 'l':
@@ -450,13 +573,16 @@ class DispLThread(object):
                     seqv[v[0]] = 'w'
                     seqv[v[1]] = 'z'
                 #
+                
                 sssv[v[0]] = '{'
                 sssv[v[1]] = '}'
+                
             elif btp == 'wyspa':
                 if is_chromatin:                
                     seqv[v[0]] = 'I'
                     seqv[v[1]] = 'I'
                 #
+                
             elif btp == '-':
                 if ctp == 'P' or ctp == 'J':
                     # 'P' and 'J' are real possibilities now.
@@ -464,53 +590,73 @@ class DispLThread(object):
                         seqv[v[0]] = 'c'
                         seqv[v[1]] = 'c'
                     #
+                    
                 else:
                     # It currently has to go here!!!!
-                    print "ERROR: undefined btp = %s" % btp
-                    print "       connection type = %s" % ctp
-                    print "       ij = %d,%d        " % (v[0], v[1])
+                    print ("ERROR: undefined btp = %s" % btp)
+                    print ("       connection type = %s" % ctp)
+                    print ("       ij = %d,%d        " % (v[0], v[1]))
                     sys.exit(1)
                 #
+                
             else:
                 if not (btp == 'bgn' or btp == 'end'):
-                    print "ERROR: undefined btp = %s" % btp
-                    print "       connection type = %s" % ctp
-                    print "       ij = %d,%d        " % (v[0], v[1])
+                    print ("ERROR: undefined btp = %s" % btp)
+                    print ("       connection type = %s" % ctp)
+                    print ("       ij = %d,%d        " % (v[0], v[1]))
                     sys.exit(1)
                 #
+                
             #
+            
         #
         
         
-        seq = string.join(seqv, '') 
-        sss = string.join(sssv, '') 
+        seq = ''.join(seqv) 
+        sss = ''.join(sssv)
+        # python2: string.join(seqv, '')  
+        # python3: ''.join(seqv)  
+        
         # also: python> ''.join(sssv); python> ''.join(seqv) 
         
         s = ''
         if structure_layout == 0:
             s = sss # this will only return the ss string
+            
         elif structure_layout == 1:
             s = seq + '\n' + sss + '\n'
-        #
+        
         else:
             s  = seq + '\n'
             s += sss + '\n'
-            # print pkv
+            # print (pkv)
             if len(pkv) > 0:
                 for pkvk in pkv:
                     s += ''.join(pkvk) + '\n'
+                #
+            #
+            
             s += ''.join(ctcfv) + '\n'
             
             if flag_debug:
-                print "target exit"
-                print s
+                print ("target exit")
+                print (s)
                 #sys.exit(0)
             #
+            
         #
+        
         return s
     #
     
+    
+    
+    
     def makeLThreadDotBracket_VARNA(self, lt, structure_layout = 0, is_chromatin = True):
+        """single line format like used in VARNA"""
+        
+        # this method should be considered obsolete.
+        
         flag_debug = False # True
         seqv  = self.vSeq
         sssv  = []
@@ -521,6 +667,7 @@ class DispLThread(object):
                 seqv += ['c']
                 sssv += ['.']
             #
+            
         else:
             for i in range(0, self.N):
                 sssv += ['.']
@@ -531,13 +678,13 @@ class DispLThread(object):
         #for tr in lt.thread:
         while ktr < len(lt.thread) - 1:
             ktr += 1
-            tr = lt.thread[ktr]
-            v = tr.ij_ndx
-            ctp = tr.ctp
-            btp = tr.btp
+            tr   = lt.thread[ktr]
+            v    = tr.ij_ndx
+            ctp  = tr.ctp
+            btp  = tr.btp
             
             if flag_debug:
-                print ktr, v, ctp, btp, sssv
+                print (ktr, v, ctp, btp, sssv)
             #
             
             # remove references to PKs
@@ -545,25 +692,34 @@ class DispLThread(object):
                 if btp == 'bgn':
                     ctpt = lt.thread[ktr+1].ctp
                     if flag_debug:
-                        print "K:  ", ctpt
+                        print ("K:  ", ctpt)
                     #
+                    
                     if ctpt == 'P':
                         ktr += 1
                     #
+                    
                     #sys.exit(0)
+                #
+                
                 continue
             #
+            
             # remove references to PKs
             if ctp == 'R' and (btp == 'bgn' or btp == 'end'):
                 if btp == 'bgn':
                     ctpt = lt.thread[ktr+1].ctp
                     if flag_debug:
-                        print "R:  ", ctpt
+                        print ("R:  ", ctpt)
                     #
+                    
                     if ctpt == 'P':
                         ktr += 1
                     #
+                    
                     #sys.exit(0)
+                #
+                
                 continue
             #
             
@@ -572,6 +728,7 @@ class DispLThread(object):
                     sssv[v[0]] = '{'
                     sssv[v[1]] = '}'
                 #
+                
                 continue
             #
             
@@ -579,32 +736,41 @@ class DispLThread(object):
                 continue
             #
             
+            if btp == "tdngl":
+                continue
+            #
+            
+            
             if not counter < len(num2lpr):
                 # this is _not_ good, and it can lead to major issues
                 # for long sequences
                 counter = 3
+            #
             
             
             if ctp == 'l':
                 if btp == 'bgn' or btp == 'end':
-                    # I think this is probably the point where we can
-                    # increment the counter over a succession of of
-                    # the same antiparallel stem; end should certainly
-                    # kick this to increment up one.
-
-                    # For the case of parallel stems, this is handled
-                    # with the step below. So it seems like what needs
-                    # to be done is look a little deeper into
-                    # things. It might be good to have the label
-                    # "bgn-ap" and "bgn-pp". This would allow
-                    # incrementing the thing as a unit (ap) or
-                    # individually (pp). It would also be possibe to
-                    # look ahead to see whether the set is 'ap' or
-                    # 'pp'. 
+                    """@
+                    
+                    I think this is probably the point where we can
+                    increment the counter over a succession of of the
+                    same antiparallel stem; end should certainly kick
+                    this to increment up one.
+                    
+                    For the case of parallel stems, this is handled
+                    with the step below. So it seems like what needs
+                    to be done is look a little deeper into things. It
+                    might be good to have the label "bgn-ap" and
+                    "bgn-pp". This would allow incrementing the thing
+                    as a unit (ap) or individually (pp). It would also
+                    be possibe to look ahead to see whether the set is
+                    'ap' or 'pp'.
+                    
+                    """
                     continue
                 #
                 
-                # print v
+                # print (v)
                 if btp == 'sp':
                     i_lab, j_lab, counter \
                         = self.set_strand_direction(ctp,
@@ -613,32 +779,41 @@ class DispLThread(object):
                                                     "makeLThreadDotBracket_VARNA")
                     sssv[v[0]] = i_lab
                     sssv[v[1]] = j_lab
+                    
                 else:
-                    # I think this will have problems if there is more
-                    # than one antiparallel PK. It should also
-                    # increment, but the trouble is that we do not so
-                    # easily know the beginning and end of this
-                    # container; i.e., we work at the micro-level from
-                    # the thread list, not from the container level.
+                    """@
+                    
+                    I think this will have problems if there is more
+                    than one antiparallel PK. It should also
+                    increment, but the trouble is that we do not so
+                    easily know the beginning and end of this
+                    container; i.e., we work at the micro-level from
+                    the thread list, not from the container level.
+                    
+                    """
                     sssv[v[0]] = '['
                     sssv[v[1]] = ']'
                 #
+                
             elif ctp == 'W': # island (wyspa)
-                # print v
+                # print (v)
                 sssv[v[0]] = '|'
                 sssv[v[1]] = '|'
+                
             elif ctp == 'S':
-                # print v
+                # print (v)
                 if btp == 'sp':
                     sssv[v[0]] = num2lpr[counter]
                     sssv[v[1]] = num2rpr[counter]
                     counter += 1
+                    
                 else:
                     sssv[v[0]] = '('
                     sssv[v[1]] = ')'
                 #
+                
             else:
-                # print v
+                # print (v)
                 sssv[v[0]] = '('
                 sssv[v[1]] = ')'
             #
@@ -648,6 +823,7 @@ class DispLThread(object):
                     seqv[v[0]] = 'x'
                     seqv[v[1]] = 'y'
                 #
+                
             elif btp == 'c':
                 sssv[v[0]] = '{'
                 sssv[v[1]] = '}'
@@ -655,6 +831,7 @@ class DispLThread(object):
                     seqv[v[0]] = 'W'
                     seqv[v[1]] = 'Z'
                 #
+                
             elif btp == 't' or btp == 'r' or btp == 'l':
                 sssv[v[0]] = '{'
                 sssv[v[1]] = '}'
@@ -662,11 +839,13 @@ class DispLThread(object):
                     seqv[v[0]] = 'w'
                     seqv[v[1]] = 'z'
                 #
+                
             elif btp == 'wyspa':
                 if is_chromatin:
                     seqv[v[0]] = 'I'
                     seqv[v[1]] = 'I'
                 #
+                
             elif btp == '-':
                 if ctp == 'P' or ctp == 'J':
                     # 'P' and 'J' are real possibilities now.
@@ -674,42 +853,48 @@ class DispLThread(object):
                         seqv[v[0]] = 'c'
                         seqv[v[1]] = 'c'
                     #
+                    
                 else:
-                    print "ERROR: undefined btp = %s" % btp
-                    print "       connection type = %s" % ctp
-                    print "       ij = %d,%d        " % (v[0], v[1])
+                    print ("ERROR: undefined btp = %s" % btp)
+                    print ("       connection type = %s" % ctp)
+                    print ("       ij = %d,%d        " % (v[0], v[1]))
                     sys.exit(1)
                 #
+                
             else:
                 if not (btp == 'bgn' or btp == 'end'):
-                    print "ERROR: undefined btp = %s" % btp
-                    print "       connection type = %s" % ctp
-                    print "       ij = %d,%d        " % (v[0], v[1])
+                    print ("ERROR: undefined btp = %s" % btp)
+                    print ("       connection type = %s" % ctp)
+                    print ("       ij = %d,%d        " % (v[0], v[1]))
                     sys.exit(1)
                 #
+                
             #
-            
-                    
+        
+        
         #
         
         
-        seq = string.join(seqv, '') 
-        sss = string.join(sssv, '') 
+        seq = ''.join(seqv) # python2: string.join(seqv, '') 
+        sss = ''.join(sssv) # python2: string.join(sssv, '') 
         # also: python> ''.join(sssv); python> ''.join(seqv) 
         
         s = ''
         if structure_layout == 0:
             s = sss # this will only return the ss string
+            
         elif structure_layout == 1:
             s = seq + '\n' + sss + '\n'
-        #
+        
         else:
             s  = seq + '\n'
             s += sss + '\n'
+        #
+        
         return s
     #
     
-        
+    
     
     def makeLThreadHeatMap(self, lt, flag_no_header = False):
         
@@ -722,7 +907,7 @@ class DispLThread(object):
         hmap = initialize_matrix(hmap, self.N, 0)
         
         
-        # print s
+        # print (s)
         for tr in lt.thread:
             v    = tr.ij_ndx
             ctp = tr.ctp
@@ -742,10 +927,15 @@ class DispLThread(object):
                continue
             #
             
+            if btp == "tdngl":
+                continue
+            #
+            
             i = v[0]; j = v[1]
             hmap[i][j] = 1
             hmap[j][i] = 1
         #
+        
         return mtools.make_heatmap(hmap, flag_no_header)
     #
     
@@ -754,8 +944,10 @@ class DispLThread(object):
         try:
             fp = open(flnm, 'w')
         except IOError:
-            print "ERROR: cannot open %s" % flnm
+            print ("ERROR: cannot open %s" % flnm)
             sys.exit(1)
+        #
+        
         fp.write(s)
         fp.close()
     #
@@ -767,35 +959,43 @@ class DispLThread(object):
             s = "> %s    %8.3f   %10.8f\n" % (ff[0], lt.dG, lt.p)
         else:
             s = "> %s    %8.3f\n" % (ff[0], lt.dG)
+        #
+        
         s += self.makeLThreadDotBracket_VARNA(lt, 1, is_chromatin)
         try:
             fp = open(flnm, 'w')
         except IOError:
-            print "ERROR: cannot open %s" % flnm
+            print ("ERROR: cannot open %s" % flnm)
             sys.exit(1)
+        #
+        
         fp.write(s)
         fp.close()
     #
-
-    # NOTE(190706): In the original DispThreads, the method
-    # getLThread2DotBracket() was originally located here. Because the
-    # method depended on TreeNode2DotBracket and Vienna2TreeNode, it
-    # would introduce a circular definition were I to call LThread in
-    # TreeNode and then call TreeNode in LThread. Therefore, this
-    # method was coverted to an independent class LThread2DotBracket
-    # to achieve this purpose and can only be accessed this way.
+    
+    """@
+    
+    NOTE(190706): In the original DispThreads, the method
+    getLThread2DotBracket() was originally located here. Because the
+    method depended on TreeNode2DotBracket and Vienna2TreeNode, it
+    would introduce a circular definition were I to call LThread in
+    TreeNode and then call TreeNode in LThread. Therefore, this method
+    was coverted to an independent class LThread2DotBracket to achieve
+    this purpose and can only be accessed this way.
+    
+    """
 #
 
 
 
 class LThread2Vienna(SortPair):
     """@
-
+    
     This class is designed to convert an object of class LThread to an
     object of class Vienna. Specifically, the input is the list
     "thread" from class LThread (which is a list of objects of class
     LNode). 
-
+    
     It is maybe important to emphasis that this is a full scale
     reduction of the LThread class (some details are lost) to the
     slightly similar form of various lists objects of type Pair in
@@ -809,7 +1009,7 @@ class LThread2Vienna(SortPair):
     being branching) or merge LThread with the classes Vienna and
     ChPair (another bastard representation that was developed on the
     fly).
-
+    
     At any rate, the object of class Vienna can be used to generate
     objects from the module Motif, and this, in turn, can be used to
     generate much larger representations such as an object of class
@@ -820,7 +1020,7 @@ class LThread2Vienna(SortPair):
     done by writing secondary structure into Vienna and converting it
     to Map, but LThread2Vienna was introduced as proof of principle so
     we could go backwards and forwards between Map and Vienna.
-
+    
     """
     def __init__(self):
         self.vsBPlist  = [] # ss
@@ -829,8 +1029,8 @@ class LThread2Vienna(SortPair):
         self.vsPKroots = []
         self.vsMPlist  = [] # e.g., ctcf etc
         self.N         = -1
-        self.vstr      = ''
-        self.vseq      = ''
+        self.molsys    = MolSystem()
+        
         """
         The most knarly of messes is the islands, so I think the easiest
         thing to do is separate these out first and solve
@@ -875,38 +1075,42 @@ class LThread2Vienna(SortPair):
           and BProots, but I think that is not so hard.
         
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
+        
         """
     #
     
-    def reset_LThread2Vienna(self):
+    def reset_LThread2Vienna(self, molsys):
         self.vsBPlist  = [] # ss
         self.vsBProots = []
         self.vsPKlist  = [] # PKs
         self.vsPKroots = []
         self.vsMPlist  = [] # e.g., ctcf etc
         self.N         = -1
-        self.vstr      = ''
-        self.vseq      = ''
+        self.molsys    = molsys
     #
     
     def set_vstr(self, vstr):
-        self.vstr = vstr
+        self.molsys.mstr = vstr
     #
     
     def set_vseq(self, vseq):
-        self.vseq = vseq
+        self.molsys.mseq = vseq
     #
     
     
-    def lt2vs(self, lt):
+    def lt2vs(self, lt): # class LThread
         debug_lt2vs = False # True # 
         if debug_lt2vs:
-            print "Entered lt2vs"
+            print ("Entered lt2vs")
         #
         
-        self.reset_LThread2Vienna()
-        self.N = lt.sqlen
+        
+        self.reset_LThread2Vienna(lt.molsys)
+        
+        self.molsys = lt.molsys
+        
+        self.N      = lt.sqlen
+        
         
         # first deal with the objects of class MultiPair
         wPairList = []
@@ -916,20 +1120,22 @@ class LThread2Vienna(SortPair):
             btp = tr.btp
             
             if ctp == 'W' and btp == "wyspa":
-                #
+                
                 i = ijv[0]; j = ijv[1]
                 wPairList += [(i,j, ctp, "ctcf")]
             elif ctp == 'w' and btp == "wyspa":
                 i = ijv[0]; j = ijv[1]
                 wPairList += [(i,j, ctp, "ctcf")]
             #
+            
         #
         
         if debug_lt2vs:
-            print "wPairList: "
+            print ("wPairList: ")
             for ww in wPairList:
-                print ww
+                print (ww)
             #
+            
         #
         
         if len(wPairList) > 0:
@@ -937,7 +1143,7 @@ class LThread2Vienna(SortPair):
             wGrpList = []
             ka = 0
             if debug_lt2vs:
-                print "0 wPairList: ", wPairList
+                print ("0 wPairList: ", wPairList)
             #
             
             while ka < len(wPairList)-1:
@@ -951,39 +1157,47 @@ class LThread2Vienna(SortPair):
                     if iw1 <= iw2 and jw2 <= jw1:
                         newgroup += [wPairList[kb]]
                         del wPairList[kb]
+                    
                     else:
                         kb += 1
                     #
+                    
                 #
+                
                 wGrpList += [newgroup]
                 ka += 1
-            #
+            #|endwhile
+            
             ka_max = len(wPairList)-1
             ka_last = len(wGrpList) -1
             if debug_lt2vs:
-                print "wGrpList:  ", wGrpList
-                print "1 wPairList: ", wPairList
+                print ("wGrpList:  ", wGrpList)
+                print ("1 wPairList: ", wPairList)
             #
             
             if len(wGrpList) > 0:
                 if wGrpList[ka_last][0][1] < wPairList[ka_max][0]:
                     wGrpList += [[wPairList[ka_max]]]
                 #
+                
             else:
                 wGrpList += [[wPairList[ka_max]]]
+            #
+            
             if debug_lt2vs:
-                print "wGrpList: "
+                print ("wGrpList: ")
                 for ww in wGrpList:
-                    print ww
+                    print (ww)
                 #
+                
             #
             
             # sys.exit(0)
             # Now we can build the list of islands in Pair format
             for k in range(0, len(wGrpList)):
                 ww = wGrpList[k]
-                #print len(ww), ww
-                #print ww[0]
+                #print (len(ww), ww)
+                #print (ww[0])
                 
                 iw = ww[0][0]; jw = ww[0][1]
                 p = Pair()
@@ -995,22 +1209,31 @@ class LThread2Vienna(SortPair):
                     if not iwk == last_k:
                         p.contacts += [iwk]
                         last_k = iwk
+                    #
+                    
                     if not jwk == jw:
                         p.contacts += [jwk]
                         last_k = jwk
                     #
-                #
+                    
+                #|endfor
+                
                 self.vsMPlist += [p]
-            #
+            #|endfor
+            
             if debug_lt2vs:
-                print "vsMPlist: "
+                print ("vsMPlist: ")
                 for mpk in self.vsMPlist:
-                    print mpk.disp_Pair()
+                    print (mpk.disp_Pair())
                 #
+                
                 # sys.exit(0)
             #
+            
         #
         
+        
+        # now we build regular pairing interactions
         for tr in lt.thread:
             ijv = tr.ij_ndx
             ctp = tr.ctp
@@ -1022,6 +1245,7 @@ class LThread2Vienna(SortPair):
             if ctp == 'K' and (btp == 'bgn' or btp == 'end'):
                 continue
             #
+            
             if ctp == 'R' and (btp == 'bgn' or btp == 'end'):
                 continue
             #
@@ -1036,19 +1260,50 @@ class LThread2Vienna(SortPair):
             if ctp == 'S' and (btp == 'bgn' or btp == 'end'):
                 continue
             #
+            
             if ctp == 'P' or ctp == 'J':
                 continue
             #
+            
             if ctp == 'l' and (btp == 'bgn' or btp == 'end'):
                 continue
             #
+            
+            """@
+            
+            I think here, I have to add some way to look up the
+            previous index when I encounter BMI. With the subtle
+            change of rules now where this LNode only lists stem
+            entries and so double introduces the stem terminus and its
+            name, there is a problem that this terminus label gets
+            repeated with successive iterations because it is not
+            filtered out. 
+            
+            Objects of class Pair representation only lists the pairs
+            and nothing more. Objects of class LNode at least
+            acknowledge the existence of such connections, though it
+            would be better if I changed the properties of LNode to
+            contain the branching information. That might render LNode
+            (and the corresponding LThread) a more meaningful and
+            uniquely purposed utility. Presently, the LNode/LThread
+            construction is not so helpful as an intermediate. Most of
+            this program has me bitching about the fact that Pair and
+            LNode are not so different from each other. So maybe
+            preserving the branching would smarten up LNode/LThread to
+            a more useful system.
+            
+            """
+            
             i = ijv[0]; j = ijv[1]
             p = Pair()
-            p.put_ssPair(i, j)  # put_ssPair(self, i, j, nm = 'bp', v = 'a')
+            p.put_ssPair(i, j)
+            # default: put_ssPair(self, i, j, nm = 'bp', v = 'a')
+            
             if btp == "sp" or btp == "sa" or btp == 's':
                 if debug_lt2vs:
-                    print "ij(%2d,%2d)[btp=%s]" % (i, j, btp)
+                    print ("ij(%2d,%2d)[btp=%s]" % (i, j, btp))
                 #
+                
                 if btp == "sp":
                     p.v = "p"
                     p.name = "bp"
@@ -1056,11 +1311,14 @@ class LThread2Vienna(SortPair):
                     p.v = "a"
                     p.name = "bp"
                 #
+                
                 self.vsBPlist += [p]
+                
             elif btp == "lp" or btp == "la":
                 if debug_lt2vs:
-                    print "ij(%2d,%2d)[btp=%s]" % (i, j, btp)
+                    print ("ij(%2d,%2d)[btp=%s]" % (i, j, btp))
                 #
+                
                 if btp == "lp":
                     p.v = "p"
                     p.name = "bp"
@@ -1068,29 +1326,32 @@ class LThread2Vienna(SortPair):
                     p.v = "a"
                     p.name = "bp"
                 #
+                
                 self.vsPKlist += [p]
+                
             else:
                 if debug_lt2vs:
-                    print "lt2vs: found an unusual one..."
-                    print "ij(%d,%d), ctp = %s, btp = %s" % (i, j, ctp, btp)
+                    print ("lt2vs: found an unusual one...")
+                    print ("ij(%d,%d), ctp = %s, btp = %s" % (i, j, ctp, btp))
                     sys.exit(0)
                     p.v = btp
                     p.name = "mp"
                 #
+                
             #
                 
         #
         
         self.vsBPlist = self.sortvsList(self.vsBPlist, 'i')
         self.vsPKlist = self.sortvsList(self.vsPKlist, 'i')
-        vs = Vstruct()
+        vs = Vstruct(lt.molsys)
         self.vsBProots = vs.findroots(self.vsBPlist, False)        
         self.vsPKroots = vs.findroots(self.vsPKlist, False)
-
+        
         """@
         
         190723: 
-
+        
            After sorting, check for redundant indicies. Originally,
            BIM were real indicies that were special to the structures;
            however, now that we have RNA where we require dinucleotide
@@ -1106,55 +1367,60 @@ class LThread2Vienna(SortPair):
            work around the matter so easily without making the
            definition of Stem exactly (absolutely exactly) the same
            for both programs, which currently they are not.
-
+        
         """
         
         self.vsBPlist = self.filter_redundant_indices(self.vsBPlist)
         self.vsPKlist = self.filter_redundant_indices(self.vsPKlist)
         
         if debug_lt2vs:
-            print "vsBPlist: "
+            print ("vsBPlist: ")
             for vv in self.vsBPlist:
-                print vv.disp_Pair()
+                print (vv.disp_Pair())
             #
-            print "vsBProots: "
+            
+            print ("vsBProots: ")
             for vv in self.vsBProots:
-                print vv.disp_Pair()
+                print (vv.disp_Pair())
             #
-            print "vsPKlist: "
+            
+            print ("vsPKlist: ")
             for vv in self.vsPKlist:
-                print vv.disp_Pair()
+                print (vv.disp_Pair())
             #
-            print "vsPKroots: "
+            
+            print ("vsPKroots: ")
             for vv in self.vsPKroots:
-                print vv.disp_Pair()
+                print (vv.disp_Pair())
             #
-            print "vsMPlist: "
+            
+            print ("vsMPlist: ")
             for vv in self.vsMPlist:
-                print vv.disp_Pair()
+                print (vv.disp_Pair())
             #
+            
         #
-
+        
         return self.vsBPlist
     #
-
+    
     def filter_redundant_indices(self, Xlist):
         k = 0
         while k < len(Xlist)-1:
             i1 = Xlist[k  ].i; j1 = Xlist[k  ].j
             i2 = Xlist[k+1].i; j2 = Xlist[k+1].j
             if i1 == i2 and j1 == j2:
-                #print "found redundant index ij1(%2d,%2d) ij2(%2d,%2d)" % (i1, j1, i2, j2)
+                #print ("found redundant index ij1(%2d,%2d) ij2(%2d,%2d)" % (i1, j1, i2, j2))
                 #sys.exit(0)
                 del Xlist[k]
             else:
                 k += 1
             #
             
-        #
+        #|endwhile
+        
         return Xlist
     #
-
 #
 
 
@@ -1164,21 +1430,35 @@ class LThread2Vienna(SortPair):
 
 def test0(cl):
     
-    N = 100
+    N = 100    # length of the desired sequence
     dG = -1.0  # this is not important for most tests of this type
     dt = DispLThread(N)
     lt = [] # [LThread()] #
     
+    print ("make LThread data from scratch:")
     ndx = 0
     lt += [LThread(N)]
+    lt[ndx].set_system("Chromatin")
     # add_lnode(ij_ndx = (i,j), dGij_B = dG, ctp = ctype, btp = btype)
-    lt[ndx].add_lnode((0,99), dG, 'S', 'sa')
-    lt[ndx].add_lnode((1,98), dG, 'B', 'sa')
+    lt[ndx].add_lnode(( 0,99), dG, 'S', 'sa')
+    lt[ndx].add_lnode(( 1,98), dG, 'B', 'sa')
+    lt[ndx].add_lnode((49,60), dG, 'B', 'sa')
+    
+    print ("vvvvv  ... show object directly:")
+    print (lt[0])
+    print ("^^^^^")
+    
+    print ("print object through disp function:")
     for thr in lt[ndx].thread:
-        print thr.disp_lnode()
+        print (thr.disp_lnode())
     #
-    print dt.makeLThreadDotBracket_VARNA(lt[ndx], 0)
+    chrstr = dt.makeLThreadDotBracket_VARNA(lt[ndx], 0)
+    chrseq = genChrSeq(chrstr)
+    #print (chrstr)
+    #print (chrseq)
+    
     # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+    print ("convert LThread data to ChPair formatted data:")
     from ChPair     import LThread2ChPair
     chdt = LThread2ChPair(lt[ndx], "test0")
     chdt.p = 1.0
@@ -1187,6 +1467,28 @@ def test0(cl):
     # no argument in print_ChPairData() means that the output will
     # only be displayed.
     # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    
+    
+    print ("convert LThread data to Vienna formatted data:")
+    vsdt = LThread2Vienna()
+    vsdt.lt2vs(lt[0])
+
+    # both vstr and vseq can be set here or the object of class
+    # MolSystem can be set up with this information in the initial
+    # build of the object
+    
+    vsdt.set_vstr(chrstr) 
+    vsdt.set_vseq(chrseq)
+    
+    print ("structure sequence: ")
+    print (vsdt.molsys.mseq)
+    print (vsdt.molsys.mstr)
+    
+    print ("vsBPlist: ")
+    for bpk in vsdt.vsBPlist:
+        print (bpk.disp_Pair())
+    #endfor
+    
     
 #
 

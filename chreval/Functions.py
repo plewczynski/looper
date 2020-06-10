@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -46,7 +46,7 @@ def similar(a, b):
       >>> a = "this is not true # not so # not so"
       >>> b = "#"
       >>> ma, mb, sz = sm.find_longest_match(0, len(a), 0, len(b))
-      >>> print ma, mb, sz
+      >>> print (ma, mb, sz)
       17 0 1
       >>> round(sm.ratio(), 4)
       0.0571
@@ -122,24 +122,24 @@ def KahanSumExp(expvalues):
     esum = 0.0 
     carry = 0.0 
     for exponent in expvalues:
-        if exponent - shift * log(2) > 709.783:
-            n = ceil((exponent - shift * log(2) - 709.783)/log(2))
+        if exponent - shift * log(float(2)) > 709.783:
+            n = ceil((exponent - shift * log(2) - 709.783)/log(float(2)))
             shift += n
-            carry /= 2*n
-            esum /= 2*n
+            carry /= float(2*n)
+            esum /= float(2*n)
         elif exponent - shift * log(2) < -708.396:
-            n = floor((exponent - shift * log(2) - -708.396)/log(2))
+            n = floor((exponent - shift * log(2) - -708.396)/log(float(2)))
             shift += n
-            carry *= 2*n
-            esum *= 2*n
+            carry *= float(2*n)
+            esum *= float(2*n)
         #
         
-        exponent -= shift * log(2)
+        exponent -= shift * log(float(2))
         value = exp(exponent) - carry 
         if doubleMAX - esum < value:
             shift += 1
-            esum /= 2
-            value /= 2
+            esum /= float(2)
+            value /= float(2)
         #
         tmp = esum + value 
         carry = (tmp - esum) - value 
@@ -153,7 +153,7 @@ def KahanSumExp(expvalues):
 def test1():
     values = [10, 37, 34, 0.1, 0.0004, 34, 37.1, 37.2, 36.9, 709, 710, 711]
     value, shift = KahanSumExp(values)
-    print "{0} x 2^{1}".format(value, shift)
+    print ("{0} x 2^{1}".format(value, shift))
 #
 
 if __name__ == "__main__":

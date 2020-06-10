@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -9,7 +9,7 @@ Classes:       FreeEnergy
 
 Author:        Wayne Dawson
 creation date: parts 2016 (in chreval), made into a separate object 170426
-last update:   190718
+last update:   200210 (upgraded to python3) 190718
 version:       0
 FreeEnergy.py 
 
@@ -56,7 +56,8 @@ from ChrConstants import feshift # (dimensionless, usually = 1)
 
 # for chromatin, these are currently not set in GetOpts 
 from ChrConstants import minStemLen     # always 1 bp for chromatin
-from ChrConstants import max_bp_gap     # max gap between bps
+from ChrConstants import max_aa_gap     # max gap between beads antiparallel
+from ChrConstants import max_pp_gap     # max gap between beads parallel
 from ChrConstants import minLoopLen     # [nt]
 from ChrConstants import dGpk_threshold # [kcal/mol]
 from ChrConstants import pk_scan_ahead  # [nt]
@@ -69,6 +70,9 @@ from ChrConstants import dG_range
 
 
 from BasicTools import roundoff
+
+# program processing routines
+from SettingsPacket import InputSettings
 
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 # ################################################################
@@ -127,7 +131,7 @@ class PairDef:
     PairDef was moved here because we need the FE defined
     early on with RNA programs. The same should be done with chromatin
     to improve the relative relational functionality of the parts.
-
+    
     """
     
     def __init__(self, p, b, c = 'X', dGp = 0.0):
@@ -178,17 +182,23 @@ class PairDef:
 #
 
 
-class SetUpFreeEnergy(object):
-    # !!!!!!!!! NOTE !!!!!!!!!
-    
+class old_SetUpFreeEnergy(object):
+    # 200313: this should soon be considered obsolete
+
+    """
     # This is used to set up FreeEnergy() when we don't have the
     # specific parameters.  It is used by test programs like test0()
-    # in this modeule.
-    
-    # !!!!!!!!!------!!!!!!!!!
+    # in this modeule. .
+
+    # It is not generally for calculation, but it is sometimes useful
+    # for tests.
+    """
     
     def __init__(self):
         self.source = "SetUpFreeEnergy"
+        self.program = "None"
+        self.system  = "Chromatin"
+        
         # input variables
         self.T        = 310.0 # not used!!!
         self.N        = -1
@@ -236,6 +246,27 @@ class SetUpFreeEnergy(object):
     #
 #
 
+class SetUpFreeEnergy(InputSettings):
+    """@ 
+
+    This is used to set up FreeEnergy() when we don't have the
+    specific parameters.  It is used by test programs like test0() in
+    this module.
+    
+    """
+    def __init__(self):
+        
+        InputSettings.__init__(self, "Chromatin")   # inherit InputSettings
+        
+        self.source = "SetUpFreeEnergy"
+
+        if self.show_info:
+            print ("dinged here SetUpFreeEnergy")
+        #
+        
+    #
+#
+
 
 # this provides the free energy parameters
 class FreeEnergy(object):
@@ -244,8 +275,24 @@ class FreeEnergy(object):
     """
     def __init__(self, cl = SetUpFreeEnergy()):
         self.debug_FreeEnergy = False # True # 
-        self.module = "Chromatin"
         global febase
+        
+        
+        self.source  = cl.source
+        self.program = cl.program
+        self.system  = cl.system
+        
+        ############################
+        self.molsys  = cl.molsys
+        ############################
+        
+        # chromatin
+        self.f_heatmap = "noname.heat"
+        self.chrseq    = ""   # e.g., "cccccccccccc"
+        self.chrstr    = ""   # e.g., "((((....))))"
+        self.cSeq      = None # Seq(self.chrseq)
+        
+        
         
         # input variables
         self.T        = cl.T # not used!!!
@@ -272,21 +319,26 @@ class FreeEnergy(object):
         self.base  = cl.dHbase    # dH(ij) = dHbase + ln(dHshift + counts(ij))
         self.shift = cl.dHshift
         if self.debug_FreeEnergy:
-            print self.base, self.shift
+            print (self.base, self.shift)
             # sys.exit()
         #
         
         # secondary structure stem parameters
         self.minStemLen = minStemLen
         # minimum loop length (for chromatin it is 1, or RNA 3)
-        self.max_bp_gap = max_bp_gap 
+        self.max_aa_gap = max_aa_gap 
+        self.max_pp_gap = max_pp_gap 
         """@
         
-           max_bp_gap (maximum base pair gap): in joining two stems to
-           form a connected stem, max_bp_gapis what simply cannot
-           reasonably qualify anymore as a "connected stem" because
-           the distance between the stems is simply too large for any
-           reasonable coupling to be expected to occur.
+           max_aa_gap (maximum anti parallel bead gap): in joining two
+           stems to form a connected anti-parallel stem, max_aa_gap is
+           what simply cannot reasonably qualify anymore as a
+           "connected stem" because the distance between the stems is
+           simply too large for any reasonable coupling to be expected
+           to occur.
+        
+           max_pp_gap (maximum parallel bead gap): in joining two
+           stems to form a connected parallel stem.
         
         """
         
@@ -375,6 +427,8 @@ class FreeEnergy(object):
         sparingly. However, I leave it here for the moment.
         
         """
+        
+        self.exist_heatmap = False
     #
     
     # Boltzmann thermal energy
@@ -385,11 +439,11 @@ class FreeEnergy(object):
     # entropy calculation
     def TdS(self, i, j, T):
         if j <= i:
-            print "ERROR: i(%d) >= j(%d)!!!" % (i,j)
+            print ("ERROR: i(%d) >= j(%d)!!!" % (i,j))
             sys.exit(1)
         #
+        
         # calculate the CLE
-        #
         n = float(j - i + 1)
         ps_n = self.w*n # xi*N/lmbd**2, where N = n * self.seg_len
         # math.log
@@ -406,9 +460,11 @@ class FreeEnergy(object):
             btype_j = []
             for i in range(0, N):
                 btype_j += [PairDef(0, '-', 'X', 0.0)]
-            #
+            #|endfor
+            
             self.btype += [btype_j]
-        #
+        #|endfor
+        
     #
     
     
@@ -423,12 +479,12 @@ class FreeEnergy(object):
         
         """
         if len(self.btype) == 0:
-            print "reset btype:"
+            print ("reset btype:")
             self.initialize_btype(vs.N)
         #
         
         for x in vs.BPlist:
-            print x.i, x.j, x.v, x.name, x.contacts
+            print (x.i, x.j, x.v, x.name, x.contacts)
             if x.v == 'a':
                 self.btype[x.i][x.j] = PairDef(1, 'ap', 'B')
             elif x.v == 'p':
@@ -446,7 +502,7 @@ class FreeEnergy(object):
     
     # enthalpy of binding calculation
     def dH(self, v_ij):
-        # print v_ij
+        # print (v_ij)
         # math.log
         dh = self.base - log(self.shift + float(v_ij))
         return dh
@@ -455,9 +511,9 @@ class FreeEnergy(object):
     def calc_dG(self, i, j, hp, T, local = "undefined"):
         flag_debug = self.debug_FreeEnergy
         if hp < 0.0:
-            print "ERROR(FreeEnergy.calc_dG()): chromatin interaction point at (%d,%d)" % (i, j)
-            print "                             is empty. Must be greater or equal to zero!"
-            print "                             call point: %s" % local
+            print ("ERROR(FreeEnergy.calc_dG()): chromatin interaction point at (%d,%d)" % (i, j))
+            print ("                             is empty. Must be greater or equal to zero!")
+            print ("                             call point: %s" % local)
             sys.exit(1)
             
         else:
@@ -469,8 +525,8 @@ class FreeEnergy(object):
         #
         
         if flag_debug:
-            print "calc_dG: dG(%2d,%2d)[hv(%4.0f)] = %8.3f, [dH(%8.3f),TdS(%8.3f)]" % \
-                (i, j, hp, dGij, self.dH(hp), self.TdS(i,j, T))
+            print ("calc_dG: dG(%2d,%2d)[hv(%4.0f)] = %8.3f, [dH(%8.3f),TdS(%8.3f)]" % \
+                (i, j, hp, dGij, self.dH(hp), self.TdS(i,j, T)))
         #
         
         return dGij
@@ -488,11 +544,12 @@ class FreeEnergy(object):
             hv_j = []
             for i in range(0, N):
                 hv_j += [0.0]
-            #
+            #|endfor
             
             self.hv += [hv_j]
             
-        #
+        #|endfor
+        
     #
     
     # identify the properties of the chromatin by the magnitude of the weight
@@ -511,7 +568,87 @@ class FreeEnergy(object):
     #
     
     
-    def assign_btypes(self, flnm):
+    def read_heatmap_from_file(self, flnm):
+        self.hv, self.ctcf_setv, self.N = self.read_heat(flnm)
+        # Note: read_heat is inherited from HeatMapTools
+        
+        # make a bogus sequence for chromatin
+        self.sseq = ''
+        for k in range(0, self.N):
+            self.sseq += 'c'
+        #
+        
+        self.exist_heatmap = True
+    #
+    
+    def build_heatmap_from_vseq(self, vs):
+        """@
+        
+        Note: This was originally called "make_heatmap". However,
+        HeatMapTools also has a method make_heatmap that also reads in
+        structures (and is inherited by FreeEnergy and, therefore,
+        shadowed!). 
+        
+        The aim of HeatMapTools' make_heatmap is to develop actual
+        heatmaps of any type given a collection of input sequences. It
+        is called by my_generation.py. Here, in these operations, we
+        are only building a map for _one_ specific sequence in the
+        form of a heatmap representation. I'm not even sure that most
+        of this is necessary except for the fact that assign_btypes()
+        needs this self.hv assigned so that it can map out btypes and
+        free energy related information.
+        
+        """
+        
+        self.N = vs.N
+        self.initialize_hv(self.N)
+        #print ("size of heatmap %d**2" % self.N)
+        
+        # secondary structure contacts
+        print ("secondary structure contacts:")
+        for v in vs.BPlist:
+            #print (v)
+            self.hv[v.i][v.j] = 3
+            print ("(%3d,%3d)  %5d" % (v.i, v.j, self.hv[v.i][v.j]))
+        #
+        
+        # related pseudoknot structure contacts
+        print ("pseudoknot contacts:")
+        for v in vs.PKlist:
+            self.hv[v.i][v.j] = 3
+            print ("(%3d,%3d)  %5d" % (v.i, v.j, self.hv[v.i][v.j]))
+        #
+        
+        # multiloop contacts,
+        print ("CTCF island contacts")
+        for w in vs.MPlist:
+            wb = w.i; we = w.j
+            self.hv[wb][we] = 50
+            print ("(%3d,%3d)  %5d" % (wb, we, self.hv[wb][we]))
+            for k in range(0, len(w.contacts)):
+                
+                ck = w.contacts[k]
+                self.hv[wb][ck] = 10
+                self.hv[ck][we] = 10
+                print ("(%3d,%3d)  %5d" % (wb, ck, self.hv[wb][ck]))
+                print ("(%3d,%3d)  %5d" % (ck, we, self.hv[ck][we]))
+                
+                for l in range(k+1, len(w.contacts)):
+                    cl = w.contacts[l]
+                    self.hv[ck][cl] = 5
+                    print ("(%3d,%3d)  %5d" % (ck, cl, self.hv[ck][cl]))
+                #|endfor
+                
+            #|endfor
+            
+        #endfor
+        
+        self.exist_heatmap = True
+    #
+    
+    
+    
+    def assign_btypes(self):
         """@
         
         This is definitely used by chreval in ChromatinModule to read
@@ -523,17 +660,16 @@ class FreeEnergy(object):
         """
         debug_assign_btypes = False # True # 
         if debug_assign_btypes:
-            print "Entered: assign_btypes"
+            print ("Entered: assign_btypes")
         #
         
-        self.hv, self.ctcf_setv, self.N = self.read_heat(flnm)
-        # Note: read_heat is inherited from HeatMapTools
-        
-        # make a bogus sequence for chromatin
-        self.sseq = ''
-        for k in range(0, self.N):
-            self.sseq += 'c'
+        if not self.exist_heatmap:
+            print ("ERROR: missing heat map")
+            print ("       must call read_heatmap_from_file(flnm) ")
+            print ("       or build_heatmap_from_vseq(class Vienna) first")
+            sys.exit(0)
         #
+        
         
         # make a bogus typedefinition for position ij
         self.btype = []
@@ -546,12 +682,14 @@ class FreeEnergy(object):
                         btp = self.get_bondtype(self.hv[i][j])
                         dGij = self.calc_dG(i, j, self.hv[i][j], self.T)
                         self.btype[i][j] = PairDef(1, btp, 'B', dGij)
+                        
                     elif j < i:
                         btp = self.get_bondtype(self.hv[i][j])
                         dGij = self.calc_dG(j, i, self.hv[i][j], self.T)
                         self.btype[i][j] = PairDef(1, btp, 'B', dGij)
+                        
                     else:
-                        print "ERROR: for bonds i(%d) = j(%d) is not allowed!" % (i, j)
+                        print ("ERROR: for bonds i(%d) = j(%d) is not allowed!" % (i, j))
                         sys.exit(1)
                     #
                     
@@ -559,18 +697,20 @@ class FreeEnergy(object):
                     if   i < j:
                         dGij = self.calc_dG(i, j, self.hv[i][j], self.T)
                         self.btype[i][j] = PairDef(0, '-', 'X', dGij)
+                        
                     elif j < i:
                         dGij = self.calc_dG(j, i, self.hv[i][j], self.T)
                         self.btype[i][j] = PairDef(0, '-', 'X', dGij)
+                        
                     else:
                         self.btype[i][j] = PairDef(0, '-', 'X', 1000.0)
                     #
                     
                 #
                 
-            #endfor
+            #|endfor i
             
-        #endfor
+        #|endfor j
         
         
         
@@ -585,12 +725,12 @@ class FreeEnergy(object):
         self.all_ctcf.update(self.edge_ctcf)
         
         if debug_assign_btypes:
-            print "ctcf_setv:        ", self.ctcf_setv
-            print "pssbl_ctcf:       ", self.pssbl_ctcf
-            print "edge_ctcf:        ", self.edge_ctcf
-            print "_________________________________________"
-            print "all_ctcf:         ", self.all_ctcf
-            print "Exiting: assign_btypes"
+            print ("ctcf_setv:        ", self.ctcf_setv)
+            print ("pssbl_ctcf:       ", self.pssbl_ctcf)
+            print ("edge_ctcf:        ", self.edge_ctcf)
+            print ("_________________________________________")
+            print ("all_ctcf:         ", self.all_ctcf)
+            print ("Exiting: assign_btypes")
             
             
             sys.exit(0)
@@ -607,14 +747,17 @@ class FreeEnergy(object):
         from constructed sequences
         """
         if len(self.hv) == 0:
-            print "reset hv:"
+            print ("reset hv:")
             self.initialize_hv(vs.N)
         #
+
+        print ("add_hv: len(hv)", len(self.hv))
         
         for x in vs.BPlist:
-            print x.i, x.j, x.v, x.name, x.contacts
+            print (x.i, x.j, x.v, x.name, x.contacts)
             self.hv[x.i][x.j] = 1.0
         #
+        sys.exit(0)
         
     #
     
@@ -643,18 +786,18 @@ class FreeEnergy(object):
         has_bps   = False 
                 
         if debug_build_btype_from_hm:
-            print "Enter build_btype_from_hm(N = %d)" % self.N
+            print ("Enter build_btype_from_hm(N = %d)" % self.N)
         #endif
         
         
         # initialize ptype, phstem and ptstem 
-        if debug_build_btype_from_hm:	
-            print "initialize btype"
+        if debug_build_btype_from_hm:  
+            print ("initialize btype")
         #endif
         self.initialize_btype(self.N)
         
-        if debug_build_btype_from_hm:	
-            print "PairType: scanning for stems.... "
+        if debug_build_btype_from_hm:  
+            print ("PairType: scanning for stems.... ")
         #endif
         
         
@@ -667,14 +810,14 @@ class FreeEnergy(object):
                 stem_len = 0;
                 
                 if hv_test > 0:
-	            
-	            if self.btype[i][j].pair == 0: # not assigned yet
-                        if debug_build_btype_from_hm:	
-	                    print "ij(%2d,%2d), btype.pair(%d)" \
-                                % (i, j, hv_test)
+                   
+                    if self.btype[i][j].pair == 0: # not assigned yet
+                        if debug_build_btype_from_hm:  
+                            print ("ij(%2d,%2d), btype.pair(%d)" \
+                                % (i, j, hv_test))
                         #endif
-	                
-	                """@
+                        
+                        """@
                         
                         190517): Here we have to handle both parallel
                         and anti-parallel stems, where with RNA, we
@@ -727,46 +870,47 @@ class FreeEnergy(object):
                         """
                         
                         # anti parallel stems
-	                stem_len = self.findStemLen(S, i, j)
-	                
-	                if stem_len >= self.minStemLen: # enough to be a stem
-	                    p = i + stem_len - 1;
-	                    q = j - stem_len + 1;
-	                    self.btype[p][q].h2tlen = stem_len;
+                        stem_len = self.findStemLen(S, i, j)
+                        
+                        if stem_len >= self.minStemLen: # enough to be a stem
+                            p = i + stem_len - 1;
+                            q = j - stem_len + 1;
+                            self.btype[p][q].h2tlen = stem_len;
                             
                             
-	                    for k in range(0, stem_len - self.minStemLen + 1):
+                            for k in range(0, stem_len - self.minStemLen + 1):
                                 # assign the head region
                                 #self.btype[p-k][q+k].h2tlen = (stem_len - k)
                                 # assign the tail region
-	                        #self.btype[i+k][j-k].t2hlen = (stem_len - k)
+                                #self.btype[i+k][j-k].t2hlen = (stem_len - k)
                                 
                                 # formation of a pair: here, we simply
                                 # assume any pair to be type 1.
                                 hvijk = self.hv[i+k][j-k]
-	                        self.btype[i+k][j-k].pair = 1
+                                self.btype[i+k][j-k].pair = 1
                                 self.btype[i+k][j-k].bpt  = 'sa'
-	                        self.btype[i+k][j-k].ctp  = 'S';
+                                self.btype[i+k][j-k].ctp  = 'S';
                                 self.btype[i+k][j-k].dGp \
                                     = self.calc_dG(i+k, j-k, hvijk, T,
                                                    "build_btype_from_hm")
-                                #
-	                    #
+                                
+                            #|endfor
                             
-	                     
+                            
                             if debug_build_btype_from_hm:
-	                        s = "S(%2d,%2d)[len(%d)]: " % (i, j, stem_len)
-	                        for k in range(0, stem_len):
-	                            s += " (%2d,%2d)[%d] " \
+                                s = "S(%2d,%2d)[len(%d)]: " % (i, j, stem_len)
+                                for k in range(0, stem_len):
+                                    s += " (%2d,%2d)[%d] " \
                                          % (i+k, j-k, self.btype[i+k][j-k].pair) 
-	                        #
-	                        s += "\n"
-                                print s
+                                #|endfor
+                                
+                                s += "\n"
+                                print (s)
                             #endif
                             
-	                    # 180428: deleted all that connect stem search stuff.
-	                #    //  end: if stem_len >= self.minStemLen: #
-	            #        //  end: if self.btype[i][j].pair == 0:
+                            # 180428: deleted all that connect stem search stuff.
+                        #    //  end: if stem_len >= self.minStemLen: #
+                    #        //  end: if self.btype[i][j].pair == 0:
                 #            //  end: if hv_test > 0:
             #                //  end: for i in range(0, i < j - self.minLoopLen - 2):
         #                    //  end: for j in range(self.minLoopLen+2, self.N):
@@ -774,8 +918,8 @@ class FreeEnergy(object):
         
         
         
-        if debug_build_btype_from_hm:	
-            print "final check" 
+        if debug_build_btype_from_hm:  
+            print ("final check" )
         #endif
         
         """@
@@ -792,43 +936,50 @@ class FreeEnergy(object):
         for j in range(self.minLoopLen, self.N):
             for i in range(0, j):
                 if self.btype[i][j].t2hlen > 1:
-	            has_stems = True
+                    has_stems = True
                     has_bps   = True # follows logically
-	            break
+                    break
                 #
-            #
-        #
+                
+            #|endfor
+            
+        #|endfor
         
         if not has_stems:
             for j in range(self.minLoopLen, self.N):
                 for i in range(0, j):
-	            if self.btype[i][j].pair != 0:
-	                has_bps = True
-	                break
+                    if self.btype[i][j].pair != 0:
+                        has_bps = True
+                        break
                     #
-                #
-            #
+                    
+                #|endfor
+                
+            #|endfor
+            
         #
         
         status = 0
         if not (has_stems and has_bps):
             status = 9999;
-            print "ERROR!: no significant pairing found for a\n"
-            print "        minimum stem length %d bps.\n" % (self.minStemLen)
-            print "        Output will be questionable\n"
+            print ("ERROR!: no significant pairing found for a\n")
+            print ("        minimum stem length %d bps.\n" % (self.minStemLen))
+            print ("        Output will be questionable\n")
             sys.exit(1)
             
         else: 
             if debug_build_btype_from_hm:
-                print "minStemLen = %d" % (self.minStemLen)
+                print ("minStemLen = %d" % (self.minStemLen))
             #endif
+            
         #
         
         for j in range(self.minLoopLen, self.N):
             for i in range(0, j - self.minLoopLen):
                 self.btype[j][i] = self.btype[i][j]
-            #
-        #
+            #|endfor
+            
+        #|endfor
         
         if debug_build_btype_from_hm:
             """@
@@ -849,11 +1000,11 @@ class FreeEnergy(object):
             """
             taglist = ["t2hlen", "h2tlen", "ctp", "pair"]
             for tl in taglist:
-                print self.display_btype(tl)
+                print (self.display_btype(tl))
             #
             
             
-            print "Planned exit after evaluating build_btype_from_hm()\n"
+            print ("Planned exit after evaluating build_btype_from_hm()\n")
             sys.exit(0);  
         #endif
         
@@ -865,37 +1016,43 @@ class FreeEnergy(object):
         debug_findStemLen = False # True # 
         
         if debug_findStemLen:
-            print "Enter debug_findStemLen(ij(%d,%d)" % (i, j)
+            print ("Enter debug_findStemLen(ij(%d,%d)" % (i, j))
         #
+        
         p = i; q = j; stack_pq = 0;
         ntype = get_bspr(S, p, q, debug_findStemLen)
         while not ntype == 0:
             p += 1; q -= 1
             if p < self.N and q > 0:
                 if q - p > self.minLoopLen:
-	            ntype = get_bspr(S, p, q, debug_findStemLen)
-                    if debug_findStemLen:
-                        print "pq(%2d, %2d), ntype = %d" % (p, q, ntype)
+                   ntype = get_bspr(S, p, q, debug_findStemLen)
+                   if debug_findStemLen:
+                       print ("pq(%2d, %2d), ntype = %d" % (p, q, ntype))
                     #
-                #
+                
+                
                 else:
-	            ntype = 0;
-	            self.btype[p][q].pair = 0 
-	            self.btype[p][q].btp  = '-' 
+                    ntype = 0;
+                    self.btype[p][q].pair = 0 
+                    self.btype[p][q].btp  = '-' 
                     if debug_findStemLen:
-                        print "pq(%2d, %2d), set ntype = %d" % (p, q, ntype)
+                        print ("pq(%2d, %2d), set ntype = %d" % (p, q, ntype))
                     #
+                    
                 #
-            #
+                
             else:
                 ntype = 0;
             #
+            
             stack_pq += 1
-        #
+            
+        #|endwhile
         
         if debug_findStemLen:
-            print "findStemLen(%d,%d) = %d" % (i, j, stack_pq) 
+            print ("findStemLen(%d,%d) = %d" % (i, j, stack_pq))
         #endif
+        
         return stack_pq
     #
     
@@ -914,12 +1071,12 @@ def test0():
     fe  = FreeEnergy(cl)
     Tds = fe.TdS(0, 1, cl.T)
     
-    print "weight    enthalpy       entropy     free energy"
-    print "         [kcal/mol]     [kcal/mol]    [kcal/mol]"
+    print ("weight    enthalpy       entropy     free energy")
+    print ("         [kcal/mol]     [kcal/mol]    [kcal/mol]")
     
     for dw in range(0,10,1):
         dh = fe.dH(float(dw))
-        print "%4d     %8.3f      %8.3f       %8.3f" % (dw, dh, Tds, (dh + Tds))
+        print ("%4d     %8.3f      %8.3f       %8.3f" % (dw, dh, Tds, (dh + Tds)))
     #
 #
 
@@ -934,14 +1091,14 @@ if __name__ == '__main__':
     run various testing programs
     """
     
-    # print len(sys.argv)
+    # print (len(sys.argv))
     if len(sys.argv) > 1:
         opt = sys.argv[1]
         if opt == "test0":
             test0()
         else:
-            print "ERROR: unrecognized option (%s)" % opt
-            print usage()
+            print ("ERROR: unrecognized option (%s)" % opt)
+            print (usage())
             sys.exit(1)
         #
     else:

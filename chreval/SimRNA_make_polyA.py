@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -10,7 +10,7 @@ Functions:     make_polyA_seq
 
 Author:        Wayne Dawson
 creation date: parts 2016, made into a separate object 170314
-last update:   170314
+last update:   200211 (upgraded to python3), 170314
 version:       0
 
 Purpose:
@@ -27,7 +27,7 @@ SHOWMAIN = False
 PROGRAM = "SimRNA_make_polyA.py"
 
 def usage():
-    print "USAGE: %s integer" % PROGRAM
+    print ("USAGE: %s integer" % PROGRAM)
 #
 
 def make_polyA_seq(cl):
@@ -35,8 +35,8 @@ def make_polyA_seq(cl):
     n = -1
     
     if SHOWMAIN:
-        print "cl: ", cl
-        print "number of args: %d" % (len(cl))
+        print ("cl: ", cl)
+        print ("number of args: %d" % (len(cl)))
     #
     
     if len(cl) < 2:
@@ -54,13 +54,13 @@ def make_polyA_seq(cl):
     try:
         n = int(sys.argv[1])
     except ValueError:
-        print "ERROR: command requires an integer argument"
-        print "       entered argument '%s'" % sys.argv[1]
+        print ("ERROR: command requires an integer argument")
+        print ("       entered argument '%s'" % sys.argv[1])
         usage()
         sys.exit(1)
     #
     
-    print 'a'*n
+    print ('a'*n)
 
 #
 

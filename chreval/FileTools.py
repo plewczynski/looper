@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 """@@@
 
   Program:        FileTools.py
@@ -10,7 +10,7 @@
   Author:         Wayne Dawson
   Version:        0.0
   Creation Date:  140221 (derived from SimRNATools c 140515)
-  Last Update:    190409
+  Last Update:    200210 (upgrade to python3)
 
 I eventually found that Python has a lot of useful file manipulation
 tools already available, so this is only a marginally useful set of
@@ -44,14 +44,15 @@ def getHeadExt(testfile):
 
        >>> flnm = "test.txt"
        >>> flhd, ext = getHeadExt(flnm)
-       >>> print flhd, ext
+       >>> print (flhd, ext)
        test txt
        
     
     """
     if debug_getHeadExt:
-        print "getHeadExt: ", testfile
+        print ("getHeadExt: ", testfile)
     #
+    
     splf = testfile.split('.')
     ext = ''
     flhd = testfile
@@ -59,6 +60,7 @@ def getHeadExt(testfile):
         ext = splf[len(splf)-1]
         flhd = testfile[:len(testfile)-len(ext)-1]
     #
+    
     return flhd, ext
 #
 
@@ -95,7 +97,7 @@ class FileTools:
         ERROR: file must have one of these extensions '*.trafl' or '*.dGrnk'.
                input file 'file.txt' --> extension: 'txt')
         >>> if not file_passed:
-        >>>     print "ERROR: terminated"; sys.exit(1)
+        >>>     print ("ERROR: terminated"); sys.exit(1)
         >>> #
         $
         
@@ -110,30 +112,34 @@ class FileTools:
         splf = testfile.split('.')
         self.ext = splf[len(splf)-1]
         if len(self.ext) == 1:
-            print "ERROR: file (%s) should have one of the following extensions: " \
-                % (self.flnm), allowed_exts
+            print ("ERROR: file (%s) should have one of the following extensions: " \
+                % (self.flnm), allowed_exts)
             sys.exit(1)
         #
+        
         self.flhd = testfile[:len(testfile)-len(self.ext)-1]
         
         flag_pass = False
         if type(allowed_exts) is list:
-            # print 'more than one extension found'
+            # print ('more than one extension found')
             for ext in allowed_exts:
                 if ext == self.ext:
                     flag_pass = True
                     break
                 #
-            #
+                
+            #|endfor
+            
         else:
             if allowed_exts == self.ext:
                 flag_pass = True
             #
+            
         #
         
         if not flag_pass:
             xtnsn = ''
-            print "[program: %s]:" % program
+            print ("[program: %s]:" % program)
             if type(allowed_exts) is list: # need to know if it is a list or a string
                 xtnsn = '\'*.%s\'' % allowed_exts[0]
                 for i in range(1,len(allowed_exts)):
@@ -141,19 +147,23 @@ class FileTools:
                 #
                 xtnsn += '.'
                 if len(allowed_exts) == 1:
-                    print "ERROR: file must have the extension %s" % xtnsn
+                    print ("ERROR: file must have the extension %s" % xtnsn)
                 else:
-                    print "ERROR: file must have one of these extensions %s" % xtnsn
+                    print ("ERROR: file must have one of these extensions %s" % xtnsn)
                 #
-                print "       input file '%s' --> (extension: '%s')" \
-                    % (self.flnm, self.ext)
+                
+                print ("       input file '%s' --> (extension: '%s')" \
+                    % (self.flnm, self.ext))
+                
             else:
                 xtnsn = '\'*.%s\'' % allowed_exts
-                print "ERROR: file must have the extension %s" % xtnsn
-                print "       input file '%s' --> (extension: '%s')" \
-                    % (self.flnm, self.ext)
+                print ("ERROR: file must have the extension %s" % xtnsn)
+                print ("       input file '%s' --> (extension: '%s')" \
+                    % (self.flnm, self.ext))
             #
+            
         #
+        
         return flag_pass
     #
     
@@ -185,6 +195,7 @@ class FileTools:
         the resulting list.
         
         """
+        
         ssv = st.split(' ')
         vlist = []
         # remove blank spaces
@@ -192,7 +203,9 @@ class FileTools:
             if not ssv_k == '':
                 vlist += [ssv_k]
             #
-        #
+            
+        #|endfor
+        
         return vlist
     #
     
@@ -218,6 +231,7 @@ class FileTools:
         for i in range(0,slen-len(sn)):
             hn += '0'
         #
+        
         hn += sn
         return hn
     #
@@ -240,21 +254,22 @@ class FileTools:
         
         """
         
-        #
+        
         self.flnm = testfile
         ss = testfile.split('.')
         self.ext = ss[len(ss)-1]
         
         if len(self.ext) == 1:
-            print "ERROR: file (%s) requires an extension: " % (self.flnm), allowed_exts
+            print ("ERROR: file (%s) requires an extension: " % (self.flnm), allowed_exts)
             sys.exit(1)
         #
+        
         self.flhd = testfile[:len(testfile)-len(self.ext)-1]
         
         
         flag_pass = False
         if type(allowed_exts) is list:
-            # print 'more than one extension found'
+            # (print 'more than one extension found')
             for ext in allowed_exts:
                 testext='.' + ext + '$'
                 p = re.compile(testext)
@@ -262,16 +277,18 @@ class FileTools:
                 if (len(a) > 0):
                     flag_pass = True
                 #
-            #
+                
+            #|endfor
             
         else:
-            # print 'only one extension found'
+            # (print 'only one extension found')
             testext='.' + allowed_exts + '$'
             p = re.compile(testext)
             a = p.findall(testfile)
             if (len(a) > 0):
                 flag_pass = True
             #
+            
         #
         
         if not flag_pass:
@@ -281,19 +298,22 @@ class FileTools:
                 for i in range(1,len(allowed_exts)):
                     xtnsn += ' or \'*.%s\'' % allowed_exts[i]
                 #
+                
                 xtnsn += '.'
                 
                 if len(allowed_exts) == 1:
-                    print "ERROR: file must have the extension %s" % xtnsn
+                    print ("ERROR: file must have the extension %s" % xtnsn)
                 else:
-                    print "ERROR: file must have one of these extensions %s" % xtnsn
+                    print ("ERROR: file must have one of these extensions %s" % xtnsn)
                 #
                 
             else:
                 xtnsn = '\'*.%s\'' % allowed_exts
-                print "ERROR: file must have the extension %s" % xtnsn
+                print ("ERROR: file must have the extension %s" % xtnsn)
             #
+            
         #
+        
         return flag_pass
     #
     

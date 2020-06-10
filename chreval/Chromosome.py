@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -8,9 +8,11 @@ Classes:       Segment
                Chromatin
                Chromosome
 
+Functions:     assign_bed_tags
+
 Author:        Wayne Dawson
 creation date: parts 2016 (in chreval), made into a separate object 170426
-last update:   180709
+last update:   200210 (upgraded to python3) 190820
 version:       0
 
 Purpose:
@@ -43,24 +45,26 @@ allowed_tags = ['chr', 'bgn', 'end',
                 'repressed',
                 'vi', 'vj']
 
-# tag definitions:
-# 'chr'        chromosome index
-# 'bgn'        beginning locus on the chromosome
-# 'end'        ending locus on the chromosome
-# 'lCTCF'      orientation of CTCF on the 5' side, sense strand and when applicable
-# 'rCTCF'      orientation of CTCF on the 3' side, sense strand and when applicable
-# 'PETcnt'     number of PET clusters counted for this loop
-# 'cmplx1'     complexity of the CTCF anchors
-# 'cmplx2'     complexity of the RNA polymerase II anchors
-# 'cmplx3'     complexity of both CTCF or RNA polymerase II anchors
-# 'open'       degree of openness of the chromatin in the locus
-# 'active'     degree of activeness of the chromatin in the locus
-# 'A'          is it compartment A?
-# 'B'          is it compartment B?
-# 'repressed'  For old *.txt files, opposite of active
-# 'vi'         starting locus of the chromatin relative to the boundaries of the domain
-# 'vj'         ending locus of the chromatin relative to the boundaries of the domain
+"""@
 
+ tag definitions:
+ 'chr'        chromosome index
+ 'bgn'        beginning locus on the chromosome
+ 'end'        ending locus on the chromosome
+ 'lCTCF'      orientation of CTCF on the 5' side, sense strand and when applicable
+ 'rCTCF'      orientation of CTCF on the 3' side, sense strand and when applicable
+ 'PETcnt'     number of PET clusters counted for this loop
+ 'cmplx1'     complexity of the CTCF anchors
+ 'cmplx2'     complexity of the RNA polymerase II anchors
+ 'cmplx3'     complexity of both CTCF or RNA polymerase II anchors
+ 'open'       degree of openness of the chromatin in the locus
+ 'active'     degree of activeness of the chromatin in the locus
+ 'A'          is it compartment A?
+ 'B'          is it compartment B?
+ 'repressed'  For old *.txt files, opposite of active
+ 'vi'         starting locus of the chromatin relative to the boundaries of the domain
+ 'vj'         ending locus of the chromatin relative to the boundaries of the domain
+"""
 
 def assign_bed_tags(taglist, sbedfl):
     name = ''    # name of the chromosome
@@ -77,8 +81,10 @@ def assign_bed_tags(taglist, sbedfl):
     vi     = -1
     vj     = -1
     cmplx = []
-    # print "taglist: ", taglist
-    # print "sbedfl:  ", sbedfl
+    
+    #print ("taglist: ", taglist)
+    #print ("sbedfl:  ", sbedfl)
+    
     for tlk in range(0, len(taglist)):
         try:
             if taglist[tlk] == 'chr':
@@ -112,15 +118,15 @@ def assign_bed_tags(taglist, sbedfl):
             elif taglist[tlk] == 'vj':
                 vj = float(sbedfl[tlk])
             else:
-                print "ERROR: undefined tag. "
-                print "       allowed tags are the following:"
+                print ("ERROR: undefined tag. ")
+                print ("       allowed tags are the following:")
                 for aa in allowed_tags:
-                    print aa
+                    print (aa)
                 sys.exit(1)
             #
         except (ValueError):
-            print "ERROR: incompatable data found for entry"
-            print sbedfl
+            print ("ERROR: incompatable data found for entry")
+            print (sbedfl)
             sys.exit(1)
         #
     #
@@ -204,7 +210,7 @@ class Chromatin:
     
     
     def add_segments(self, bgn, end, state):
-        # print "add_segments"
+        # print ("add_segments")
         self.segments += [Segment(bgn, end, state)]
     #
     

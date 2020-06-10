@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -11,7 +11,7 @@ Objects:       NodeVisitor
 
 Author:        Wayne Dawson
 creation date: 170126 (originally part of Threads.py & RThreads.py) 
-last update:   190725
+last update:   200211 (upgraded to python3), 191225
 version:       0.1
 
 Purpose:
@@ -111,8 +111,7 @@ from Motif      import Link
 from Motif      import LGroup
 from Motif      import Map # main map for all the FE and structures
 
-"""contains free energy parameters"""
-#from RFreeEnergy import FreeEnergy
+from LoopRecords import MBLptr
 
 """Other objects and tools"""
 from FileTools  import getHeadExt
@@ -170,7 +169,7 @@ PROGRAM      = "TreeNode.py"  # name of the program
 # possibly in other parts.
 
 def usage():
-    print "USAGE: %s" % PROGRAM
+    print ("USAGE: %s" % PROGRAM)
 #
 
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -251,7 +250,7 @@ class NodeVisitor(object):
         debug_visit = False
         method_name = 'visit_' + type(node.name).__name__
         if debug_visit:
-            print method_name
+            print (method_name)
         #
         
         # method_name takes the form of the following strings:
@@ -290,10 +289,12 @@ class TreeNode2DotBracket(NodeVisitor):
     def __init__(self, v2t, is_chromatin = True):
         inputObject = type(v2t).__name__
         if not inputObject == "Vienna2TreeNode":
-            print "Error: TreeNode2DotBracket requires objects of class Vienna2TreeNode."
-            print "       object entered: %s" % inputObject
+            print ("Error: TreeNode2DotBracket requires objects of class Vienna2TreeNode.")
+            print ("       object entered: %s" % inputObject)
             sys.exit(1)
         #
+        
+        self.debug_TreeNode2DotBracket = False # True # 
         
         self.genTree = v2t.genTree # the main tree we need
         self.ssStems = v2t.ssStems # helps with searching out branching
@@ -303,6 +304,7 @@ class TreeNode2DotBracket(NodeVisitor):
         # sequence stuff 
         self.seqv    = []
         self.sssv    = []
+        
         self.counter = 1
         self.counter = 1
         self.reset_counter()
@@ -310,17 +312,35 @@ class TreeNode2DotBracket(NodeVisitor):
         
         self.chromatin = is_chromatin # specifies that the sequence is chromatin
         
-        # print "here, is_chromatin = ", is_chromatin
-        for i in range(0, self.N):
+        
+        if self.debug_TreeNode2DotBracket:
+            print ("here, is_chromatin = ", is_chromatin)
+            print ("      v2t.vstr: ", v2t.vstr)
+            print ("      v2t.vseq: ", v2t.vseq)
+        #
+        
+        
+        if len(v2t.vseq) == len(v2t.vstr) and len(v2t.vseq) == self.N:
+            self.seqv = list(v2t.vseq)
+        else:
             if self.chromatin:
-                self.seqv += ['c']
+                # no sequence provide, so we just make a blank one
+                self.seqv = self.N*['c']
+            else:
+                print ("ERROR(TreeNode2DotBracket): RNA lacks a defined sequence!")
+                sys.exit(1)
             #
             
-            self.sssv += ['.']
         #
+        
+        self.sssv = self.N*['.']
+        
         
         self.vstr = self.makeFinal(self.sssv)
         self.vSeq = ''
+        #print (self.seqv)
+        #print (self.sssv)
+        #sys.exit(0)
         
         # presently, MP structures are automatically written. I am
         # thinking that these should be written on a separate line,
@@ -330,7 +350,7 @@ class TreeNode2DotBracket(NodeVisitor):
         
         
         self.initialize_t2m   = True
-        #print "initialized TreeNode2DotBracket(), counter = ", self.counter
+        #print ("initialized TreeNode2DotBracket(), counter = ", self.counter)
     #
     
     def make_dotbracket(self, is_chromatin = True):
@@ -342,7 +362,7 @@ class TreeNode2DotBracket(NodeVisitor):
         self.vstr = self.makeFinal(self.sssv)
         
         self.vSeq = self.makeFinal(self.seqv)
-        #print self.vSeq
+        #print (self.vSeq)
         
         return self.vstr
     #        
@@ -354,7 +374,7 @@ class TreeNode2DotBracket(NodeVisitor):
     
     
     def makeFinal(self, seqList):
-        seqx = string.join(seqList, '') 
+        seqx = ''.join(seqList) 
         # also: python> ''.join(sssv); python> ''.join(seqList) 
         return seqx
     #
@@ -384,13 +404,13 @@ class TreeNode2DotBracket(NodeVisitor):
             self.reset_counter() # self.counter = 1
         #
         
-        #print "counter: ", self.counter
+        #print ("counter: ", self.counter)
     #
     
     def visit_Stem(self, node):
         debug_visit_Stem = False # True # 
         if debug_visit_Stem:
-            print "Enter visit_Stem: ", node.name
+            print ("Enter visit_Stem: ", node.name)
         #endif
         
         vstem = node.name
@@ -418,25 +438,35 @@ class TreeNode2DotBracket(NodeVisitor):
         vpk = node.name
         ipk = vpk.it; jpk = vpk.jt
         if debug_visit_PseudoKnot:
-            print "Enter visit_PseudoKnot", vpk, vpk.pktype
-            print vpk
+            print ("Enter visit_PseudoKnot", vpk, vpk.pktype)
+            print (vpk)
         #
         
         for stem in vpk.rootstems:
             if debug_visit_PseudoKnot:
-                print "vpk: rootstem: ", stem, stem.vtype
+                print ("vpk: rootstem: ", stem, stem.vtype)
             #
             
-            self.write_Stem(stem)
+            if type(stem).__name__ == "PseudoKnot":
+                if debug_visit_PseudoKnot:
+                    print ("begin pk in pk")
+                #
+                
+                self.write_PseudoKnot(stem)
+                #print ("finished pk in pk"); sys.exit(0)
+                
+            else:
+                self.write_Stem(stem)
+            #
         #endfor
         
         if debug_visit_PseudoKnot:
-            print "all linkages: ", vpk.linkages
+            print ("all linkages: ", vpk.linkages)
         #
         
         for stem in vpk.linkages:
             if debug_visit_PseudoKnot:
-                print "vpk: linkage: ", stem, stem.vtype
+                print ("vpk: linkage: ", stem, stem.vtype)
             #
             
             self.write_Linkage(stem)
@@ -453,6 +483,41 @@ class TreeNode2DotBracket(NodeVisitor):
             
         #
         
+    #
+    
+    
+    def write_PseudoKnot(self, vpk):
+        debug_visit_PseudoKnot = False # True # 
+        for stem in vpk.rootstems:
+            if debug_visit_PseudoKnot:
+                print ("vpk: rootstem: ", stem, stem.vtype)
+            #
+            
+            if type(stem).__name__ == "PseudoKnot":
+                if debug_visit_PseudoKnot:
+                    print ("begin pk in pk inside pk")
+                #
+                
+                self.write_PseudoKnot(stem)
+                #print ("finished pk in pk"); sys.exit(0)
+                
+            else:
+                self.write_Stem(stem)
+            #
+        #endfor
+        
+        if debug_visit_PseudoKnot:
+            print ("all linkages: ", vpk.linkages)
+        #
+        
+        for stem in vpk.linkages:
+            if debug_visit_PseudoKnot:
+                print ("vpk: linkage: ", stem, stem.vtype)
+            #
+            
+            self.write_Linkage(stem)
+            self.inc_count() # self.counter += 1
+        #endfor
     #
     
     
@@ -495,7 +560,10 @@ class TreeNode2DotBracket(NodeVisitor):
     def write_Stem(self, vstem):
         # stype = 's' (strandard) or 'l' (linkage)
         
-        debug_write_StemThread = False # True #
+        debug_write_StemThread = False # True # 
+        if debug_write_StemThread:
+            print ("write_Stem: ", vstem)
+        #
         
         i_t = vstem.it; j_t = vstem.jt
         i_h = vstem.ih; j_h = vstem.jh
@@ -573,12 +641,15 @@ class TreeNode2DotBracket(NodeVisitor):
 
 
 
+
+
 class TreeNode2Motif(NodeVisitor):
     def __init__(self, v2t):
+        flag_debug = False
         inputObject = type(v2t).__name__
         if not inputObject == "Vienna2TreeNode":
-            print "Error: TreeNode2Motif requires objects of class Vienna2TreeNode."
-            print "       object entered: %s" % inputObject
+            print ("Error: TreeNode2Motif requires objects of class Vienna2TreeNode.")
+            print ("       object entered: %s" % inputObject)
             sys.exit(1)
         #
         
@@ -589,16 +660,29 @@ class TreeNode2Motif(NodeVisitor):
         self.N        = v2t.N
         self.fe       = v2t.fe       # currently RNAModules or ChromatinModules
         self.dGmin    = 1000.0
+        self.dHmin    = 1000.0
         self.initialize_t2m = True
         
-        # print "initialized TreeNode2Motif()"
+        if flag_debug:
+            print (self.fe.rnaseq)
+            
+            for j in range(0, len(self.fe.btype)):
+                for i in range(0, j):
+                    print ("%3d, %3d: " % (i, j), self.fe.btype[i][j])
+                #
+            #
+            
+            # print ("initialized TreeNode2Motif()")
+            #sys.exit(0)
+        #
+        
     #
     
     def build_wyspa(self, mpstruct):
         debug_build_wyspa = False # True #
         if debug_build_wyspa:
-            print mpstruct
-            print type(mpstruct).__name__
+            print (mpstruct)
+            print (type(mpstruct).__name__)
         #
         
         if len(mpstruct.arches) > 0:
@@ -609,7 +693,7 @@ class TreeNode2Motif(NodeVisitor):
                 iw = ww.it; jw = ww.jt
                 
                 if debug_build_wyspa:
-                    print "ijW(%2d,%2d) <- ijw(%2d,%2d)" % (iW, jW, iw, jw)
+                    print ("ijW(%2d,%2d) <- ijw(%2d,%2d)" % (iW, jW, iw, jw))
                 #
                 
                 if jw < jW:
@@ -653,9 +737,9 @@ class TreeNode2Motif(NodeVisitor):
                     #
                     
                 #endfor
-
+                
                 """@ 
-
+                
                 The more I look at this, the more I realize that it
                 doesn't make sense the way it is written. This whole
                 thing needs to be fixed before it can be integrated
@@ -677,9 +761,9 @@ class TreeNode2Motif(NodeVisitor):
             self.assign_P(i_t, j_t, MProots, 'P', '-')
             
             if debug_post_graftMP:
-                print "result"
+                print ("result")
                 for mm in self.fe.smap.glink[i_t][j_t].lg:
-                    print mm.motif[0].show_Motif()
+                    print (mm.motif.show_Motif())
                 #endfor
                 
             #
@@ -695,7 +779,7 @@ class TreeNode2Motif(NodeVisitor):
             it = node.name.it; jt = node.name.jt
             ih = node.name.ih; jh = node.name.jh
             nm = node.name.name
-            print "Enter visit_Stem{ijt(%2d,%2d)::ijh(%2d,%2d) %s}" % (it, jt, ih, jh, nm) 
+            print ("Enter visit_Stem{ijt(%2d,%2d)::ijh(%2d,%2d) %s}" % (it, jt, ih, jh, nm))
         #
         
         # depth first
@@ -732,7 +816,7 @@ class TreeNode2Motif(NodeVisitor):
         
         if vstem.vtype == "root":
             if debug_visit_Stem:
-                print "fixing root stem"
+                print ("Establishing the root of the TreeNode")
             #
             
             i_t = vstem.ih; j_t = vstem.jh
@@ -764,6 +848,7 @@ class TreeNode2Motif(NodeVisitor):
                     
                 #
             #
+            
             ngbranches = len(gbranches)
             
             """@
@@ -775,16 +860,17 @@ class TreeNode2Motif(NodeVisitor):
             
             """
             
-            Vpqh   = self.get_branchingFE(gbranches)
+            Vpqh, Hpqh = self.get_branchingFE(gbranches)
+            ib = 0; jb = self.N-1
             
             if debug_visit_Stem:
-                print "base: (%3d,%3d): gbranches -> %s" % (i_t, j_t, gbranches)
-                print "      Vij = %8.2f" % Vpqh
-                #print "planned exit at 1 in visit_Stem"; sys.exit(0)
+                print ("base: (%3d,%3d): gbranches -> %s" % (i_t, j_t, gbranches))
+                print ("      Vij = %8.2f, Hij = %8.2f" % (Vpqh, Hpqh))
+                #print ("planned exit at 1 in visit_Stem"); sys.exit(0)
             #
             
             
-            if ngbranches == 0:
+            if ngbranches == 0: # root and no branches
                 """@
                 
                 The whole thing is either completely empty of
@@ -797,85 +883,218 @@ class TreeNode2Motif(NodeVisitor):
                     # there is meta-structure consisting of one
                     # isolated pair (B-loop)
                     
-                    dG_H = self.fe.cle_HloopE(i_t,  j_t)
-                    rmotif = XLoop(i_t, j_t, dG_H, 'B', 'sa')
-                    # btp is irrelevant whether 'sa' or 'sp'
-                    self.fe.smap.glink[i_t][j_t].add_link(Link(rmotif))
-                else:
-                    # there is no meta-structure at all
+                    # add the head dangle and corrections
+                    dG_H =  self.fe.cle_HloopE(i_t,  j_t)
+                    # add the tail dangle and corrections
+                    dG_H += self.fe.dG_stem_dangle(ib,  jb,   # boundaries 
+                                                   i_t, j_t,  # 5'3' tail of the stem
+                                                   True,      # T -> tail dangle
+                                                   False)     # invoke debug option
                     
-                    dG_X = self.fe.cle_HloopE(i_t,  j_t)
-                    rmotif = XLoop(i_t, j_t, dG_X, 'X', '-')
-                    # btp = '-' (empty)
+                    rmotif = XLoop(i_t, j_t, dG_H, 'B', 'sa')
+                    
+                    # enthalpy
+                    rmotif.dH_dVlp = self.fe.get_dHhloop_mm1(i_t, j_t)
+                    rmotif.dHpqh   = 0.0
+                    rmotif.Hij     = rmotif.dH_dVlp
+                    # btp is irrelevant whether 'sa' or 'sp'
+                    
+                    """@
+                    
+                    I think this needs some further consideration for
+                    parallel and antiparallel cases, so, for example,
+                    looking at i_t - 1, j_t + 1 vs i_t -1, j_t -
+                    1. One problem is the prior bp is not passed in
+                    the current design.
+                    
+                    """
+                    
                     self.fe.smap.glink[i_t][j_t].add_link(Link(rmotif))
+                    
+                    if debug_visit_Stem:
+                        print ("B-loop closing final sequence (%d,%d)" % (i_t, j_t))
+                        print (rmotif)
+                    #
+                    
+                else: 
+                    """@
+                    
+                    There is absolutely no meta-structure at all. This
+                    can happen for a poorly chosen structure or
+                    sequence; however, it is rare.
+                    
+                    In general, with turner rules, this shouldn't
+                    happen and if it does, unless this is evaluated by
+                    the gMatrix, it will surely produce an error.  """
+                    
+                    a = self.fe.aSeq[i_t]
+                    b = self.fe.aSeq[j_t]
+                    c = self.fe.aSeq[i_t+1]
+                    d = self.fe.aSeq[j_t-1]
+                    
+                    # It would make sense to say something about this one
+                    print ("WARNING/ERROR: terminal H-loop closed by nWC bp.")
+                    print ("               i(%d, %s), j(%d, %s)" % (i_t, a, j_t, b))
+                    print ("               %s%s/%s%s" % (a, c, b, d))
+                    
+                    # it would generally be strange to want the FE of
+                    # a structure like this, in general, so about the
+                    # only thing to do is calculate the ends.
+                    dG_X = self.fe.cle_HloopE(i_t,  j_t)
+                    
+                    rmotif = XLoop(i_t, j_t, dG_X, 'X', '-')
+                    
+                    # enthalpy
+                    rmotif.Hij = self.fe.get_dHhloop_mm1(i_t, j_t)
+                    # (no entropy contributions in enthalpy)
+                    
+                    self.fe.smap.glink[i_t][j_t].add_link(Link(rmotif))
+                    
+                    
+                    if debug_visit_Stem:
+                        print ("no structure in final sequence (%d,%d)" % (i_t, j_t))
+                        print (rmotif)
+                    #
                 #
                 
-            elif ngbranches == 1:
+            elif ngbranches == 1: # root and one branch
                 i_h = gbranches[0][0]; j_h = gbranches[0][1]
                 if (i_h == i_t and j_h == j_t):
                     """@
                     
-                    The ends of the sequence are a stucture: I, M, K, S, R, or W.
+                    The ends of the sequence are a stucture: I, M, K,
+                    S, R, or W. This would already have been
+                    calculated. Therefore, we skip it.
                     
                     """
                     
                     if debug_visit_Stem:
-                        print "ngbranches == 1 and the single structure of class %s" \
-                            % (vstem.name)
-                        print "closes the far ends of the sequence: ijt = (%2d,%2d)" \
-                            % (i_t, j_t)
+                        print ("ngbranches == 1 and the single structure of class %s" \
+                            % (vstem.name))
+                        print ("closes the far ends of the sequence: ijt = (%2d,%2d)" \
+                            % (i_t, j_t))
                     #
+                    
                 else:
                     
                     """The ends of the sequence are a J-loop."""
                     
                     if debug_visit_Stem:
-                        print "ngbranches == 1 and the single structure of class %s" \
-                            % (vstem.name)
-                        print "forms a domain at ijh = (%2d,%2d)" \
-                            % (i_h, j_h)
+                        print ("ngbranches == 1 and the single structure of class %s" \
+                            % (vstem.name))
+                        print ("forms a domain at ijh = (%2d,%2d)" \
+                            % (i_h, j_h))
                     #
-                    jmotif = MBL(i_t, j_t, Vpqh, 'J', '-', gbranches)
+                    
+                    stmtail = True
+                    dG_td = self.fe.dG_stem_dangle(ib,  jb,   # boundaries 
+                                                   i_h, j_h,  # 5'3' tail of the stem
+                                                   stmtail,   # T -> tail dangle
+                                                   False)     # invoke debug option
+                    dG_J  = Vpqh + dG_td
+                    # Vpqh is just the FE without the dangle 
+                    
+                    jmotif = MBL(i_t, j_t, dG_J, 'J', '-', gbranches)
                     jmotif.vtype   = vstem.vtype
-                    jmotif.MLclose = 0.0
-                    jmotif.dGVpq   = Vpqh
+                    
+                    # here, the I-loop is already complete, so we just
+                    # use Vpqh and ignore dG_dVlp.
+                    
+                    jmotif.dG_dVlp = dG_td # branch dangle + 5'3'-head + cle closing
+                    jmotif.dGVpq   = Vpqh  # branch FE (uncorrected)
+                    
+                    # enthalpy
+                    dH_td = self.fe.dH_stem_dangle(ib,  jb,   # boundaries 
+                                                   i_h, j_h,  # 5'3' tail of stem
+                                                   stmtail,   # T -> tail dangle
+                                                   False)     # invoke debug option
+                    
+                    jmotif.dH_dVlp = dH_td # branch dangle + 5'3'-head enthalpy
+                    jmotif.dHVpq   = Hpqh  # branch enthalpy (uncorrected)
+                    jmotif.Hij     = Hpqh + dH_td
+                    # Hpqh is just the enthalpy without the dangle 
                     
                     self.fe.smap.glink[i_t][j_t].add_link(Link(jmotif))
                     
+                    if debug_visit_Stem:
+                        print ("J-loop finishes final sequence (%d,%d)" % (i_t, j_t))
+                        print (jmotif)
+                    #
+                    
                 #
                 
-            elif ngbranches > 1:
+            elif ngbranches > 1: # root and more than one branch
+                
+                # Well ... if there is more than one branch, we cannot
+                # have an M-loop, so it must be that all branches are
+                # considered, there is no skipping here, and we can
+                # assume without further ado that it is a P-loop.
+                
                 if debug_visit_Stem:
-                    print "ngbranches > 1 and the single structure of class %s" \
-                        % (vstem.name)
-                    print "closes the far ends of the sequence: ijh = (%2d,%2d)" \
-                        % (i_t, j_t)
+                    print ("ngbranches > 1 and the single structure of class %s" \
+                        % (vstem.name))
+                    print ("closes the far ends of the sequence: ijh = (%2d,%2d)" \
+                        % (i_t, j_t))
                 #
+                
+                new_pMBL = MBLptr(ib, jb)
+                new_pMBL.nm = 'P'
+                new_pMBL.dr = '-'
+                new_pMBL.V = Vpqh
+                for gbrk in gbranches:
+                    iv = gbrk[0]; jv = gbrk[1]
+                    new_pMBL.addBranch(iv, jv)
+                #
+                
+                new_pMBL.n = len(gbranches)
                 
                 
                 """The ends of the sequence are a P-loop."""
+                dG_td = self.fe.dG_trim_53pStems(ib, jb,   # 5' to 3' [i/p]MBL bounds 
+                                                 new_pMBL, # mbl branch info
+                                                 False)    # iMBL or pMBL? B.Cs
                 
-                
-                pmotif = MBL(i_t, j_t, Vpqh, 'P', '-', gbranches)
+                dG = Vpqh + dG_td
+                pmotif = MBL(i_t, j_t, dG, 'P', '-', gbranches)
                 pmotif.vtype   = vstem.vtype
-                pmotif.MLclose = 0.0
-                pmotif.dGVpq   = Vpqh
+                pmotif.dG_dVlp = dG_td  # branch dangle + 5'3'-head + cle closing
+                pmotif.dGVpq   = Vpqh   # branches FE *uncorrected)
+                
+                # !!!!!
+                """The ends of the sequence are a P-loop."""
+                dH_td = self.fe.dH_trim_53pStems(ib, jb,   # 5' to 3' [i/p]MBL bounds 
+                                                 new_pMBL, # mbl branch info
+                                                 False)    # iMBL or pMBL? B.Cs
+                
+                pmotif.dH_dVlp = dH_td  # branch dangle + 5'3'-head enthalpy
+                pmotif.dHVpq   = Hpqh   # branch enthalpy (uncorrected)
+                pmotif.dHd53p  = 0.0    # open so there can be no tail 5'3' dangles
+                pmotif.Hij     = Hpqh + dH_td
                 
                 self.fe.smap.glink[i_t][j_t].add_link(Link(pmotif))
+                
+                if debug_visit_Stem:
+                    print ("P-loop finishes final sequence (%d,%d)" % (i_t, j_t))
+                    print (pmotif)
+                #
                 
                 
             #
             
-            self.dGmin = self.fe.smap.glink[i_t][j_t].lg[0].motif[0].get_Vij()
+            self.dGmin = self.fe.smap.glink[i_t][j_t].lg[0].motif.get_Vij()
+            self.dHmin = self.fe.smap.glink[i_t][j_t].lg[0].motif.get_Hij()
             
             if debug_visit_Stem:
-                print "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"
-                print "result: dGmin = %8.2f [kcal/mol]" % self.dGmin
+                print ("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
+                print ("result: dGmin = %8.2f [kcal/mol]" % self.dGmin)
+                print ("        dHmin = %8.2f [kcal/mol]" % self.dHmin)
                 for mm in self.fe.smap.glink[i_t][j_t].lg:
-                    print mm.motif[0].show_Motif()
+                    print (mm.motif.show_Motif())
                 #endfor
                 
-                print "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"
+                print ("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+
+                #print ("planned exit at end of root"); sys.exit(0)
                 
             #
             
@@ -884,7 +1103,7 @@ class TreeNode2Motif(NodeVisitor):
         else:
             # in general, we will be writing here
             
-            # print "went in here "
+            # print ("went in here ")
             
             # 190707: maybe the trick here is to make this part of
             # RNAModule or ChromatinModule, then almost everything
@@ -901,9 +1120,9 @@ class TreeNode2Motif(NodeVisitor):
     
     
     def visit_PseudoKnot(self, node):
-        debug_visit_PseudoKnot = False # True # 
+        debug_visit_PseudoKnot = True # False # 
         if debug_visit_PseudoKnot:
-            print "enter visit_PseudoKnot"
+            print ("enter visit_PseudoKnot")
         #
         # depth first
         if not node.children == None:
@@ -920,8 +1139,8 @@ class TreeNode2Motif(NodeVisitor):
         
         vpk = node.name
         ipk = vpk.it; jpk = vpk.jt
-        #print vpk
-        #print vpk.disp_PseudoKnot()
+        #print (vpk)
+        #print (vpk.disp_PseudoKnot())
         
         vtype = 'a'  
         pktype = vpk.pktype
@@ -938,13 +1157,13 @@ class TreeNode2Motif(NodeVisitor):
             id2 = vpk.rootstems[1].it; jd2 = vpk.rootstems[1].jt
             
         elif len(vpk.rootstems) > 2:
-            print "ERROR! too many branches"
-            print vpk.rootstems
+            print ("ERROR! too many branches")
+            print (vpk.rootstems)
             
             sys.exit(1)
         #
         
-        #print vpk.rootstems
+        #print (vpk.rootstems)
         # #################################
         # ###   process the root stems  ###
         # #################################
@@ -952,32 +1171,37 @@ class TreeNode2Motif(NodeVisitor):
         rt_stm_brnch = [] # root stem branch
         kpk = 0
         dG_root = 0.0
+        dH_root = 0.0
         all_rootStems = []
         for rstem in vpk.rootstems:
             ir = rstem.it; jr = rstem.jt
-            # print "rootstem: ", stem
+            # print ("rootstem: ", stem)
             rt_stm_brnch += [(ir, jr)]
             self.write_StemMotif(rstem, 's', [])
-            all_rootStems += [self.fe.smap.glink[ir][jr].lg[0].motif[0].Ob]
+            all_rootStems += [self.fe.smap.glink[ir][jr].lg[0].motif.Ob]
             
             # xx!!!! 190707 !!!!xx have to develop further.
-            dG_root_k = self.fe.smap.glink[ir][jr].lg[0].motif[0].get_Vij()
-            dG_root += dG_root_k
+            dG_root += self.fe.smap.glink[ir][jr].lg[0].motif.get_Vij()
+            dH_root += self.fe.smap.glink[ir][jr].lg[0].motif.get_Hij()
             if debug_visit_PseudoKnot:
-                print "dG root V   ijr(%3d,%3d)[dG=%8.2f)" % (ir, jr, dG_root_k)
+                print ("root stem %d:  ijr(%3d,%3d)  dG = %8.2f  dH = %8.2f" \
+                    % (kpk + 1, ir, jr,
+                       self.fe.smap.glink[ir][jr].lg[0].motif.get_Vij(),
+                       self.fe.smap.glink[ir][jr].lg[0].motif.get_Hij()))
             #
             
             kpk += 1
+            
         #endfor
         
         if debug_visit_PseudoKnot:
-            print "rt_stm_brnch: ", rt_stm_brnch
+            print ("rt_stm_brnch: ", rt_stm_brnch)
         #
         
         nrt_stm_brnch = len(rt_stm_brnch)
         if nrt_stm_brnch <= 0:
-            print "ERROR: ??? don't understand what to make of this case!"
-            print "       nssbranches = %d, ij_h(%2d,%2d)[%s]" % (i_h, j_h, vtype)
+            print ("ERROR: ??? don't understand what to make of this case!")
+            print ("       nssbranches = %d, ij_h(%2d,%2d)[%s]" % (i_h, j_h, vtype))
             sys.exit(1)
         #
         
@@ -1000,8 +1224,8 @@ class TreeNode2Motif(NodeVisitor):
                 elif vpk.rootstems[0].name == "PseudoKnot":
                     fr_zones_l = [(jd1, ql)]
                 else:
-                    print "ERROR: undefined object (%s) at (%2d,%2d)" \
-                        % (vpk.rootstems[0].name, id1, jd1)
+                    print ("ERROR: undefined object (%s) at (%2d,%2d)" \
+                        % (vpk.rootstems[0].name, id1, jd1))
                     sys.exit(1)
                 #
                 
@@ -1011,8 +1235,8 @@ class TreeNode2Motif(NodeVisitor):
                 fr_zones_l += [(jd1, id2)]
                 
             else:
-                print "ERROR: 1 Too few linkages"
-                print vpk.linkages
+                print ("ERROR: 1 Too few linkages")
+                print (vpk.linkages)
                 sys.exit(1)
             #
             
@@ -1101,41 +1325,53 @@ class TreeNode2Motif(NodeVisitor):
                 #
                 
             else:
-                print "ERROR: 2 Too few linkages"
-                print vpk.linkages
+                print ("ERROR: 2 Too few linkages")
+                print (vpk.linkages)
                 sys.exit(1)
             #
             
         #
         
         dG_link = 0.0
+        dH_link = 0.0
         linktail = []
         all_linkStems = []
         for lstem in vpk.linkages:
             pL = lstem.it; qL = lstem.jt
             linktail += [(pL, qL)]
-            # print "linkage: ", lstem.stem
+            # print ("linkage: ", lstem.stem)
             self.write_StemMotif(lstem, 'l', fr_zones_l)
-            all_linkStems += [self.fe.smap.glink[pL][qL].lg[0].motif[0].Ob]
-            dG_link += self.fe.smap.glink[pL][qL].lg[0].motif[0].Ob.Vij
-            #self.fe.smap.glink[pL][qL].lg[0].motif[0].get_Vij()
+            all_linkStems += [self.fe.smap.glink[pL][qL].lg[0].motif.Ob]
+            dG_link += self.fe.smap.glink[pL][qL].lg[0].motif.get_Vij()
+            dH_link += self.fe.smap.glink[pL][qL].lg[0].motif.get_Hij()
+            
+            if debug_visit_PseudoKnot:
+                print ("linkage:       pqL(%3d,%3d)  dG = %8.2f  dH = %8.2f" \
+                    % (pL, qL,
+                       self.fe.smap.glink[pL][qL].lg[0].motif.get_Vij(),
+                       self.fe.smap.glink[pL][qL].lg[0].motif.get_Hij()))
+            #
+            
         #
         
         if debug_visit_PseudoKnot:
-            print "linktail: ", linktail
+            print ("linktail: ", linktail)
         #
         
         if debug_visit_PseudoKnot:
-            print "dG linkages ijv(%3d,%3d)[dG=%8.2f)" % (ipk, jpk, dG_link)
+            print ("dG linkages ijpk(%3d,%3d)[dG=%8.2f)" \
+                % (ipk, jpk, dG_link))
         #
         
         dGpk = dG_root + dG_link
-        # print "pk(%3d,%3d), dG = %8.2f" % (ipk, jpk, dGK)
+        dHpk = dH_root + dH_link
+        # print ("pk(%3d,%3d), dG = %8.2f" % (ipk, jpk, dGK))
         pkmotif = PseudoKnot(ipk, jpk, ctp)
         pkmotif.roottmp   = deepcopy(rt_stm_brnch)
         pkmotif.rootstems = deepcopy(all_rootStems)
         pkmotif.linkages  = deepcopy(all_linkStems)
         pkmotif.Vij = dGpk
+        pkmotif.Hij = dHpk
         """
         pkmotif.branching = []  # now solved inside of rootstems and linkages
         pkmotif.Vbr = 0.0       # now solved inside of rootstems and linkages
@@ -1148,7 +1384,7 @@ class TreeNode2Motif(NodeVisitor):
         self.fe.smap.glink[ipk][jpk].add_link(Link(pkmotif))
         if debug_visit_PseudoKnot:
             for mm in self.fe.smap.glink[ipk][jpk].lg:
-                print mm.motif[0].show_Motif()
+                print (mm.motif.show_Motif())
             #endfor
             
             #sys.exit(0)
@@ -1157,10 +1393,11 @@ class TreeNode2Motif(NodeVisitor):
     #
     
     def assign_B(self, i_h, j_h, stype, vtype):
-        debug_assign_B = False # True # 
+        debug_assign_B = True # False # 
+        plan_stop_on_pass = False
         if debug_assign_B:
             branches = []
-            print "Enter assign_B{ij_h(%d,%d), branches = %s" % (i_h, j_h, branches)
+            print ("Enter assign_B{ij_h(%d,%d), branches = %s" % (i_h, j_h, branches))
         #
         
         # has pairing at i_h, j_h
@@ -1175,44 +1412,39 @@ class TreeNode2Motif(NodeVisitor):
             btp = vtype
         #
         
-        # dGt = self.fe.calc_dG(i_h, j_h, 5.0, self.fe.T) # previous method
         
-        dGB = self.fe.cle_HloopE(i_h,  j_h)
-        dGt = 0.0
-        if False:
-            # needs to have actual boundary conditions to make it
-            # worth doing this calculation. Presently, this is only
-            # called when the boundaries are (i_h,j_h).
-            ib = i_h; jb = j_h
-            dGt = self.fe.stem_dangle(ib,  jb,  # boundaries (often [0 to self.N-1]) 
-       	                              i_h, j_h, # 5'3' tail of the stem
-                                      True,     # True -> tail dangle, False -> head dangle
-                                      False)    # invoke debug option
-        #
+        dG = self.fe.cle_HloopE(i_h,  j_h)
+        dH = self.fe.dH_HloopE(i_h,  j_h)
         
         # add any corrections for tetraloop, local loop
         # entropy or whatever here
-                
-        dG = dGt + dGB
         
-        link_B = Link(XLoop(i_h, j_h, dG, ctp, btp))
-        self.fe.smap.glink[i_h][j_h].add_link(link_B)
+        bmotif = XLoop(i_h, j_h, dG, ctp, btp)
+        bmotif.Hij = dH
+        self.fe.smap.glink[i_h][j_h].add_link(Link(bmotif))
+        
         if debug_assign_B:
             for mm in self.fe.smap.glink[i_h][j_h].lg:
-                print mm.motif[0].show_Motif()
+                print (mm.motif.show_Motif())
             #endfor
+
+            if plan_stop_on_pass:
+                print ("planned exit in TreeNode.assign_B");
+                sys.exit(0)
+            #
             
         #
         
-        #print "exit at end of assign_B"; sys.exit(0)
+        #print ("exit at end of assign_B"); sys.exit(0)
         
     #
     
     def assign_X(self, i_h, j_h, stype, vtype):
-        debug_assign_X = False # True # 
+        debug_assign_X = True # False #
+        plan_stop_on_pass = False
         if debug_assign_X:
             branches = []
-            print "Enter assign_X{ij_h(%d,%d), branches = %s" % (i_h, j_h, branches)
+            print ("Enter assign_X{ij_h(%d,%d), branches = %s" % (i_h, j_h, branches))
         #
                 
         # has no pairing at i_h, j_h
@@ -1222,30 +1454,26 @@ class TreeNode2Motif(NodeVisitor):
         # interaction. Not only is there is no other interactions,
         # there is no pairing interaction at all.
         
-        ctp = 'B'
-        btp = "%s%s" % (stype, vtype)
-        if not (vtype == 'a' or vtype == 'p'):
-            btp = vtype
-        #
+        ctp = 'X'
+        btp = '-'
         
-        # xx!!!! 190707 !!!!xx have to develop further.
-        #dGt = self.fe.calc_dG(i_h, j_h, 0.0, self.fe.T)
-        
-        Vclose = self.fe.find_branch_weight(ih, jh, []) # 
-        dGt = 0.0 # no dangling contribution!!!
-        
+        dG = self.fe.find_branch_dGwt(ih, jh, []) # 
+        dH = 0.0
         # add any corrections for tetraloop, local loop
         # entropy or whatever here
         
-        dG = dGt + dGX
-        
-        link_X = Link(XLoop(i_h, j_h, dG, ctp, btp))
-        self.fe.smap.glink[i_h][j_h].add_link(link_X)
+        bmotif = XLoop(i_h, j_h, dG, ctp, btp)
+        bmotif.Hij = dH
+        self.fe.smap.glink[i_h][j_h].add_link(Link(bmotif))
         if debug_assign_X:
             for mm in self.fe.smap.glink[i_h][j_h].lg:
-                print mm.motif[0].show_Motif()
+                print (mm.motif.show_Motif())
             #endfor
             
+            if plan_stop_on_pass:
+                print ("planned exit in TreeNode.assign_X");
+                sys.exit(0)
+            #
         #
         
     #
@@ -1253,8 +1481,10 @@ class TreeNode2Motif(NodeVisitor):
     
     def assign_I(self, i_h, j_h, branches, stype, vtype):
         debug_assign_I = False # True # 
+        plan_stop_on_pass = False
+        
         if debug_assign_I:
-            print "Enter assign_I{ij_h(%d,%d), branches = %s" % (i_h, j_h, branches)
+            print ("Enter assign_I{ij_h(%d,%d), branches = %s" % (i_h, j_h, branches))
         #
         
         # has pairing at i_h, j_h
@@ -1267,44 +1497,42 @@ class TreeNode2Motif(NodeVisitor):
         #
         
         # pairing at i_h, j_h        
-        # xx!!!! 190707 !!!!!xx needs some different approach
-        #dGh = self.fe.calc_dG(i_h, j_h, 5.0, self.fe.T)
-        
-        Vpqh   = self.get_branchingFE(branches)
+        Vpqh, Hpqh = self.get_branchingFE(branches)
         # Vpqh = FE contribution from I/M branches or 0.0 for B 
-        Vclose = self.fe.find_branch_weight(i_h, j_h, branches, opt_iMBL)
+        Vclose = self.fe.find_branch_dGwt(i_h, j_h, branches, opt_iMBL)
         
-        dGt = 0.0
-        if False:
-            # needs to have actual boundary conditions to make it
-            # worth doing this calculation. Presently, this is only
-            # called when the boundaries are (i_h,j_h).
-            ib = i_h; jb = j_h
-            dGt = self.fe.stem_dangle(ib,  jb,  # boundaries (often [0 to self.N-1]) 
-       	                              i_h, j_h, # 5'3' tail of the stem
-                                      True,     # True -> tail dangle, False -> head dangle
-                                      False)    # invoke debug option
-        #
         
         # add any corrections for tetraloop, local loop
         # entropy or whatever here
         
-        dG = Vpqh + Vclose + dGt
+        dG = Vpqh + Vclose
         
         imotif = MBL(i_h, j_h, dG, ctp, btp, branches)
         imotif.vtype   = vtype
-        imotif.MLclose = Vclose # global corrected FE
-        imotif.dGVpq   = Vpqh   # local corrected FE
-        imotif.dGd53p  = dGt    # tail dangle FE
+        imotif.dG_dVlp = Vclose # branch dangle + 5'3'-head + cle closing
+        imotif.dGVpq   = Vpqh   # FE from branches within (ph, qh)
         imotif.dG_fs   = 0.0    # free strand correction
+        
+        # enthalpy
+        Hclose = self.fe.find_branch_dHwt(i_h, j_h, branches, opt_iMBL)
+        imotif.dH_dVlp = Hclose
+        imotif.dHVpq   = Hpqh
+        imotif.Hij     = Hpqh + Hclose
+        
         self.fe.smap.glink[i_h][j_h].add_link(Link(imotif)) 
         
-        
         if debug_assign_I:
+            dG = Vpqh + Vclose
+            dH = Hpqh + Hclose
             pI = branches[0][0]; qI = branches[0][1]
-            print "assign_I: ij_h(%2d,%2d)[%s][%s], pqI(%2d,%2d), dG(%8.2f)" \
-                % (i_h, j_h, ctp, btp, pI, qI, dG)
-            print self.fe.smap.glink[i_h][j_h].lg[0].motif[0].show_Motif()
+            print ("assign_I: ij_h(%2d,%2d)[%s][%s], pqI(%2d,%2d), dG(%8.2f), dH(%8.2f)" \
+                % (i_h, j_h, ctp, btp, pI, qI, dG, dH))
+            print (self.fe.smap.glink[i_h][j_h].lg[0].motif.show_Motif())
+            
+            if plan_stop_on_pass:
+                print ("planned exit at end of assign_I");
+                sys.exit(0)
+            #
             
         #
         
@@ -1312,11 +1540,17 @@ class TreeNode2Motif(NodeVisitor):
     
     
     def assign_J(self, i_h, j_h, branches, stype, vtype):
-        debug_assign_J = False # True # 
+        
+        # I think this one is not call (at least normally). In
+        # particular, I noticed that it had a simple error but it was
+        # basically ignored.
+        debug_assign_J = True # False # 
+        plan_stop_on_pass = False
+        
         if debug_assign_J:
-            print "Enter assign_J{ij_h(%d,%d), branches = %s" % (i_h, j_h, branches)
+            print ("Enter assign_J{ij_h(%d,%d), branches = %s" % (i_h, j_h, branches))
         #
-                
+        
         # has no pairing at i_h, j_h
         opt_iMBL = False # T -> closed at (i_h,j_h), F -> open
         
@@ -1326,27 +1560,23 @@ class TreeNode2Motif(NodeVisitor):
             btp = vtype
         #
         
-        # xx!!!! 190707 !!!!!xx needs some different approach
-        #dGh = self.fe.calc_dG(i_h, j_h, 5.0, self.fe.T)
-        
         """@
         
         The main difference between an I-loop and a J-loop is that we
         don't have the cap closing the loop at (i_h, j_h). Hence, the
         function
         
-            self.fe.find_branch_weight(i_h, j_h, branches)
+            self.fe.find_branch_dGwt(i_h, j_h, branches)
         
         is not called and the dangle function is most certainly not
         used.
         
         """
         
-        Vpqh   = self.get_branchingFE(branches)
+        Vpqh, Hpqh = self.get_branchingFE(branches)
         # Vpqh = FE contribution from I/M branches or 0.0 for B 
-        Vclose = self.fe.find_branch_weight(i_h, j_h, branches, opt_iMBL)
+        Vbranch_wt = self.fe.find_branch_dGwt(i_h, j_h, branches, opt_iMBL)
         
-        dGt = 0.0    # no contribution from dangling bonds
         
         # add any corrections for tetraloop, local loop
         # entropy or whatever here
@@ -1355,19 +1585,31 @@ class TreeNode2Motif(NodeVisitor):
         
         jmotif = MBL(i_h, j_h, dG, ctp, btp, branches)
         jmotif.vtype   = vstem.vtype
-        jmotif.MLclose = Vbranch_wt # global corrected FE
-        jmotif.dGVpq   = Vpqh       # local corrected FE
-        jmotif.dGd53p  = dGt        # tail dangle FE
+        jmotif.dG_dVlp = Vbranch_wt # branch dangle + 5'3'-head + cle closing
+        jmotif.dGVpq   = Vpqh       # FE from branches within (ph, qh)
         jmotif.dG_fs   = 0.0        # free strand correction
+        
+        # enthalpy
+        jmotif.dHVpq   = Hpqh       # branch dH contributions without adjustments
+        jmotif.dG_dVlp = self.fe.find_branch_dHwt(i_h, j_h, branches, opt_iMBL)
+        jmotif.Hij     = Hpqh + jmotif.dG_dVlp  # free strand correction
+        
+        
+        
         self.fe.smap.glink[i_h][j_h].add_link(Link(jmotif)) 
         
         
         if debug_assign_J:
             # pairing at i_h, j_h
             pJ = branches[0][0]; qJ = branches[0][1]
-            print "assign_J: ij_h(%2d,%2d)[%s][%s], pqJ(%2d,%2d), dG(%8.2f)" \
-                % (i_h, j_h, ctp, btp, pJ, qJ, dG)
-            print self.fe.smap.glink[i_h][j_h].lg[0].motif[0].show_Motif()
+            print ("assign_J: ij_h(%2d,%2d)[%s][%s], pqJ(%2d,%2d), dG(%8.2f)" \
+                % (i_h, j_h, ctp, btp, pJ, qJ, dG))
+            print (self.fe.smap.glink[i_h][j_h].lg[0].motif.show_Motif())
+            
+            if plan_stop_on_pass:
+                print ("planned exit at end of assign_J");
+                sys.exit(0)
+            #
             
         #
         
@@ -1375,9 +1617,10 @@ class TreeNode2Motif(NodeVisitor):
     
     
     def assign_M(self, i_h, j_h, branches, stype, vtype):
-        debug_assign_M = True # False # 
+        debug_assign_M = False # True # 
+        plan_stop_on_pass = False
         if debug_assign_M:
-            print "Enter assign_M{ij_h(%d,%d), branches = %s" % (i_h, j_h, branches)
+            print ("Enter assign_M{ij_h(%d,%d), branches = %s" % (i_h, j_h, branches))
         #
         
         # has pairing at i_h, j_h
@@ -1391,46 +1634,60 @@ class TreeNode2Motif(NodeVisitor):
         # xx!!!! 190707 !!!!xx needs some updating
         #dGh = self.fe.calc_dG(i_h, j_h, 5.0, self.fe.T)
         
-        Vpqh   = self.get_branchingFE(branches)
+        Vpqh, Hpqh = self.get_branchingFE(branches)
         # Vpqh = FE contribution from I/M branches or 0.0 for B 
-        Vclose = self.fe.find_branch_weight(i_h, j_h, branches, opt_iMBL)
+        Vclose = self.fe.find_branch_dGwt(i_h, j_h, branches, opt_iMBL)
         if debug_assign_M:
-            print "assign_M: Vpqh(%8.2f), Vclose(%8.2f), gbranches:  %s" \
-                % (Vpqh, Vclose, gbranches)
-        #
-        
-        dGt = 0.0
-        if False:
-            # needs to have actual boundary conditions to make it
-            # worth doing this calculation. Presently, this is only
-            # called when the boundaries are (i_h,j_h).
-            ib = i_h; jb = j_h
-            dGt = self.fe.stem_dangle(ib,  jb,  # boundaries (often [0 to self.N-1]) 
-       	                              i_h, j_h, # 5'3' tail of the stem
-                                      True,     # True -> tail dangle, False -> head dangle
-                                      False)    # invoke debug option
+            print ("assign_M: Vpqh(%8.2f), Vclose(%8.2f), branches:  %s" \
+                % (Vpqh, Vclose, branches))
         #
         
         # add any corrections for tetraloop, local loop
         # entropy or whatever here
         
-        
         dG = Vpqh + Vclose
+        
         mmotif = MBL(i_h, j_h, dG, ctp, btp, branches)
         mmotif.vtype   = vtype
-        mmotif.MLclose = Vclose # global corrected FE
-        mmotif.dGVpq   = Vpqh   # local corrected FE
-        mmotif.dGd53p  = dGt    # tail dangle FE
+        mmotif.dG_dVlp = Vclose # branch dangle + 5'3'-head + cle closing
+        mmotif.dGVpq   = Vpqh   # FE from branches within (ph, qh)
         mmotif.dG_fs   = 0.0    # free strand correction
+        
+        # enthalpy
+        Hclose = self.fe.find_branch_dHwt(i_h, j_h, branches, opt_iMBL)
+        if debug_assign_M:
+            print ("assign_M: Hpqh(%8.2f), Hclose(%8.2f), branches:  %s" \
+                % (Hpqh, Hclose, branches))
+        #
+        
+        mmotif.dHVpq   = Hpqh 
+        mmotif.dH_dVlp = Hclose
+        mmotif.Hij     = Hpqh + Hclose
+        
         self.fe.smap.glink[i_h][j_h].add_link(Link(mmotif))                
         if debug_assign_M:
-            print "assign_M: ij_h(%2d,%2d)[%s][%s] -> dG(%8.2f)" \
-                % (i_h, j_h, ctp, btp, dG), branches
+            print ("free energy: ========")
+            print ("dGVpq:      %8.2f" % (mmotif.dGVpq))
+            print ("dG_dVlp:    %8.2f" % (mmotif.dG_dVlp))
+            print ("--------    ----------")
+            print ("Vij:        %8.2f" % (mmotif.Vij))
+            print ("enthalpy:    ========")
+            print ("dHVpq:      %8.2f" % (mmotif.dHVpq))
+            print ("dH_dVlp:    %8.2f" % (mmotif.dH_dVlp))
+            print ("--------    ----------")
+            print ("Hij:        %8.2f" % (mmotif.Hij))
+            print ("assign_M: ij_h(%2d,%2d)[%s][%s] -> dG(%8.2f)" \
+                % (i_h, j_h, ctp, btp, dG), branches)
             
             for Vk in self.fe.smap.glink[i_h][j_h].lg[0].motif:
-                print Vk.show_Motif()
+                print (Vk.show_Motif())
             #endfor
             
+            if plan_stop_on_pass:
+                print ("planned exit at end of assign_M");
+                sys.exit(0)
+            #
+
         #
         
     #
@@ -1438,9 +1695,10 @@ class TreeNode2Motif(NodeVisitor):
     
     
     def assign_P(self, i_h, j_h, branches, stype, vtype):
-        debug_assign_P = False # True # 
+        debug_assign_P = True # False # 
+        plan_stop_on_pass = False
         if debug_assign_P:
-            print "Enter assign_P{ij_h(%d,%d), branches = %s" % (i_h, j_h, branches)
+            print ("Enter assign_P{ij_h(%d,%d), branches = %s" % (i_h, j_h, branches))
         #
         
         # has no pairing at i_h, j_h
@@ -1458,23 +1716,21 @@ class TreeNode2Motif(NodeVisitor):
         function. This means opt_iMBL = False in this case. The result
         is that the function
         
-            self.fe.find_branch_weight(i_h, j_h, branches, opt_iMBL)
+            self.fe.find_branch_dGwt(i_h, j_h, branches, opt_iMBL)
         
         does not call cle_MloopEV() and only reports results from
-        trim_53pStems(). 
+        dG_trim_53pStems(). 
         
         """
         
-        Vpqh   = self.get_branchingFE(branches)
+        Vpqh, Hpqh = self.get_branchingFE(branches)
         # Vpqh = FE contribution from I/M branches or 0.0 for B
         
-        Vbranch_wt = self.fe.find_branch_weight(i_h, j_h, branches, opt_iMBL)
+        Vbranch_wt = self.fe.find_branch_dGwt(i_h, j_h, branches, opt_iMBL)
         if debug_assign_P:
-            print "assign_P: Vpqh(%8.2f), Vbranch_wt(%8.2f), gbranches:  %s" \
-                % (Vpqh, Vbranch_wt, branches)
+            print ("assign_P: Vpqh(%8.2f), Vbranch_wt(%8.2f), gbranches:  %s" \
+                % (Vpqh, Vbranch_wt, branches))
         #
-        
-        dGt = 0.0 # no tail dangle contribution to a P-loop
         
         # add any corrections for tetraloop, local loop
         # entropy or whatever here
@@ -1483,20 +1739,32 @@ class TreeNode2Motif(NodeVisitor):
         
         pmotif = MBL(i_h, j_h, dG, ctp, btp, branches)
         pmotif.vtype   = vstem.vtype
-        pmotif.MLclose = Vbranch_wt # global corrected FE
-        pmotif.dGVpq   = Vpqh       # local corrected FE
-        pmotif.dGd53p  = dGt        # tail dangle FE
+        pmotif.dG_dVlp = Vbranch_wt # branch dangle + 5'3'-head + cle closing
+        pmotif.dGVpq   = Vpqh       # FE from branches within (ph, qh)
         pmotif.dG_fs   = 0.0        # free strand correction
+        
+        # enthalpy
+        pmotif.dHVpq    = Hpqh
+        pmotif.dH_dVlp  = self.fe.dH_trim_53pStems(i, j,      ## 5' to 3' of [i/p]MBL
+                                                  branches,  ## (class MBPptr)
+                                                  opt_iMBL)  ## T -> iMBL, F -> pMBL
+        pmotif.Hij     = Hpqh + mmotif.dH_dVlp
+        
+        
         self.fe.smap.glink[i_h][j_h].add_link(Link(pmotif))                
         
         if debug_assign_P:
-            print "assign_P: ij_h(%2d,%2d)[%s][%s] -> dG(%8.2f)" \
-                % (i_h, j_h, ctp, btp, dG), branches
+            print ("assign_P: ij_h(%2d,%2d)[%s][%s] -> dG(%8.2f)" \
+                % (i_h, j_h, ctp, btp, dG), branches)
             
             for Vk in self.fe.smap.glink[i_h][j_h].lg[0].motif:
-                print Vk.show_Motif()
+                print (Vk.show_Motif())
             #endfor
             
+            if plan_stop_on_pass:
+                print ("planned exit at end of assign_P");
+                sys.exit(0)
+            #
         #
         
     #
@@ -1531,11 +1799,12 @@ class TreeNode2Motif(NodeVisitor):
         """
         
         debug_assign_Stem = False # True # 
+        plan_stop_on_pass = False
         if debug_assign_Stem:
-            print "Enter assign_Stem{(%2d,%2d):(%2d,%2d)" % (i_t, j_t, i_h, j_h)
-            print "                   vstem: %s" % (vstem)
-            print "                   stype[%s], vtype[%s]" % (stype, vtype)
-            print "                fr_zones: %s}" % (fr_zones)
+            print ("Enter assign_Stem{(%2d,%2d):(%2d,%2d)" % (i_t, j_t, i_h, j_h))
+            print ("                   vstem: %s" % (vstem))
+            print ("                   stype[%s], vtype[%s]" % (stype, vtype))
+            print ("                fr_zones: %s}" % (fr_zones))
         #
         
         # First, we search the head of the stem for branching
@@ -1566,12 +1835,15 @@ class TreeNode2Motif(NodeVisitor):
         
         # Now find the free energy of the loop region or the 
         
-        Vpqh   = self.get_branchingFE(gbranches)
+        Vpqh, Hpqh = self.get_branchingFE(gbranches)
         # Vpqh = FE contribution from I/M branches or 0.0 for B 
-        Vclose = self.fe.find_branch_weight(i_h, j_h, gbranches)
+        Vclose = self.fe.find_branch_dGwt(i_h, j_h, gbranches)
+        Hclose = self.fe.find_branch_dHwt(i_h, j_h, gbranches)
         if debug_assign_Stem:
-            print "Vpqh(%8.2f), Vclose(%8.2f), gbranches:  %s" \
-                % (Vpqh, Vclose, gbranches)
+            print ("Vpqh(%8.2f), Vclose(%8.2f), gbranches:  %s" \
+                % (Vpqh, Vclose, gbranches))
+            print ("Hpqh(%8.2f), Hclose(%8.2f), gbranches:  %s" \
+                % (Hpqh, Hclose, gbranches))
         #endif
         
         
@@ -1580,36 +1852,54 @@ class TreeNode2Motif(NodeVisitor):
         btp = "%s%s" % (stype, vstem.vtype)
         
         dG = Vpqh + Vclose
-        # total free energy at the head including the closing point at
-        # (i_h, j_h)
+        dH = Hpqh + Hclose
+        
+        # total free energy and enthalpy at the head including the
+        # closing point at (i_h, j_h)
         
         n = vstem.slen - 2
         if debug_assign_Stem:
-            print "ij_h(%2d,%2d), slen = %d, dG = %8.2f" % (i_h, j_h, n+2, dG)
+            print ("ij_h(%2d,%2d), slen = %2d, dG = %8.2f" % (i_h, j_h, n+2, dG))
+            print ("                        dH = %8.2f" % (dH))
+            # sys.exit(0)
         #
         
         if ngbranches == 0:
             hmotif = XLoop(i_h, j_h, Vclose, 'B', btp)
             hmotif.vtype = vstem.vtype
+            
+            hmotif.dH_dVlp = Hclose
+            hmotif.dHVpq   = Hpqh
+            hmotif.Hij     = dH # Hpqh + Hclose
             self.fe.smap.glink[i_h][j_h].add_link(Link(hmotif))
         elif ngbranches == 1:
             imotif = MBL(i_h, j_h, dG, 'I', btp, gbranches)
             imotif.vtype   = vstem.vtype
-            imotif.MLclose = Vclose
-            imotif.dGVpq   = Vpqh
+            
+            imotif.dG_dVlp = Vclose # branch dangle + 5'3'-head + cle closing
+            imotif.dGVpq   = Vpqh   # FE from branches within (ph, qh)
+            
+            imotif.dH_dVlp = Hclose
+            imotif.dHVpq   = Hpqh
+            imotif.Hij     = dH # Hpqh + Hclose
             
             self.fe.smap.glink[i_h][j_h].add_link(Link(imotif))
             
         elif ngbranches > 1:
             mmotif = MBL(i_h, j_h, dG, 'M', btp, gbranches)
             mmotif.vtype   = vstem.vtype
-            mmotif.MLclose = Vclose
-            mmotif.dGVpq   = Vpqh
+            
+            mmotif.dG_dVlp = Vclose # branch dangle + 5'3'-head + cle closing
+            mmotif.dGVpq   = Vpqh   # FE from branches within (ph, qh)
+            
+            mmotif.dH_dVlp = Hclose
+            mmotif.dHVpq   = Hpqh
+            mmotif.Hij     = dH # Hpqh + Hclose
             
             self.fe.smap.glink[i_h][j_h].add_link(Link(mmotif))
         else:
-            print "ERROR(assign_Stem): something seriously wrong ngbranches = %d" \
-                % ngbranches
+            print ("ERROR(assign_Stem): something seriously wrong ngbranches = %d" \
+                % ngbranches)
             sys.exit(1)
         #
         
@@ -1619,11 +1909,14 @@ class TreeNode2Motif(NodeVisitor):
         
         # build a map entry for every Pair in the stem
         stm = [vstem.stem[n + 1]]
-        dGp = [Vclose]
+        dGp = [Vclose]; dHp = [Hclose]
         for k in range(n, -1, -1): # bpk in vstem.stem:
             
-            bpk = vstem.stem[k]
-            iss = bpk.i; jss = bpk.j
+            bpk   = vstem.stem[k]
+            bpkp1 = vstem.stem[k+1]
+            iss  = bpk.i;   jss  = bpk.j
+            issf = bpkp1.i; jssf = bpkp1.j
+            
             stm += [bpk]
             num_bp = len(stm)
             
@@ -1634,24 +1927,59 @@ class TreeNode2Motif(NodeVisitor):
                                              num_bp,   # the number of bp in the stem
                                              False)    # option to debug
             
-            if debug_assign_Stem:
-                s  =  "k[%2d]: " % (k)
-                s += "xi_stm(%8.2f), L_eff(%8.2f), dGloc_stm(%8.2f), dGloc_fs(%8.2f)" \
-                    % (xi_stm, L_eff, dGloc_stm, dGloc_fs)
-                print s
-            #endif
+            ddGl = (dGloc_stm - dGloc_fs) # local free energy Gstm - Gfs
             
             # 190726: generalized description of pairing FE  vvvvvvvvvvvvvvvvvvvv
-            dGp_k  = self.fe.calc_dGbp(iss, jss, xi_stm)
+            if not (issf - iss == 1 and jss - jssf == 1):
+                # add connected I-loop between the effective stems
+                
+                dGp_k = self.fe.cle_IloopE(iss,  jss,   # tail of I-loop 
+                                           issf, jssf,  # head of I-loop 
+                                           xi_stm)      # [nt] Kuhn length
+                
+                dHp_k = self.fe.dH_IloopE(iss,  jss,   # tail of I-loop 
+                                          issf, jssf,  # head of I-loop 
+                                          xi_stm)      # [nt] Kuhn length
+                
+                if debug_assign_Stem:
+                    s = "Iloop(k=%2d): ijss(%2d,%2d) -> ijssf(%2d,%2d)[%s]" \
+                        % (k, iss, jss, issf, jssf, self.fe.btype[iss][jss].f2nt)
+                    s += "xi_stm(%8.2f), L_eff(%8.2f), dGloc_stm(%8.2f), dGloc_fs(%8.2f)\n"\
+                         % (xi_stm, L_eff, dGloc_stm, dGloc_fs)
+                    s += "ddGl(%8.2f), dGp_k(%8.2f), dHp_k(%8.2f)" % (ddGl, dGp_k, dHp_k)
+                    print (s)
+                    #sys.exit(0)
+                #
+                
+            else:
+                
+                dGp_k  = self.fe.calc_dGbp(iss, jss, xi_stm)
+                dHp_k  = self.fe.calc_dHbp(iss, jss, xi_stm)
+                
+                if debug_assign_Stem:
+                    s = "aStem(k=%2d): ijss(%2d,%2d)::ijssf(%2d,%2d)[%s]" \
+                        % (k, iss, jss, issf, jssf, self.fe.btype[iss][jss].f2nt)
+                    s += "xi_stm(%8.2f), L_eff(%8.2f), dGloc_stm(%8.2f), dGloc_fs(%8.2f)\n"\
+                         % (xi_stm, L_eff, dGloc_stm, dGloc_fs)
+                    s += "ddGl(%8.2f), dGp_k(%8.2f), dHp_k(%8.2f)" % (ddGl, dGp_k, dHp_k)
+                    print (s)
+                    #sys.exit(0)
+                #endif
+                
+            #
+            
             # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-            dG += dGp_k
-            dGp += [dGp_k]
+            dG  += dGp_k;   dH  += dHp_k
+            dGp += [dGp_k]; dHp += [dHp_k]
+            
             
             smotif = Stem(list(reversed(stm)))
             smotif.xi         = xi_stm    # Kuhn length of stem
             smotif.dG_l       = dGloc_stm # local FE from stem formation
             smotif.dG_fs      = dGloc_fs  # equivalent free strand FE
-            smotif.Vij        = dG        # total FE
+            # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+            smotif.Vij        = dG + ddGl # total FE (including local FE)
+            # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
             smotif.dGp \
                 = list(reversed(dGp))     # individual pair FE contibutions
             smotif.dGloop     = Vclose    # H/I/M loop closing FE weight at (i_h,j_h)
@@ -1660,28 +1988,48 @@ class TreeNode2Motif(NodeVisitor):
                 = deepcopy(gbranches)     # branches closing the stem
             
             
+            smotif.dHp \
+                = list(reversed(dHp))     # individual pair FE contibutions
+            smotif.Hpqh       = Hpqh      # FE contribution from adjoining X/J/P
+            smotif.Hij        = dH
+            
+            #print (len(self.fe.smap.glink))
+            #print (iss, jss)
+            
             self.fe.smap.glink[iss][jss].add_link(Link(smotif))
             
             if debug_assign_Stem:
-                print "a%s stem: ijss(%3d,%3d):ijh(%3d,%3d), stemlen = %2d: " \
-                    % (vtype, iss, jss, i_h, j_h, len(stm))
-                #print "         %s" % (list(reversed(stm)))
+                print ("a%s stem: ijss(%3d,%3d):ijh(%3d,%3d), stemlen = %2d: " \
+                    % (vtype, iss, jss, i_h, j_h, len(stm)))
+                print ("dG(%8.2f) + ddGl(%8.2f) = dGtot(%8.2f) vs  Vij(%8.2f)" \
+                    % (dG,
+                       ddGl,
+                       dG + ddGl,
+                       self.fe.smap.glink[iss][jss].lg[0].motif.get_Vij()))
+                print ("                                   dH(%8.2f) vs  Hij(%8.2f)" \
+                    % (dH, self.fe.smap.glink[iss][jss].lg[0].motif.get_Hij()))
+                #print ("         %s" % (list(reversed(stm))))
+                #sys.exit(0)
             #
             
-        #
+        #endfor k
         
         if debug_assign_Stem:
-            print "summary(assign_Stem){(%2d,%2d):(%2d,%2d)}:" % (i_t, j_t, i_h, j_h)
+            print ("summary(assign_Stem){(%2d,%2d):(%2d,%2d)}:" % (i_t, j_t, i_h, j_h))
             for bpk in vstem.stem:
                 iss = bpk.i; jss = bpk.j
                 
                 for ijSt in self.fe.smap.glink[iss][jss].lg[0].motif:
-                    print ijSt.show_Motif()
+                    print (ijSt.show_Motif())
                 #endfor
                 
             #endfor
              
-            # sys.exit(0)
+            if plan_stop_on_pass:
+                print ("planned exit at end of assign_S");
+                sys.exit(0)
+            #
+            
         #endif
     #
     
@@ -1705,9 +2053,9 @@ class TreeNode2Motif(NodeVisitor):
         i_h = vstem.ih; j_h = vstem.jh
         vtype = vstem.vtype
         if debug_write_StemMotif:
-            print "Enter write_StemMotif{(%2d,%2d):(%2d,%2d)}[%s]" \
-                % (i_t, j_t, i_h, j_h, stype)
-            print "      stemlen:     %d" % vstem.slen
+            print ("Enter write_StemMotif{(%2d,%2d):(%2d,%2d)}[%s]" \
+                % (i_t, j_t, i_h, j_h, stype))
+            print ("      stemlen:     %d" % vstem.slen)
         #
         
         """@
@@ -1723,7 +2071,7 @@ class TreeNode2Motif(NodeVisitor):
         
         if vstem.slen > 1:
             if debug_write_StemMotif:
-                print "write_StemMotif(%2d, %2d) -> build Stem" % (i_t, j_t)
+                print ("write_StemMotif(%2d, %2d) -> build Stem" % (i_t, j_t))
             #
             
             # build the stem
@@ -1740,14 +2088,14 @@ class TreeNode2Motif(NodeVisitor):
             ngbranches = len(gbranches)
             
             if debug_write_StemMotif:
-                print "ngbranches(%d): %s" % (ngbranches, gbranches)
+                print ("ngbranches(%d): %s" % (ngbranches, gbranches))
             #
             
             if ngbranches > 0:
                 
                 if debug_write_StemMotif:
-                    print "found isolated bp at (%2d, %2d),  gbranches:  %s" \
-                        % (i_h, j_h, gbranches)
+                    print ("found isolated bp at (%2d, %2d),  gbranches:  %s" \
+                        % (i_h, j_h, gbranches))
                 #
                 
                 if ngbranches == 1:
@@ -1779,14 +2127,14 @@ class TreeNode2Motif(NodeVisitor):
                 
             elif ngbranches == 0:
                 if debug_write_StemMotif:
-                    print "write_StemMotif(%2d, %2d) -> build B-loop" % (i_t, j_t)
+                    print ("write_StemMotif(%2d, %2d) -> build B-loop" % (i_t, j_t))
                 #
                 
                 self.assign_B(i_h, j_h, stype, vtype)
                 
             else:
-                print "ERROR: ??? don't understand what to make of this case!"
-                print "       ij_h(%2d,%2d)[%s]" % (i_h, j_h, vtype)
+                print ("ERROR: ??? don't understand what to make of this case!")
+                print ("       ij_h(%2d,%2d)[%s]" % (i_h, j_h, vtype))
                 sys.exit(1)
             #
             
@@ -1813,12 +2161,14 @@ class TreeNode2Motif(NodeVisitor):
     """
     
     
-    def get_branchingFE(self, branches): # both type I and M 
+    def get_branchingFE(self, branches): # both type I and M
+        dH_V = 0.0
         dG_V = 0.0
         dG_local = 0.0 # presently, this is always zero
         for Vk in branches:
             i_Vk = Vk[0]; j_Vk = Vk[1]
             dG_V += self.fe.smap.glink[i_Vk][j_Vk].lg[0].Vij
+            dH_V += self.fe.smap.glink[i_Vk][j_Vk].lg[0].motif.get_Hij()
             
             # add any corrections for the cost of forming the branch
             # (or branches) between (i_h,j_h) and [(pV0,qV0),
@@ -1829,9 +2179,10 @@ class TreeNode2Motif(NodeVisitor):
         
         # add the FE contributions together 
         dGloop = dG_local + dG_V
-        
-        return dGloop
+        dHloop = dH_V
+        return dGloop, dHloop
     #
+    
     
     
     
@@ -1839,22 +2190,22 @@ class TreeNode2Motif(NodeVisitor):
         """I think this is probably less used or maybe not used anymore"""
         debug_get_ssbranches = False # True # 
         if debug_get_ssbranches:
-            print "Enter get_ssbranches(), closed = %s" % closed
+            print ("Enter get_ssbranches(), closed = %s" % closed)
         #
         
         branches = []
         for vstem in self.ssStems:
             gstemtype = type(vstem).__name__
-            # print gstemtype
+            # print (gstemtype)
             if not gstemtype == "Stem": # this __must__ be class Stem
-                print "ERROR: ssStem contains objects other than type Stem"
-                print "       %s: ijss = (%2d,%2d)" % (gstemtype, vstem.it, vstem.jt)
+                print ("ERROR: ssStem contains objects other than type Stem")
+                print ("       %s: ijss = (%2d,%2d)" % (gstemtype, vstem.it, vstem.jt))
                 sys.exit(1)
             #
             
             iV = vstem.it; jV = vstem.jt
             if debug_get_ssbranches:
-                print "ib(%2d) <  iV(%2d) < jV(%2d) <  jb(%d)" % (ib, iV, jV, jb)
+                print ("ib(%2d) <  iV(%2d) < jV(%2d) <  jb(%d)" % (ib, iV, jV, jb))
             #
             
             if closed:
@@ -1878,7 +2229,7 @@ class TreeNode2Motif(NodeVisitor):
     def get_genbranches(self, ib, jb, closed = True):
         debug_get_genbranches = False # True # 
         if debug_get_genbranches:
-            print "Enter get_genbranches(), closed = %s" % closed
+            print ("Enter get_genbranches(), closed = %s" % closed)
         #
         
         branches = []
@@ -1889,16 +2240,16 @@ class TreeNode2Motif(NodeVisitor):
                 continue
             #
             
-            # print gstemtype
+            # print (gstemtype)
             if not (gstemtype == "Stem" or gstemtype == "PseudoKnot"):
-                print "ERROR: genStem contains objects other than type Stem and PseudoKnot"
-                print "       %s: ijV = (%2d,%2d)" % (gstemtype, vstem.it, vstem.jt)
+                print ("ERROR: genStem contains objects other than type Stem and PseudoKnot")
+                print ("       %s: ijV = (%2d,%2d)" % (gstemtype, vstem.it, vstem.jt))
                 sys.exit(1)
             #
             
             iV = vstem.it; jV = vstem.jt
             if debug_get_genbranches:
-                print "ib(%2d) <= iV(%2d) < jV(%2d) <= jb(%d)" % (ib, iV, jV, jb)
+                print ("ib(%2d) <= iV(%2d) < jV(%2d) <= jb(%d)" % (ib, iV, jV, jb))
             #
             
             if closed:
@@ -1915,7 +2266,7 @@ class TreeNode2Motif(NodeVisitor):
 
             if len(branches) > 1:
                 if debug_get_genbranches:
-                    print "get_genbranches: branches = %s" % branches
+                    print ("get_genbranches: branches = %s" % branches)
                 #
                 
                 k = 0
@@ -1925,10 +2276,10 @@ class TreeNode2Motif(NodeVisitor):
                     
                     if ik1 <= ik2 and jk2 <= jk1:
                         if debug_get_genbranches:
-                            print "get_genbranches: branches = %s" % branches
-                            print "ik1(%2d) <= ik2(%2d) < jk2(%2d) <= jk1(%2d)" \
-                                % (ik1, ik2, jk2, jk1)
-                            print "deleting ijk2(%2d,%2d)" % (ik2, jk2)
+                            print ("get_genbranches: branches = %s" % branches)
+                            print ("ik1(%2d) <= ik2(%2d) < jk2(%2d) <= jk1(%2d)" \
+                                % (ik1, ik2, jk2, jk1))
+                            print ("deleting ijk2(%2d,%2d)" % (ik2, jk2))
                         #
                         
                         del branches[k+1]
@@ -1973,9 +2324,9 @@ def test0(cl):
     lt[ndx].add_lnode((0,99), dG, 'S', 'sa')
     lt[ndx].add_lnode((1,98), dG, 'B', 'sa')
     for thr in lt[ndx].thread:
-        print thr.disp_lnode()
+        print (thr.disp_lnode())
     #
-    print dt.makeLThreadDotBracket_VARNA(lt[ndx], 0)
+    print (dt.makeLThreadDotBracket_VARNA(lt[ndx], 0))
     # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
     from ChPair     import LThread2ChPair
     chdt = LThread2ChPair(lt[ndx], "test0")
@@ -1990,23 +2341,35 @@ def test0(cl):
 def test1(cl):
     aList = [123, 'xyz', 'zara', 'abc']
     aList.insert( 3, 2009)
-    print "Final List : ", aList
+    print ("Final List : ", aList)
 #
 
 
 def test2(cl):
+    from SettingsPacket  import InputSettings
     from Vienna2TreeNode import Vienna2TreeNode
     # The only way to get this to work is to load this module _within_
     # this specific method. When I do that, it will run without
     # causing circular definitions of TreeNode and Vienna2TreeNode. So
     # it accomplishes a certain amound of independence as though this
     # were a separate program nowhere located within TreeNode.py. 
+
+    iSetUp = InputSettings("RNA")
+    iSetUp.set_source("test2 *TreeNode)")
+    iSetUp.set_program("TreeNode.py")
+    
+    #iSetUp.useTurner  = True
+    #iSetUp.useViS     = False
+    #iSetUp.usegMatrix = args.usegMatrix
+    #iSetUp.gMflnm     = "none"
+    iSetUp.set_FEparamData() # default Turner
+    
+    # set up the actual FE Data according to the settings
+    iSetUp.set_ViennaParams()
     
     vs = Vstruct()
-    vs = Vstruct()
-    vs.set_system("RNA")
-    #vs.set_system("Chromatin")
-
+    vs.set_system(iSetUp)
+    
     
     
     #          0         10        20        30        40        50        60        70        80        90
@@ -2044,31 +2407,31 @@ def test2(cl):
     
     tf = LThreadBuilder(v2t)
     tf.visit(v2t.genTree)
-    print "LThread notation: "
+    print ("LThread notation: ")
     tf.disp_lt()
-    # print "planned exit"; sys.exit(0);
+    # print ("planned exit"); sys.exit(0);
     
-    # print dt.makeLThreadDotBracket_VARNA(ds.lt, 0)
+    # print (dt.makeLThreadDotBracket_VARNA(ds.lt, 0))
     vf = LThread2Vienna()
     vf.lt2vs(tf.lt)
     vf.set_vstr(v2t.vstr)
     vf.set_vseq(v2t.vseq)
     
-    print "structure sequence: "
-    print vf.vstr
-    print "vsBPlist: "
+    print ("structure sequence: ")
+    print (vf.vstr)
+    print ("vsBPlist: ")
     for bpk in vf.vsBPlist:
-        print bpk.disp_Pair()
+        print (bpk.disp_Pair())
     #endfor
     
-    print "vsPKlist: "
+    print ("vsPKlist: ")
     for bpk in vf.vsPKlist:
-        print bpk.disp_Pair()
+        print (bpk.disp_Pair())
     #endfor
     
-    print "vsMPlist: "
+    print ("vsMPlist: ")
     for bpk in vf.vsMPlist:
-        print bpk.disp_Pair()
+        print (bpk.disp_Pair())
     #endfor
     
 #    

@@ -1,11 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
 program:        ChrConstants.py
 
 Creation Date:  cr 2017.03~ (in various levels of development)
-Last Update:    190719
+Last Update:    200210 (upgraded to python3)
 Version:        1.0
 
 
@@ -33,17 +33,34 @@ associated with features of chromatin.
 T37C    = 310.15   # [K] 37C in Kelven
 
 # fundamental coarse grained resolution length
-seg_len = 5000.0
+seg_len = 5000.0  # [bps] segment length (bead-to-bead distance)
 
 # constants: in entropy evaluation
 xi       = 5.0    # # [bp] default stem Kuhn length
 xi_fs    = 5.0    # [nt] free strand Kuhn length (basically useless)
-lmbd     = 0.002  # [bps] binding distance := bps / seg_len 
+lmbd     = 0.002  # ratio "bond distance"/"segment length": 10 bp/5000 bp
+"""@
+
+   On lmbd: Actually, I think 10 bp sound way too generous. However,
+   maybe originally, I was thinking 2/1000. At any rate, currently,
+   the binding enthalpy weights are figured with this particular
+   parameterization, and that balance between entropy and enthalpy is
+   what most matters in any calculation.
+
+"""
 gmm      = 2.3    # dimensionless but related to D/2
 delta    = 2.0    # dimensionless exponetial scaling weight
 
 # constants: weights for the enthalpy terms 
-febase   = -6.0
+febase   = -6.0   # [kcal/mol], weight parameter
+"""@
+
+   I have varied this several times. I have tried various value.  At
+   one point, I had tried -4.7 kcal/mol; however, that seemed a bit
+   too weak.
+
+"""
+
 # [kcal/mol], weight parameter, also have used 4.7 kcal/mol 
 feshift  =  1.0 # (dimensionless, usually = 1)
 
@@ -75,8 +92,8 @@ length for chromatin is 1, where as for RNA, the minimum pair is at
 least a dinucleotide base pair.
 
 """
-max_bp_gap = 1
-
+max_aa_gap = 2
+max_pp_gap = 2
 
 
 minLoopLen  = 1 # [nt], minimum loop length (default is 1)
@@ -113,4 +130,6 @@ dG_range = 10.0 # [kcal/mol], FE range in suboptimal structures
 
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 # #################################################################
+
+
 

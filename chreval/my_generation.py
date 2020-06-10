@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -12,7 +12,7 @@ Functions:     add_noise
 
 Author:        Wayne Dawson
 creation date: around 1610--
-last update:   190403
+last update:   200312 (upgrade to python3), 190403
 version:       0
 
 
@@ -33,72 +33,77 @@ likely to be used by the other programs in this distribution.
 """
 
 
-from Vienna import Vstruct
-from BasicTools   import initialize_matrix
-from HeatMapTools import HeatMapTools
 import sys
 import random
 import argparse
 import os
 
+from MolSystem    import MolSystem
+from BasicTools   import initialize_matrix
+from HeatMapTools import HeatMapTools
+from Vienna       import Vstruct
+
 PROGRAM = "my_generation.py"
 
 def help_ExampleFile():
-    print "Here is an example of an input file:\n"
-    print "     > cat example.ss"
-    print "     .ABC..........abc.. 20 "
-    print "     ....DE...........de  3 "
-    print "     .......((..))...... 10 "
-    print "     {.................}  5"
-    print "\nThe first two sequences express a parallel stem"
-    print ".ABCDE........abcde\n"
-    print "The stem is divided into two pieces with weights 20 and 3,"
-    print "respectively."
-    print "The third sequence is an antiparallel stem of weight 10"
-    print ".......((..))......\n"
-    print "The fourth sequence is a CTCF \"{..}\" with an assigned weight 5."
-    print "{.................}\n"
-    print "If no weight is ascribed to the sequence, then a default value"
-    print "will be used for the elements in that line. Note also that part"
-    print "of the parallel stem overlaps with the CTCF. Hence, more than one"
-    print "structure is allowed in this scheme."
-    print "\ncommand line:"
-    print "\n     > %s -f example.ss" % PROGRAM
+    print ("Here is an example of an input file:\n")
+    print ("     > cat example.ss")
+    print ("     .ABC..........abc.. 20 ")
+    print ("     ....DE...........de  3 ")
+    print ("     .......((..))...... 10 ")
+    print ("     {.................}  5")
+    print ("\nThe first two sequences express a parallel stem")
+    print (".ABCDE........abcde\n")
+    print ("The stem is divided into two pieces with weights 20 and 3,")
+    print ("respectively.")
+    print ("The third sequence is an antiparallel stem of weight 10")
+    print (".......((..))......\n")
+    print ("The fourth sequence is a CTCF \"{..}\" with an assigned weight 5.")
+    print ("{.................}\n")
+    print ("If no weight is ascribed to the sequence, then a default value")
+    print ("will be used for the elements in that line. Note also that part")
+    print ("of the parallel stem overlaps with the CTCF. Hence, more than one")
+    print ("structure is allowed in this scheme.")
+    print ("\ncommand line:")
+    print ("\n     > %s -f example.ss" % PROGRAM)
 #    
 
 def help_ExampleSeq():
-    print "command line:\n"
-    print "     > %s -seq \".ABCDE.((..)).abcde\" \"{.................}\"" % PROGRAM
-    print "\nThe first sequence expresses a parallel stem"
-    print ".ABCDE........abcde\n"
-    print "and an antiparallel stem"
-    print ".......((..))......\n"
-    print "The second sequence is a CTCF."
-    print "{.................}\n"
-    print "To ascribe weights, an input file is required with the flag '-f'."
-    print "Use flag '-hExFile' for more information. Note also that part"
-    print "of the parallel stem overlaps with the CTCF. Hence, more than one"
-    print "structure is allowed in this scheme."
+    print ("command line:\n")
+    print ("     > %s -seq \".ABCDE.((..)).abcde\" \"{.................}\"" % PROGRAM)
+    print ("\nThe first sequence expresses a parallel stem")
+    print (".ABCDE........abcde\n")
+    print ("and an antiparallel stem")
+    print (".......((..))......\n")
+    print ("The second sequence is a CTCF.")
+    print ("{.................}\n")
+    print ("To ascribe weights, an input file is required with the flag '-f'.")
+    print ("Use flag '-hExFile' for more information. Note also that part")
+    print ("of the parallel stem overlaps with the CTCF. Hence, more than one")
+    print ("structure is allowed in this scheme.")
 #    
 
 
 def add_noise(N, hv):
-    # 170306wkd: I really don't know what to consider a valid range
-    # for noise with these experiments. However, it seems reasonable
-    # that one or two counts surely _could_ be noise, just by
-    # chance. Perhaps it is more, perhaps it is less, but in this
-    # scheme, I just add noise at random locations with a range
-    # between 0 and 2.
+    """@
     
-    # A further issue: I think it is questionable whether the
-    # distribution of noise should be treated as uniform or some
-    # weight that drops off like the pair interaction frequency. After
-    # all, spurious contacts are probably more likely on the short
-    # range of 1 to 10 segments, but beyond that, the probbability is
-    # likely rather small.  This is a very cheesy design here, in that
-    # it just blindly dumps noise anywhere without consideration of
-    # what the noise should really look like. Then again, we don't
-    # actually know what the "correct" distribution is. ... ... 
+    170306wkd: I really don't know what to consider a valid range for
+    noise with these experiments. However, it seems reasonable that
+    one or two counts surely _could_ be noise, just by chance. Perhaps
+    it is more, perhaps it is less, but in this scheme, I just add
+    noise at random locations with a range between 0 and 2.
+    
+    A further issue: I think it is questionable whether the
+    distribution of noise should be treated as uniform or some weight
+    that drops off like the pair interaction frequency. After all,
+    spurious contacts are probably more likely on the short range of 1
+    to 10 segments, but beyond that, the probbability is likely rather
+    small.  This is a very cheesy design here, in that it just blindly
+    dumps noise anywhere without consideration of what the noise
+    should really look like. Then again, we don't actually know what
+    the "correct" distribution is. ... ...
+    
+    """
     
     for j in range(0, N):
         for i in range(0,j):
@@ -107,18 +112,21 @@ def add_noise(N, hv):
             v = u1*u2*int(random.uniform(0,2) + 0.5)
             hv[i][j] = v
             hv[j][i] = v
-        #
+        #|endfor
+        
     #
+    
     return hv
 #
 
 
 def read_SeqFile(iflnm):
-    print iflnm
+    print (iflnm)
     if not os.path.isfile(iflnm):
-        print "ERROR: %s not found" % iflnm
+        print ("ERROR: %s not found" % iflnm)
         sys.exit(1)
     #
+    
     fp = open(iflnm, 'r')
     lfp = fp.readlines()
     fp.close()
@@ -129,33 +137,44 @@ def read_SeqFile(iflnm):
         if len(s) > 0:
             if s[0][0] == '#':
                 continue
+            #
+            
             if len(s) == 1:
                 ss_seq += [s[0]]
                 ss_wt  += [-1]
+                
             elif len(s) == 2:
                 ss_seq += [s[0]]
                 try:
                     wt = int(s[1])
                 except ValueError:
-                    print "ERROR: input file '%s' must contain a sequence and an integer" % iflnm
-                    print "       line(%d): " % k, s
+                    print ("ERROR: input file '%s' must contain a sequence and an integer" % iflnm)
+                    print ("       line(%d): " % k, s)
                     sys.exit(1)
                 #
-                if wt < 1:
-                    print "ERROR: input file '%s' must contain a sequence and a POSITIVE integer" % iflnm
-                    print "       line(%d): " % k, s
-                    sys.exit(1)
-                #
-                ss_wt += [wt]
-            else:
-                print "ERROR: input file '%s' has too many entries. I don't understand it." % iflnm
-                print "       line(%d): " % k, s
-                sys.exit(1)
                 
+                if wt < 1:
+                    print ("ERROR: input file '%s' must contain a sequence and a POSITIVE integer" % iflnm)
+                    print ("       line(%d): " % k, s)
+                    sys.exit(1)
+                #
+                
+                ss_wt += [wt]
+                
+            else:
+                print ("ERROR: input file '%s' has too many entries. I don't understand it." % iflnm)
+                print ("       line(%d): " % k, s)
+                sys.exit(1)
+            #
+            
         #
-    #
+        
+    #|endfor
+    
     for k in range(0, len(ss_seq)):
-        print ss_seq[k], ss_wt[k] 
+        print (ss_seq[k], ss_wt[k] )
+    #|endfor
+    
     return ss_seq, ss_wt
 #
 
@@ -166,67 +185,84 @@ def generate(ss_seq, ss_wt, w_noise, oflnm):
     k = 0
     N = len(ss_seq[0])
     
+    ms = MolSystem()
+    ms.set_system("Chromatin")
+    ms.set_JobType("generator")
+    ms.set_ParamType("genheat") # no parameter file needed
+    
     # setup objects and check input sequence (or sequences)
     for k in range(0, len(ss_seq)):
-        vs += [Vstruct()]
+        ms.set_mstr(ss_seq[k])
+        
+        vs += [Vstruct(ms)]
         n = len(ss_seq[k])
         
         # First, verify that there are no imcompatibilities with the
         # input sequences. One of the most obvious errors is that the
         # sequences are of different length.
         if not n == N:
-            print "ERROR: input sequence is not the same length as the others"
+            print ("ERROR: input sequence is not the same length as the others")
             m = 1
             for m in range(0, len(ss_seq)):
-                print "seq(%2d): %s" % (m, ss_seq[m])
-            print "new seq: %s" % ss_seq[k]
+                print ("seq(%2d): %s" % (m, ss_seq[m]))
+            #|endfor
+            
+            print ("new seq: %s" % ss_seq[k])
             sys.exit(1)
         #
+        
         n_vs = len(vs) - 1
         vs[n_vs].wt = ss_wt[n_vs]
-    #
+    #|endfor
     
     # display a summary if debugging
     if debug_generate:
         for k in range(0, len(vs)):
-            print "%d: %d" % (k, vs[k].wt)
-        #
+            print ("%d: %d" % (k, vs[k].wt))
+        #|endfor
+        
     #
     
     
     # Second, go on and analyze what is there.
     for k in range(0, len(vs)):
-        print "line(%2d): " % k
+        print ("line(%2d): " % k)
         #vs[k].reset_Vstruct()
         if debug_generate:
-            print "Xlist:  ", vs[k].Xlist
-            print "BPlist: ", vs[k].BPlist
+            print ("Xlist:  ", vs[k].Xlist)
+            print ("BPlist: ", vs[k].BPlist)
         #
-        vs[k].set_Vstruct(ss_seq[k])
+        
+        #vs[k].set_Vstruct(ss_seq[k]) # already assigned
         vs[k].scan_allTypes(0, 0)
         vs[k].print_vstr()
         
         if debug_generate:
-            print "Xlist:  ", vs[k].Xlist
-            print "BPlist: ", vs[k].BPlist
+            print ("Xlist:  ", vs[k].Xlist)
+            print ("BPlist: ", vs[k].BPlist)
         #
+        
         flag_other = True
         if flag_other:
             # display for information purposes
             if len(vs[k].BPlist) > 0:
-                print "secondary structure"
+                print ("secondary structure")
                 vs[k].print_Xlist_n(vs[k].BPlist)
             #
+            
             if len(vs[k].PKlist) > 0:
-                print "pk connects"
+                print ("pk connects")
                 vs[k].print_Xlist_n(vs[k].PKlist)
             #
+            
             if len(vs[k].MPlist) > 0:
-                print "CTCF connects"
+                print ("CTCF connects")
                 vs[k].print_Xlist_n(vs[k].MPlist)
             #
+            
         #
-    #
+        
+    #|endfor
     
     hv = []
     hv = initialize_matrix(hv, N, 0)
@@ -241,55 +277,66 @@ def generate(ss_seq, ss_wt, w_noise, oflnm):
             i = pair.i
             j = pair.j
             if debug_generate:
-                print "BPlist: ", vs[k].wt
+                print ("BPlist: ", vs[k].wt)
             #
+            
             if vs[k].wt > 0:
                 hv[i][j] = vs[k].wt
             else:
                 hv[i][j] = 3
             #
+            
             hv[j][i] = hv[i][j]
         #
+        
         for pair in vs[k].PKlist:
             i = pair.i
             j = pair.j
             if debug_generate:
-                print "PKlist: ", vs[k].wt
+                print ("PKlist: ", vs[k].wt)
             #
+            
             if vs[k].wt > 0:
                 hv[i][j] = vs[k].wt
             else:
                 hv[i][j] = 5
             #
+            
             hv[j][i] = hv[i][j]
         #
+        
         for pair in vs[k].MPlist:
             i = pair.i
             j = pair.j
             if debug_generate:
-                print "MPlist: ", vs[k].wt
+                print ("MPlist: ", vs[k].wt)
             #
+            
             if vs[k].wt > 0:
                 hv[i][j] = vs[k].wt
             else:
                 hv[i][j] = 100
             #
+            
             hv[j][i] = hv[i][j]
         #
+        
     #
+    
     if debug_generate:
-        print hv
+        print (hv)
     #
-    print "make heatmap"
+    
+    print ("make heatmap")
     htools = HeatMapTools() # default setup GenerateHeatMapTools()
     heatmap = htools.make_heatmap(hv)
-    #print heatmap
-    print "save heatmap in %s" % oflnm
+    #print (heatmap)
+    print ("save heatmap in %s" % oflnm)
     
     fp = open(oflnm, 'w')
     fp.write(heatmap)
     fp.close()
-    print "done"
+    print ("done")
 #
     
 
@@ -338,7 +385,7 @@ def main(cl):
     #
     # assign arguments
     args = parser.parse_args()
-    # print args
+    # print (args)
     if args.help_ExFile:
         help_ExampleFile()
         sys.exit(0)
@@ -353,8 +400,8 @@ def main(cl):
     oflnm = args.f_heatmap[0]
     iflnm = args.f_ss[0]
     w_noise = args.w_noise
-    print 'input file name:   ', iflnm
-    print 'output file name:  ', oflnm
+    print ('input file name:   ', iflnm)
+    print ('output file name:  ', oflnm)
 
     if ss_seq == None:
         # if ss_seq is 
@@ -364,12 +411,12 @@ def main(cl):
             ss_wt += [-1]
         #
     #
-    print 'input sequences:   '
+    print ('input sequences:   ')
     for k in range(0, len(ss_seq)):
         if ss_wt[k] > 0:
-            print "%s  %4d" % (ss_seq[k], ss_wt[k])
+            print ("%s  %4d" % (ss_seq[k], ss_wt[k]))
         else:
-            print "%s   default weight" % ss_seq[k]
+            print ("%s   default weight" % ss_seq[k])
         #
     #
     generate(ss_seq, ss_wt, w_noise, oflnm)

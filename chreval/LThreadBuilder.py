@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """@@@
 
@@ -10,7 +10,7 @@ Objects:       LThreadBuilder
 
 Author:        Wayne Dawson
 creation date: 170725 (originally part of Threads.py & RThreads.py and later TreeNode) 
-last update:   190725
+last update:   200211 (upgraded to python3), 191016
 version:       0.1
 
 Purpose:
@@ -144,7 +144,7 @@ from NaryTree   import TreeBuilder
 #  1     insert into a list
 #  2     parser for simple structures
 
-TEST = 2
+TEST = 3
 
 
 # 2. special local global function
@@ -156,7 +156,7 @@ PROGRAM      = "LThreadBuilder.py"  # name of the program
 # possibly in other parts.
 
 def usage():
-    print "USAGE: %s" % PROGRAM
+    print ("USAGE: %s" % PROGRAM)
 #
 
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -237,7 +237,7 @@ class NodeVisitor(object):
         debug_visit = False
         method_name = 'visit_' + type(node.name).__name__
         if debug_visit:
-            print method_name
+            print (method_name)
         #
         
         # method_name takes the form of the following strings:
@@ -299,30 +299,10 @@ standard representation. In short, LThread is useful for computing the
 free energy of the structure with the intermediary of applying
 Vienna2TreeNode.
 
-"""
 
-class LThreadBuilder(NodeVisitor):
-    def __init__(self, v2t):
-        inputObject = type(v2t).__name__
-        if not inputObject == "Vienna2TreeNode":
-            print "Error: LThreadBuilder requires objects of class Vienna2TreeNode."
-            print "       object entered: %s" % inputObject
-            sys.exit(1)
-        #
-        self.ssStems  = v2t.ssStems # helps with searching out branching
-        self.MPlist   = v2t.MPlist
-        self.N        = v2t.N
-        self.lt       = LThread(self.N)
-        self.fe       = v2t.fe # basic FE/entropy function for chromatin
+Structure of LThread's LNode
 
-        self.write_MultiPairs()
-        
-        if len(self.ssStems) == 0:
-            print "WARNING: structure list is empty"
-        #
-        self.initalized = True
-        """
-        LNode
+    class LNode:
         def __init__(self, ij_ndx, dGij_B, ctp, btp):
            self.ij_ndx = ij_ndx # (i, j) This is very important!
            # probably should have ij_ndx.i, ij_ndx.j calling it a pair.
@@ -331,7 +311,54 @@ class LThreadBuilder(NodeVisitor):
            self.ctp    = ctp    # connection type
            self.btp    = btp    # bond type
         #
-        """
+    
+        . . .
+    #
+
+
+"""
+
+class LThreadBuilder(NodeVisitor):
+    def __init__(self, v2t): # class Vienna2TreeNode
+        flag_debug = False # True # 
+        inputObject = type(v2t).__name__
+        if not inputObject == "Vienna2TreeNode":
+            print ("Error: LThreadBuilder requires objects of class Vienna2TreeNode.")
+            print ("       object entered: %s" % inputObject)
+            sys.exit(1)
+        #
+        self.ssStems  = v2t.ssStems # helps with searching out branching
+        self.MPlist   = v2t.MPlist
+        self.N        = v2t.N
+        self.lt       = LThread(self.N, v2t.molsys)
+        self.fe       = v2t.fe # basic FE/entropy function for chromatin
+        
+        #print ("v2t.fe: ", v2t.fe); sys.exit(0)
+        
+        if flag_debug:
+            # check to see of self.fe is assigned properly
+            for j in range(len(self.fe.btype)):
+                for i in range(j):
+                    print ("%3d,%3d: " % (i, j), self.fe.btype[i][j])
+                #
+            #
+            
+            print ("planned exit LThreadBuilder at 1"); sys.exit(0)
+            
+        #
+        
+        self.write_MultiPairs()
+        
+        if len(self.ssStems) == 0:
+            print ("WARNING: structure list is empty")
+        #
+        
+        self.initalized = True
+        
+        if flag_debug:
+            print ("planned exit LThreadBuilder at 2"); sys.exit(0)
+        #
+        
     #
     
     
@@ -352,7 +379,7 @@ class LThreadBuilder(NodeVisitor):
                     ww =  island.arches[k]
                     i_w = ww.it; j_w = ww.jt
                     self.lt.thread += [LNode((i_w,j_w), dG, ctp, 'wyspa')]
-                    # print "ww.internal: ij_w(%2d,%2d)" % (i_w, j_w), ww.internal
+                    # print ("ww.internal: ij_w(%2d,%2d)" % (i_w, j_w), ww.internal)
                     if len(ww.internal) > 0:
                         for vv in ww.internal:
                             self.lt.thread += [LNode((vv.i,vv.j), 0.0, ww.btype, 'wyspa')]
@@ -392,8 +419,8 @@ class LThreadBuilder(NodeVisitor):
         
         debug_visit_PseudoKnot = False # True # 
         if debug_visit_PseudoKnot:
-            print "Enter TreeBuilder.visit_PseudoKnot ijpk(%2d,%2d)" % (ipk, jpk)
-            print vpk
+            print ("Enter TreeBuilder.visit_PseudoKnot ijpk(%2d,%2d)" % (ipk, jpk))
+            print (vpk)
         #
         
         
@@ -407,15 +434,15 @@ class LThreadBuilder(NodeVisitor):
             self.lt.thread += [LNode((ipk,jpk), 0.0, 'P', 's')]
             
         else:
-            print "ERROR(visit_PseudoKnot): (%d,%d)" % (ipk, jpk)
-            print vpk.rootstems
-            print vpk.linkages
+            print ("ERROR(visit_PseudoKnot): (%d,%d)" % (ipk, jpk))
+            print (vpk.rootstems)
+            print (vpk.linkages)
             sys.exit(1)
         #
             
         for stem in vpk.rootstems:
             if debug_visit_PseudoKnot:
-                print "rootstem: ", stem
+                print ("rootstem: ", stem)
             #
             
             self.write_StemThread(stem)
@@ -424,7 +451,7 @@ class LThreadBuilder(NodeVisitor):
         self.lt.thread += [LNode((ipk,jpk), 0.0, 'l', 'bgn')]
         for stem in vpk.linkages:
             if debug_visit_PseudoKnot:
-                print "linkages: ", stem
+                print ("linkages: ", stem)
             #
             
             self.write_StemThread(stem, 'l')
@@ -458,9 +485,10 @@ class LThreadBuilder(NodeVisitor):
         nbranches = len(branches)
         
         if debug_write_StemThread:
-            print "Enter write_StemThread{(%2d,%2d):(%2d,%2d), stype(%s)" \
-                % (i_t, j_t, i_h, j_h, stype)
-            print "branches: ", branches
+            print ("Enter write_StemThread{(%2d,%2d):(%2d,%2d), stype(%s)" \
+                % (i_t, j_t, i_h, j_h, stype))
+            print ("branches: ", branches)
+            print ("vstem:    ", vstem.stem)
         #
         
         # presently, branches is not needed directly, but in the
@@ -474,9 +502,13 @@ class LThreadBuilder(NodeVisitor):
         for k in range(0, n): # bpk in vstem.stem:
             bpk = vstem.stem[k]
             i = bpk.i; j = bpk.j
+            
+            # xxxx 191103 please fix  VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+            
             # xx!!!! 190707 !!!!xx revise potential ... also, the stem
             # needs some changes in definition
             dG = self.fe.calc_dG(i, j, 5.0, self.fe.T)
+            # xxxx 191103 please fix  AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
             btp = "%s%s" % (stype, bpk.v)
             if not (bpk.v == 'a' or bpk.v == 'p'):
                 btp = bpk.name
@@ -486,13 +518,13 @@ class LThreadBuilder(NodeVisitor):
             self.lt.thread += [nth]
             
             if debug_write_StemThread:
-                print "(%2d,%2d)[ctp=%s][btp=%s]" % (i,j, ctp, btp)
+                print ("(%2d,%2d)[ctp=%s][btp=%s]" % (i,j, ctp, btp))
             #
             
         #endfor
         
         bpk = vstem.stem[n]
-        # print vstem.stem
+        # print (vstem.stem)
         i = bpk.i; j = bpk.j; v = bpk.v
         dG = self.fe.calc_dG(i, j, 5.0, self.fe.T)
         btp = "%s%s" % (stype, bpk.v)
@@ -505,15 +537,15 @@ class LThreadBuilder(NodeVisitor):
         ctp_term = 'x'
         if nbranches == 1:
             # i-loop
-            # print "iloop"
+            # print ("iloop")
             ctp_term = 'I'
         elif nbranches > 1:
-            # print "mloop"
+            # print ("mloop")
             # m-loop
             ctp_term = 'M'
         else:
             # no children = leaf
-            # print "hloop"
+            # print ("hloop")
             ctp_term = 'B'
         #
         
@@ -521,7 +553,7 @@ class LThreadBuilder(NodeVisitor):
         self.lt.thread += [LNode((i_h, j_h), dG, ctp_term, btp)]
         
         if debug_write_StemThread:
-            print "(%2d,%2d)[ctp=%s][btp=%s]" % (i,j, ctp, btp)
+            print ("(%2d,%2d)[ctp=%s][btp=%s]" % (i,j, ctp, btp))
         #
         
         # write the structure end note
@@ -534,10 +566,10 @@ class LThreadBuilder(NodeVisitor):
         branches = []
         for vstem in self.ssStems:
             gstemtype = type(vstem).__name__
-            # print gstemtype
+            # print (gstemtype)
             if not gstemtype == "Stem":
-                print "ERROR: ssStem contains objects other than type Stem"
-                print "       %s: ijss = (%2d,%2d)" % (gstemtype, vstem.it, vstem.jt)
+                print ("ERROR: ssStem contains objects other than type Stem")
+                print ("       %s: ijss = (%2d,%2d)" % (gstemtype, vstem.it, vstem.jt))
                 sys.exit(1)
             #
             
@@ -553,7 +585,7 @@ class LThreadBuilder(NodeVisitor):
     
     def disp_lt(self):
         for ltk in self.lt.thread:
-            print ltk.disp_lnode()
+            print (ltk.disp_lnode())
         #
         
     #
@@ -584,9 +616,9 @@ def test0(cl):
     lt[ndx].add_lnode((0,99), dG, 'S', 'sa')
     lt[ndx].add_lnode((1,98), dG, 'B', 'sa')
     for thr in lt[ndx].thread:
-        print thr.disp_lnode()
+        print (thr.disp_lnode())
     #
-    print dt.makeLThreadDotBracket_VARNA(lt[ndx], 0)
+    print (dt.makeLThreadDotBracket_VARNA(lt[ndx], 0))
     # vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
     from ChPair     import LThread2ChPair
     chdt = LThread2ChPair(lt[ndx], "test0")
@@ -601,28 +633,125 @@ def test0(cl):
 def test1(cl):
     aList = [123, 'xyz', 'zara', 'abc']
     aList.insert( 3, 2009)
-    print "Final List : ", aList
+    print ("Final List : ", aList)
 #
 
 
 def test2(cl):
+    # here we have checks for RNA
+    
     from Vienna2TreeNode import Vienna2TreeNode
+    from MolSystem       import genRNASeq
+    from MolSystem       import genChrSeq
+    from MolSystem       import MolSystem
+    from SettingsPacket  import InputSettings
+    
     # The only way to get this to work is to load this module _within_
     # this specific method. When I do that, it will run without
     # causing circular definitions of TreeNode and Vienna2TreeNode. So
     # it accomplishes a certain amound of independence as though this
     # were a separate program nowhere located within TreeNode.py. 
     
+    
+    
+    # some allowed RNA readable sequences
+    
+    #          0         10        20        30        40        50        60        70        80        90
+    #          |         |         |         |         |         |         |         |         |         |
+    #ss_seq = ".(((.(((((((.[[...)))))..]].((((...))))..))))).....([)]([)].......(..)..((..)).(..)..........................."
+    #ss_seq  = ".((............)).."
+    #ss_seq  = ".((((........)))).."
+    #ss_seq  = ".((((..(...).)))).."
+    #ss_seq   = ".(((.(((.(((....))).))).)))."
+    ss_seq   = ".(((.(((......(((....))).......))).)))."
+    rnaseq   = genRNASeq(ss_seq)
+    
+    if len(cl) > 1:
+        ss_seq = cl[1]
+    #
+    iSetUp = InputSettings("RNA")
+    iSetUp.set_source("test2 in LThreadBuilder)")
+    iSetUp.set_program("cantata")
+    # maybe a better name is "description" or "purpose", but, anyway,
+    # cantata converts an input sequence into a motif representation,
+    # which is the ultimate goal of these tools.
+    
+    iSetUp.set_FEparamData()
+    
+    # set up the actual FE Data according to the settings
+    iSetUp.set_ViennaParams() # presently sets useTurner
+    iSetUp.set_sequence(rnaseq)
+    iSetUp.set_structure(ss_seq)
+    
+    iSetUp.show_InputSettings()
+    
     vs = Vstruct()
-    vs = Vstruct()
-    vs.set_system("RNA")
-    #vs.set_system("Chromatin")
+    vs.set_system(iSetUp)
+    vs.parse_fullDotBracketStructure(ss_seq, rnaseq, True)
+    v2t = Vienna2TreeNode(vs, None, rnaseq)
+    v2t.vienna2tree()
+    
+    tf = LThreadBuilder(v2t)
+    tf.visit(v2t.genTree)
+    print ("LThread notation: ")
+    tf.disp_lt()
+    # print ("planned exit"); sys.exit(0);
+    
+    # print (dt.makeLThreadDotBracket_VARNA(ds.lt, 0))
+    vf = LThread2Vienna()
+    vf.lt2vs(tf.lt)
 
+    
+    print ("v2t.vseq", v2t.vseq)
+    print ("v2t.vstr", v2t.vstr)
+    
+    vf.set_vstr(v2t.vstr)
+    vf.set_vseq(v2t.vseq)
+    
+    print ("structure sequence: ")
+    print (vf.molsys.mseq)
+    print (vf.molsys.mstr)
+    print ("vsBPlist: ")
+    for bpk in vf.vsBPlist:
+        print (bpk.disp_Pair())
+    #endfor
+    
+    print ("vsPKlist: ")
+    for bpk in vf.vsPKlist:
+        print (bpk.disp_Pair())
+    #endfor
+    
+    print ("vsMPlist: ")
+    for bpk in vf.vsMPlist:
+        print (bpk.disp_Pair())
+    #endfor
+    
+#    
+
+def test3(cl):
+    # here we have checks for Chromatin, which has far more
+    # possibilities
+    
+    from Vienna2TreeNode import Vienna2TreeNode
+    from MolSystem       import genRNASeq
+    from MolSystem       import genChrSeq
+    from MolSystem       import MolSystem
+    from SettingsPacket  import InputSettings
+    
+    # The only way to get this to work is to load this module _within_
+    # this specific method. When I do that, it will run without
+    # causing circular definitions of TreeNode and Vienna2TreeNode. So
+    # it accomplishes a certain amound of independence as though this
+    # were a separate program nowhere located within TreeNode.py. 
+    
+    
+    
+    
     
     
     #          0         10        20        30        40        50        60        70        80        90
     #          |         |         |         |         |         |         |         |         |         |
-#    ss_seq = ".(((.(((((((.[[...)))))..]].((((...))))..))))).....([)]([)].......(..)..((..)).(..)..........................."
+    #ss_seq = ".(((.(((((((.[[...)))))..]].((((...))))..))))).....([)]([)].......(..)..((..)).(..)..........................."
     #ss_seq = "{(((.(((((((.[[...)))))..]].((((...))))..)))))..|..([)]([)]...}.{.(..)..((..)).(..)..}...{.....|...|....|....}"
     #ss_seq = "{((((((.A.AAAAA......))))).BBBB........a..aaaaa....bbbb..).|..([)]([)].ABC.abc.}....{.....}"
     #ss_seq = "{((((((.A.AAAAA......))))).((((........a..aaaaa....))))..).|..([)]([)].ABC.abc.}....{.....}"
@@ -632,7 +761,6 @@ def test2(cl):
     #ss_seq = "{((((((.A.AAAAA.<BC..))))).((((.>bc.DE.a..aaaaa..de))))..).|..([)]([)].........}....{.....}"
     #ss_seq  = "{((((((.A.AAAAA.<BC..))))).((((.>bc....a..aaaaa....))))..).|..([)]([)]...}....{.ABC..DEF..abc..def...}"
     
-    rnaseq = ""
     # regular secondary structure
     #          0         10        20        30        40        50        60        70        80        90
     #          |    .    |    .    |    .    |    .    |    .    |    .    |    .    |    .    |    .    |
@@ -644,42 +772,69 @@ def test2(cl):
     #ss_seq  = ".((((..(...).)))).."
     #rnaseq   = "uGGGuGGGuGGGuuuuCCCuCCCuCCCu"
     #ss_seq   = ".(((.(((.(((....))).))).)))."
-    rnaseq   = "uGGGuGGGuuuuuuGGGuuuuCCCuuuuuuuCCCuCCCu"
     ss_seq   = ".(((.(((......(((....))).......))).)))."
+    chrseq   = genChrSeq(ss_seq)
     
     if len(cl) > 1:
         ss_seq = cl[1]
-    vs.parse_fullDotBracketStructure(ss_seq, True)
-    v2t = Vienna2TreeNode(vs, None, rnaseq)
+    #
+    
+    iSetUp = InputSettings("Chromatin")
+    iSetUp.set_source("test3 in LThreadBuilder)")
+    iSetUp.set_program("cantata")
+    # maybe a better name is "description" or "purpose", but, anyway,
+    # cantata converts an input sequence into a motif representation,
+    # which is the ultimate goal of these tools.
+    
+    iSetUp.set_FEparamData()
+
+    
+    
+    
+    # set up the actual FE Data according to the settings
+    iSetUp.set_ViennaParams() # presently sets parameter flag to "Chromatin"
+    iSetUp.set_sequence(chrseq)
+    iSetUp.set_structure(ss_seq)
+    
+    
+    iSetUp.show_InputSettings()
+    vs = Vstruct()
+    vs.set_system(iSetUp)
+    vs.parse_fullDotBracketStructure(ss_seq, chrseq, True)
+    v2t = Vienna2TreeNode(vs, None, chrseq)
     v2t.vienna2tree()
     
-    tf = LThreadBuilder(v2t)
-    tf.visit(v2t.genTree)
-    print "LThread notation: "
-    tf.disp_lt()
-    # print "planned exit"; sys.exit(0);
     
-    # print dt.makeLThreadDotBracket_VARNA(ds.lt, 0)
+    tf = LThreadBuilder(v2t)
+    
+    tf.visit(v2t.genTree)
+    
+    print ("LThread notation: ")
+    tf.disp_lt()
+    # print ("planned exit"); sys.exit(0);
+    
+    # print (dt.makeLThreadDotBracket_VARNA(ds.lt, 0))
     vf = LThread2Vienna()
     vf.lt2vs(tf.lt)
     vf.set_vstr(v2t.vstr)
     vf.set_vseq(v2t.vseq)
     
-    print "structure sequence: "
-    print vf.vstr
-    print "vsBPlist: "
+    print ("structure sequence: ")
+    print (vf.molsys.mseq)
+    print (vf.molsys.mstr)
+    print ("vsBPlist: ")
     for bpk in vf.vsBPlist:
-        print bpk.disp_Pair()
+        print (bpk.disp_Pair())
     #endfor
     
-    print "vsPKlist: "
+    print ("vsPKlist: ")
     for bpk in vf.vsPKlist:
-        print bpk.disp_Pair()
+        print (bpk.disp_Pair())
     #endfor
     
-    print "vsMPlist: "
+    print ("vsMPlist: ")
     for bpk in vf.vsMPlist:
-        print bpk.disp_Pair()
+        print (bpk.disp_Pair())
     #endfor
     
 #    
@@ -695,7 +850,10 @@ def main(cl):
     
     elif TEST == 2:
         test2(cl)
+    elif TEST == 3:
+        test3(cl)
     #
+    
     
 #
    
