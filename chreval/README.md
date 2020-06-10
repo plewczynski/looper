@@ -290,7 +290,7 @@ matplotlib, numpy, random and argparse
 
 * Configuration
 
-Standard python 2.7
+Standard python 3.6 and higher
 
 * Dependencies
 
