@@ -26,7 +26,7 @@ from datetime import datetime
 
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 __version_info__  = ("1.0", "1")
-__lastUpdate_info__ = ('2020','02','18')
+__lastUpdate_info__ = ('2020','06','10')
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 __lastUpdate__ = '-'.join(__lastUpdate_info__)        
 __version__    = "version %s, release %s" % (__version_info__[0], __version_info__[1]) 
